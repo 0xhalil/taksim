@@ -20,6 +20,8 @@
   <a href="SECURITY.md">Security</a>
 </p>
 
+<p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
+
 ---
 
 taksim is a native macOS app that runs the agent CLIs you are signed in to — **Claude Code, Codex, Gemini CLI,

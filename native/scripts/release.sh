@@ -51,7 +51,7 @@ fi
 # Apple's notary service looks a file over (minutes) and says Accepted or why not
 notarize() {
   RESULT=$(xcrun notarytool submit "$1" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" \
-    --issuer "$TAKSIM_NOTARY_ISSUER" --wait --timeout 40m --output-format json) || true
+    --issuer "$TAKSIM_NOTARY_ISSUER" --wait --timeout 3h --output-format json) || true
   STATUS=$(printf '%s' "$RESULT" | node -pe 'try { JSON.parse(require("fs").readFileSync(0, "utf8")).status } catch { "unreadable" }')
   if [ "$STATUS" != "Accepted" ]; then
     echo "notarization of $1: $STATUS" >&2; printf '%s\n' "$RESULT" >&2
@@ -98,8 +98,12 @@ TAP="${TAKSIM_TAP:-0xhalil/homebrew-taksim}"
 # The release page, laid out like the README: what it is, what changed, how to install, checksums
 BODY="$OUT/notes.md"
 PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -x "v$VERSION" | head -1 || true)
+# the tag message is the intro; a line "[zh]" in it starts the Chinese intro
+HIGHLIGHTS=$(printf '%s\n' "$NOTES" | sed '/^\[zh\]$/,$d')
+HIGHLIGHTS_ZH=""
+case "$NOTES" in *'[zh]'*) HIGHLIGHTS_ZH=$(printf '%s\n' "$NOTES" | sed '1,/^\[zh\]$/d') ;; esac
 {
-  printf '%s\n\n' "${NOTES:-taksim $VERSION}"
+  printf '%s\n\n' "${HIGHLIGHTS:-taksim $VERSION}"
   if [ -n "$PREV" ]; then
     CHANGES=$(git log --no-merges --format='- %s' "$PREV..HEAD" | grep -v -E '^- (release|tests?|ci|site|docs?|chore)[:(]' || true)
     [ -n "$CHANGES" ] && printf "## What's changed\n\n%s\n\n" "$CHANGES"
@@ -113,6 +117,16 @@ PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -x "v$VERSION" | hea
   printf ' The app updates itself.\n\n'
   printf '## SHA-256\n\n```\n%s  %s\n%s  %s\n```\n' "$(cat "$DMG.sha256")" "$(basename "$DMG")" "$(cat "$ZIP.sha256")" "$(basename "$ZIP")"
   [ -n "$PREV" ] && printf '\n**Full changelog:** https://github.com/%s/compare/%s...v%s\n' "$REPO" "$PREV" "$VERSION"
+  # the same page in Chinese: users there read it too
+  printf '\n---\n\n## 简体中文\n\n'
+  [ -n "$HIGHLIGHTS_ZH" ] && printf '%s\n\n' "$HIGHLIGHTS_ZH"
+  printf '| 安装方式 | |\n|---|---|\n'
+  printf '| Homebrew | `brew install --cask %s/taksim/taksim` |\n' "${TAP%%/*}"
+  printf '| 磁盘映像 | `%s`，拖入“应用程序” |\n' "$(basename "$DMG")"
+  printf '| ZIP | `%s` |\n\n' "$(basename "$ZIP")"
+  printf '需要 macOS 15 或更高版本，Apple 芯片。'
+  [ -n "$NOTARIZING" ] && printf '已使用 Developer ID 签名并经过 Apple 公证。'
+  printf '应用会自动更新。校验值（SHA-256）见上方。\n'
 } > "$BODY"
 if [ -z "$PUBLISH" ]; then echo; cat "$BODY"; echo; echo "built; add --publish to release it on $REPO"; exit 0; fi
 

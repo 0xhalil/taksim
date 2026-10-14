@@ -11,7 +11,9 @@ git push origin v0.2.0
 ```
 
 The tag message becomes the top of the release page, so write it for users: a line that says what this version is,
-then a few bullets. The page gets the rest on its own:
+then a few bullets. Users in China read the page too: put a line with just `[zh]` after the English part and write the
+same intro in Simplified Chinese below it; the page ends with a Chinese section that has it and a Chinese install table
+(without `[zh]` the section has only the table). The page gets the rest on its own:
 
 | Part | From |
 |---|---|
@@ -25,7 +27,8 @@ then a few bullets. The page gets the rest on its own:
 
 1. Waits for the `test` workflow to pass on the tagged commit (up to 30 minutes), so tag after pushing, not before.
 2. Builds the app, packs the engine and a Node runtime into it, signs everything inside with the Developer ID
-   certificate (hardened runtime), sends it to Apple's notary service and staples the ticket.
+   certificate (hardened runtime), sends it to Apple's notary service and staples the ticket. Apple's check usually
+   takes minutes, but the first ones of a new account can take hours; the workflow waits up to three.
 3. Makes `Taksim-<version>.zip` (the app updates itself from it and the Homebrew cask installs it) and
    `Taksim-<version>-arm64.dmg` (signed and notarized too), each with a `.sha256`.
 4. Creates the GitHub release and updates the cask in the tap, `0xhalil/homebrew-taksim`.

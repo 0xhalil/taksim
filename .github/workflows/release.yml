@@ -32,7 +32,7 @@ concurrency:
 jobs:
   release:
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
         with:
