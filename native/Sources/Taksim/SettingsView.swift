@@ -891,6 +891,8 @@ private struct CLIAccounts: View {
     @FocusState private var focus: String?
     /// CLIs whose own (unnamed) login is hidden from this list: the login itself stays on the computer
     @AppStorage("hiddenLogins") private var hiddenLogins = ""
+    /// the row under the pointer: its remove button shows
+    @State private var hovered: String?
     private var loginHidden: Bool { hiddenLogins.split(separator: ",").contains(Substring(backend.name)) }
 
     private var installed: Bool { backend.installed == true }
@@ -911,8 +913,9 @@ private struct CLIAccounts: View {
                         let name = st.email ?? backend.label
                         row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"], loggingIn: false,
                             signIn: { Task { await m.signIn(backend) } },
+                            remove: hideLogin,
                             menu: AnyView(Menu {
-                                Button(L("Hide"), role: .destructive) { hiddenLogins = (hiddenLogins.split(separator: ",").map(String.init) + [backend.name]).joined(separator: ",") }
+                                Button(L("Hide"), role: .destructive, action: hideLogin)
                             } label: {
                                 Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.muted).frame(width: 24, height: 24)
                             }.menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()))
@@ -927,6 +930,7 @@ private struct CLIAccounts: View {
                             status: st, usage: m.usage(of: a), loggingIn: m.login?.account == a.id,
                             signIn: { Task { await m.signIn(account: a.id, backend: backend.name, privately: own) } },
                             key: own ? { keyFor = a.id; keyDraft = ""; focus = "key" } : nil,
+                            remove: { remove(a) },
                             menu: AnyView(menu(a)))
                         if keyFor == a.id { keyRow(a) }
                         divider
@@ -948,6 +952,10 @@ private struct CLIAccounts: View {
         .onChange(of: startAdding) { _, now in if now { beginAdd() } }
     }
 
+    private func hideLogin() {
+        hiddenLogins = (hiddenLogins.split(separator: ",").map(String.init) + [backend.name]).joined(separator: ",")
+    }
+
     private var divider: some View { Rectangle().fill(JB.line).frame(height: 1).padding(.leading, 50) }
 
     private func initialAvatar(_ name: String) -> some View {
@@ -959,7 +967,7 @@ private struct CLIAccounts: View {
 
     /// avatar, name (double-click to rename), who is signed in; the one action needed; the rest under ⋯
     private func row(avatar: AnyView, name: String, id: String? = nil, status: AccountsModel.Status?, usage: Usage? = nil, loggingIn: Bool,
-                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, menu: AnyView?) -> some View {
+                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, remove: (() -> Void)? = nil, menu: AnyView?) -> some View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
@@ -992,9 +1000,17 @@ private struct CLIAccounts: View {
                 }
                 .buttonStyle(Press()).disabled(m.login != nil)
             }
+            // one click on the row's own ✕ (it shows under the pointer); right click offers it too
+            if let remove, hovered == name, loggingIn == false {
+                Button(action: remove) { Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(JB.muted).frame(width: 24, height: 24) }
+                    .buttonStyle(Press()).help(L("Remove")).transition(.scale.combined(with: .opacity))
+            }
             if let menu { menu }
         }
         .padding(.horizontal, 12).frame(height: 52)
+        .contentShape(Rectangle())
+        .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { if inside { hovered = name } else if hovered == name { hovered = nil } } }
+        .contextMenu { if let remove { Button(L("Remove"), role: .destructive, action: remove) } }
     }
 
     /// the API key, pasted once; Enter checks it with Google and keeps it in the keychain
