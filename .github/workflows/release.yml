@@ -1,0 +1,98 @@
+# Ships a version of the app: push a tag (git tag -a v0.2.0 -m "what changed" && git push origin v0.2.0).
+# Tests run first, then native/scripts/release.sh builds Taksim-<version>.zip, creates the GitHub release that
+# installed apps look for (Updater.swift) and updates the Homebrew cask in 0xhalil/homebrew-taksim.
+# Run by hand ("Run workflow") it builds only and leaves the zip as a downloadable artifact, unless "publish" is ticked.
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the v, e.g. 0.2.0
+        required: true
+      notes:
+        description: What changed (release notes)
+        required: false
+      publish:
+        description: Publish the release (otherwise a dry run that only builds)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          swift --version
+      - name: Version and notes
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_NOTES: ${{ inputs.notes }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            VERSION="${TAG#v}"; PUBLISH=true
+            NOTES=$(git tag -l --format='%(contents)' "$TAG")
+          else
+            VERSION="$INPUT_VERSION"; PUBLISH="$INPUT_PUBLISH"; NOTES="$INPUT_NOTES"
+          fi
+          case "$VERSION" in
+            [0-9]*.[0-9]*) ;;
+            *) echo "not a version: $VERSION" >&2; exit 1 ;;
+          esac
+          {
+            echo "version=$VERSION"
+            echo "publish=$PUBLISH"
+            echo "notes<<TAKSIM_NOTES_END"; echo "$NOTES"; echo "TAKSIM_NOTES_END"
+          } >> "$GITHUB_OUTPUT"
+      - name: Engine tests
+        run: npm test
+      - name: Swift tests
+        working-directory: native
+        run: swift test
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+          VERSION: ${{ steps.v.outputs.version }}
+          NOTES: ${{ steps.v.outputs.notes }}
+          PUBLISH: ${{ steps.v.outputs.publish }}
+        run: |
+          if [ "$PUBLISH" = true ]; then
+            printf '%s\n' "$TAP_KEY" > "$RUNNER_TEMP/tap_key"; chmod 600 "$RUNNER_TEMP/tap_key"
+            TAKSIM_TAP_KEY="$RUNNER_TEMP/tap_key" native/scripts/release.sh "$VERSION" "$NOTES" --publish
+          else
+            native/scripts/release.sh "$VERSION" "$NOTES"
+          fi
+      - name: Keep the zip of a dry run
+        if: steps.v.outputs.publish != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Taksim-${{ steps.v.outputs.version }}
+          path: native/build/release/*
+          retention-days: 7

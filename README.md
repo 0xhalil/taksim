@@ -15,7 +15,7 @@ agent runs on your own login, on your own machine, and the engine listens on `12
 brew install --cask 0xhalil/taksim/taksim
 ```
 
-Or download the latest `Taksim-<version>.zip` from [Releases](https://github.com/0xhalil/taksim-releases/releases),
+Or download the latest `Taksim-<version>.zip` from [Releases](https://github.com/0xhalil/taksim/releases),
 unzip it and move `Taksim.app` to Applications. Releases are not notarized yet: the first time, right-click the app
 and choose **Open**. The app updates itself from then on.
 
