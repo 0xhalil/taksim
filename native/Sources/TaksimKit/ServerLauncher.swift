@@ -14,8 +14,8 @@ public final class ServerLauncher: @unchecked Sendable {
         public var errorDescription: String? {
             switch self {
             case .portTaken(let p): L("Port %d is used by another program.", p)
-            case .noNode: L("Node.js was not found. Node 20+ must be installed (the engine runs on Node for now).")
-            case .didNotStart(let log): L("The engine did not start; log: %@", log)
+            case .noNode: L("Taksim could not start: Node.js 20 or newer is needed.")
+            case .didNotStart(let log): L("Taksim could not start; log: %@", log)
             }
         }
     }

@@ -354,7 +354,6 @@ struct GeneralPane: View {
     @AppStorage("notify.sound") private var notifySound = true
     @AppStorage("dockBadge") private var dockBadge = true
     @State private var textSize = CanvasText.size
-    @State private var copied = false
     @Bindable private var lang = LangState.shared
     private var langBinding: Binding<Language> { Binding(get: { lang.current }, set: { lang.current = $0 }) }
 
@@ -401,19 +400,6 @@ struct GeneralPane: View {
                         Toggle("", isOn: $dockBadge).labelsHidden().toggleStyle(.switch).controlSize(.small)
                             .onChange(of: dockBadge) { _, on in if !on { NSApp.dockTile.badgeLabel = nil } }
                     }
-                }
-                SettingsGroup(title: L("Engine")) {
-                    SettingsRow(L("Status"), model.launcher == nil ? L("Started outside the app") : L("Started by the app")) {
-                        HStack(spacing: 6) { Dot(on: model.store?.connected == true); Text(model.store?.connected == true ? L("live") : L("connecting")) }
-                    }
-                    SettingsRow(L("Address"), model.base.absoluteString) {
-                        SettingsButton(title: copied ? L("Copied") : L("Copy")) {
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.base.absoluteString, forType: .string)
-                            copied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
-                        }
-                    }
-                    SettingsRow(L("Canvases"), L("Open on this engine")) { Text("\(model.store?.canvases.count ?? 0)").foregroundStyle(JB.muted) }
                 }
                 SettingsGroup(title: L("Reset")) {
                     SettingsRow(L("Start over"), L("Canvases, accounts, connections and tools go; the app opens as when first installed")) {
