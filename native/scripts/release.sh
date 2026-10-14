@@ -51,7 +51,7 @@ if [ -n "$TAKSIM_TAP_KEY" ]; then
   git clone -q "git@github.com:$TAP.git" "$W"
   mkdir -p "$W/Casks"; printf '%s\n' "$CASK" > "$W/Casks/taksim.rb"
   git -C "$W" add Casks/taksim.rb
-  git -C "$W" -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "taksim $VERSION"
+  git -C "$W" -c user.name="halil akkaya" -c user.email="contact@halilakkaya.dev" commit -q -m "taksim $VERSION"
   git -C "$W" push -q origin HEAD
   rm -rf "$W"
 else
