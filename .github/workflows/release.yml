@@ -1,5 +1,6 @@
 # Ships a version of the app: push a tag (git tag -a v0.2.0 -m "what changed" && git push origin v0.2.0).
-# Tests run first, then native/scripts/release.sh builds Taksim-<version>.zip, creates the GitHub release that
+# The tagged commit must already have a passing `test` run, then native/scripts/release.sh builds, signs and
+# notarizes Taksim-<version>.zip, creates the GitHub release that
 # installed apps look for (Updater.swift) and updates the Homebrew cask in 0xhalil/homebrew-taksim.
 # Run by hand ("Run workflow") it builds only and leaves the zip as a downloadable artifact, unless "publish" is ticked.
 name: release
@@ -22,6 +23,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release
@@ -71,11 +73,21 @@ jobs:
             echo "publish=$PUBLISH"
             echo "notes<<TAKSIM_NOTES_END"; echo "$NOTES"; echo "TAKSIM_NOTES_END"
           } >> "$GITHUB_OUTPUT"
-      - name: Engine tests
-        run: npm test
-      - name: Swift tests
-        working-directory: native
-        run: swift test
+      - name: The tests passed on this commit
+        if: steps.v.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          # the `test` workflow runs on every push to main; a tag pushed right behind it waits for it
+          for i in $(seq 1 60); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=20" \
+              --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
+            case " $runs " in *" success "*) echo "tests passed on $SHA"; exit 0 ;; esac
+            case " $runs " in *" pending "*) ;; *"  "*) [ "$i" -gt 6 ] && break ;; *) echo "tests did not pass on $SHA: $runs" >&2; exit 1 ;; esac
+            sleep 30
+          done
+          echo "no passing test run for $SHA" >&2; exit 1
       - name: Import the Developer ID certificate
         env:
           CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
