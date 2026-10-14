@@ -1,8 +1,8 @@
 # Contributing to taksim
 
 Thanks for wanting to help. taksim is a native macOS app (`native/`, Swift) on a Node engine (`src/`); read
-[CLAUDE.md](CLAUDE.md) for the rules of the codebase and [docs/design-language.md](docs/design-language.md) for how
-the interface should look and behave. Both apply to people and to coding agents alike.
+[docs/design-language.md](docs/design-language.md) for how the interface should look and behave; it applies to
+people and to coding agents alike.
 
 ## Getting set up
 

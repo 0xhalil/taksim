@@ -94,12 +94,32 @@ fi
 shasum -a 256 "$DMG" | awk '{print $1}' > "$DMG.sha256"
 echo "$DMG ($(du -h "$DMG" | cut -f1)), sha256 $(cat "$DMG.sha256")"
 
-[ -n "$PUBLISH" ] || { echo "built; add --publish to release it on $REPO"; exit 0; }
-gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256" --repo "$REPO" --title "taksim $VERSION" --notes "${NOTES:-taksim $VERSION}"
+TAP="${TAKSIM_TAP:-0xhalil/homebrew-taksim}"
+# The release page, laid out like the README: what it is, what changed, how to install, checksums
+BODY="$OUT/notes.md"
+PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -x "v$VERSION" | head -1 || true)
+{
+  printf '%s\n\n' "${NOTES:-taksim $VERSION}"
+  if [ -n "$PREV" ]; then
+    CHANGES=$(git log --no-merges --format='- %s' "$PREV..HEAD" | grep -v -E '^- (release|tests?|ci|site|docs?|chore)[:(]' || true)
+    [ -n "$CHANGES" ] && printf "## What's changed\n\n%s\n\n" "$CHANGES"
+  fi
+  printf '## Install\n\n| | |\n|---|---|\n'
+  printf '| Homebrew | `brew install --cask %s/taksim/taksim` |\n' "${TAP%%/*}"
+  printf '| Disk image | `%s`, drag to Applications |\n' "$(basename "$DMG")"
+  printf '| ZIP | `%s` |\n\n' "$(basename "$ZIP")"
+  printf 'macOS 15 or later on Apple silicon.'
+  [ -n "$NOTARIZING" ] && printf ' Signed with a Developer ID and notarized by Apple.'
+  printf ' The app updates itself.\n\n'
+  printf '## SHA-256\n\n```\n%s  %s\n%s  %s\n```\n' "$(cat "$DMG.sha256")" "$(basename "$DMG")" "$(cat "$ZIP.sha256")" "$(basename "$ZIP")"
+  [ -n "$PREV" ] && printf '\n**Full changelog:** https://github.com/%s/compare/%s...v%s\n' "$REPO" "$PREV" "$VERSION"
+} > "$BODY"
+if [ -z "$PUBLISH" ]; then echo; cat "$BODY"; echo; echo "built; add --publish to release it on $REPO"; exit 0; fi
+
+gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256" --repo "$REPO" --title "taksim $VERSION" --notes-file "$BODY"
 echo "published v$VERSION on $REPO"
 
 # Homebrew: the cask in the tap (TAKSIM_TAP, default 0xhalil/homebrew-taksim) points at this release
-TAP="${TAKSIM_TAP:-0xhalil/homebrew-taksim}"
 CASK=$(sed -e "s/__VERSION__/$VERSION/g" -e "s/__SHA256__/$(cat "$ZIP.sha256")/g" -e "s#__REPO__#$REPO#g" native/scripts/taksim.rb.in)
 if [ -n "$TAKSIM_TAP_KEY" ]; then
   # CI: the workflow's token only reaches this repository, so the tap takes a deploy key (write access to it alone)
