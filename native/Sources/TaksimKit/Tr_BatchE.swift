@@ -15,6 +15,7 @@ extension Tr {
         "Accept  ⏎": "Kabul et  ⏎",
         "Send  ⏎": "Gönder  ⏎",
         "Cancel  ⎋": "Vazgeç  ⎋",
+        "Hide": "Gizle",
         "No change": "Değişiklik yok",
     ]
 }

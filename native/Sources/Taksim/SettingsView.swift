@@ -889,6 +889,9 @@ private struct CLIAccounts: View {
     @State private var savingKey = false
     @State private var draft = ""
     @FocusState private var focus: String?
+    /// CLIs whose own (unnamed) login is hidden from this list: the login itself stays on the computer
+    @AppStorage("hiddenLogins") private var hiddenLogins = ""
+    private var loginHidden: Bool { hiddenLogins.split(separator: ",").contains(Substring(backend.name)) }
 
     private var installed: Bool { backend.installed == true }
     private var list: [AccountsModel.Account] { m.accounts.filter { $0.backend == backend.name }.sorted { ($0.dir == nil ? 0 : 1, $0.name) < ($1.dir == nil ? 0 : 1, $1.name) } }
@@ -904,10 +907,15 @@ private struct CLIAccounts: View {
             if installed {
                 VStack(spacing: 0) {
                     // the CLI's own login, before anyone named it: listed as the account it is, once signed in
-                    if !list.contains(where: { $0.dir == nil }), let st = m.machine[backend.name], st.loggedIn == true {
+                    if !list.contains(where: { $0.dir == nil }), !loginHidden, let st = m.machine[backend.name], st.loggedIn == true {
                         let name = st.email ?? backend.label
                         row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"], loggingIn: false,
-                            signIn: { Task { await m.signIn(backend) } }, menu: nil)
+                            signIn: { Task { await m.signIn(backend) } },
+                            menu: AnyView(Menu {
+                                Button(L("Hide"), role: .destructive) { hiddenLogins = (hiddenLogins.split(separator: ",").map(String.init) + [backend.name]).joined(separator: ",") }
+                            } label: {
+                                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.muted).frame(width: 24, height: 24)
+                            }.menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()))
                         divider
                     }
                     ForEach(list) { a in
@@ -1077,6 +1085,7 @@ private struct CLIAccounts: View {
         let n = newName.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return }
         adding = false
+        hiddenLogins = hiddenLogins.split(separator: ",").map(String.init).filter { $0 != backend.name }.joined(separator: ",")
         Task { await m.add(backend: backend.name, name: n) }
     }
     private func commitRename(_ id: String) {
