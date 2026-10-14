@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IDE</title>
+<!-- One agent's IDE filling the window (the native app shows it in a web view): GET /ide/<canvas>/<agent>[?theme=light|dark].
+     Its styles are ui/ide.css. -->
+<link rel="stylesheet" href="/ui/vendor/xterm.css">
+<link rel="stylesheet" href="/ui/ide.css">
+<style>html, body { margin: 0; height: 100%; background: #1e1f22; } html[data-theme="light"], html[data-theme="light"] body { background: #ffffff; }</style>
+</head>
+<body class="idepage">
+<div id="ides"></div>
+<div id="toast"></div>
+<script type="module" src="/ui/canvas/ide-page.mjs"></script>
+</body>
+</html>

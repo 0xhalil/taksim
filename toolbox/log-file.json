@@ -1,0 +1,133 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "log-file",
+  "name": "Log dosyası",
+  "summary": "Bir log dosyasını canlı takip eder; hatalar ve uyarılar ayrı bir listede toplanır.",
+  "when": [
+    "app.log'u izle",
+    "bu log dosyasını takip et",
+    "loglarda hata var mı",
+    "tail -f yap",
+    "loglardaki exception'ları göster",
+    "watch the log file",
+    "follow the server logs",
+    "hata loglarını izle",
+    "log'a düşen uyarıları takip et"
+  ],
+  "keywords": [
+    "log",
+    "logs",
+    "tail",
+    "günlük",
+    "error",
+    "exception",
+    "warning",
+    "file",
+    "dosya"
+  ],
+  "requires": {
+    "bin": []
+  },
+  "params": {
+    "path": {
+      "desc": "log file path",
+      "default": null
+    }
+  },
+  "instructions": "Panel follows the file; the 'Hatalar' view keeps only lines with error/exception/fatal/warn. When the user asks about an error, read the surrounding lines of the file and the code the stack trace points at (open it in the IDE).",
+  "spec": {
+    "title": "Log · {{path}}",
+    "sources": {
+      "log": {
+        "brick": "tail",
+        "path": "{{path}}",
+        "parse": "lines",
+        "lines": 300
+      },
+      "errors": {
+        "brick": "tail",
+        "path": "{{path}}",
+        "parse": "lines",
+        "lines": 2000,
+        "where": {
+          "text": {
+            "match": "error|exception|fatal|traceback|warn"
+          }
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "errors-n",
+        "brick": "stat",
+        "source": "errors",
+        "title": "Hata/uyarı",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 10
+      },
+      {
+        "id": "errors",
+        "brick": "log",
+        "source": "errors",
+        "title": "Hatalar",
+        "row_actions": [
+          {
+            "label": "Açıkla",
+            "ask": "Bu log satırı ne anlama geliyor, neden oluyor? {text}"
+          }
+        ]
+      },
+      {
+        "id": "log",
+        "brick": "log",
+        "source": "log",
+        "title": "Tümü"
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "log": [
+        {
+          "text": "10:41:02 INFO  GET /api/orders 200 41ms"
+        },
+        {
+          "text": "10:41:03 INFO  GET /api/cart 200 12ms"
+        },
+        {
+          "text": "10:41:05 WARN  slow query: SELECT * FROM orders WHERE … (1.8s)"
+        },
+        {
+          "text": "10:41:07 ERROR payment webhook failed: timeout after 5000ms"
+        },
+        {
+          "text": "10:41:08 INFO  POST /api/checkout 201 230ms"
+        }
+      ],
+      "errors": [
+        {
+          "text": "10:41:05 WARN  slow query: SELECT * FROM orders WHERE … (1.8s)"
+        },
+        {
+          "text": "10:41:07 ERROR payment webhook failed: timeout after 5000ms"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "lnav",
+    "url": "https://lnav.org",
+    "borrowed": [
+      "hatalar için ayrı görünüm",
+      "hata/uyarı sayısı",
+      "canlı takip"
+    ]
+  }
+}

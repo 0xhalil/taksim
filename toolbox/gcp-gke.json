@@ -1,0 +1,389 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "gcp-gke",
+  "name": "GKE cluster'ları",
+  "summary": "Projedeki GKE cluster'ları: sürüm, konum, node sayısı ve durum; node pool'lar makine tipi ve autoscaling sınırlarıyla.",
+  "when": [
+    "gke cluster'larına bak",
+    "cluster sürümleri ne",
+    "kaç node var",
+    "node pool'ları göster",
+    "gcloud container clusters list",
+    "show my gke clusters",
+    "is the cluster upgrading",
+    "which node pools autoscale",
+    "cluster reconciling mi",
+    "gke node sayısı"
+  ],
+  "keywords": [
+    "gcp",
+    "gcloud",
+    "gke",
+    "kubernetes",
+    "k8s",
+    "cluster",
+    "node pool",
+    "node",
+    "upgrade",
+    "google cloud"
+  ],
+  "requires": {
+    "bin": [
+      "gcloud"
+    ]
+  },
+  "params": {
+    "project": {
+      "desc": "Google Cloud project id (gcloud projects list)",
+      "default": null
+    }
+  },
+  "instructions": "Panel lists the project's GKE clusters every 60s (location, control plane version, node count, status) with node counts ranked, and every node pool (machine type, autoscaling min/max, version, status) via --flatten=nodePools. A RECONCILING cluster is usually upgrading or resizing: check `gcloud container operations list --project <project> --filter='status!=DONE'`. To look inside a cluster, get credentials only if the user agrees (`gcloud container clusters get-credentials`) and then use the Kubernetes tools. Always pass the same --project. Don't upgrade, resize or delete unless the user asks.",
+  "spec": {
+    "title": "GKE · {{project}}",
+    "sources": {
+      "clusters": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "container",
+          "clusters",
+          "list",
+          "--project",
+          "{{project}}",
+          "--format=json"
+        ],
+        "parse": "json",
+        "every_s": 60
+      },
+      "pools": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "container",
+          "clusters",
+          "list",
+          "--project",
+          "{{project}}",
+          "--flatten=nodePools",
+          "--format=json"
+        ],
+        "parse": "json",
+        "every_s": 60
+      }
+    },
+    "views": [
+      {
+        "id": "clusters-n",
+        "brick": "stat",
+        "source": "clusters",
+        "title": "Cluster"
+      },
+      {
+        "id": "nodes",
+        "brick": "bars",
+        "source": "clusters",
+        "title": "Node",
+        "label": "name",
+        "value": "currentNodeCount",
+        "limit": 6,
+        "span": 3
+      },
+      {
+        "id": "clusters",
+        "brick": "table",
+        "source": "clusters",
+        "title": "Cluster'lar",
+        "key": "name",
+        "columns": [
+          {
+            "field": "name",
+            "label": "NAME"
+          },
+          {
+            "field": "location",
+            "label": "LOCATION"
+          },
+          {
+            "field": "currentMasterVersion",
+            "label": "VERSION"
+          },
+          {
+            "field": "currentNodeCount",
+            "label": "NODES"
+          },
+          {
+            "field": "status",
+            "label": "STATUS"
+          },
+          {
+            "field": "releaseChannel.channel",
+            "label": "CHANNEL"
+          }
+        ],
+        "bar": "currentNodeCount",
+        "row_actions": [
+          {
+            "label": "Neden?",
+            "ask": "{name} cluster'ı neden {status}? Süren operasyonlara bak."
+          }
+        ]
+      },
+      {
+        "id": "pools",
+        "brick": "table",
+        "source": "pools",
+        "title": "Node pool'lar",
+        "columns": [
+          {
+            "field": "name",
+            "label": "CLUSTER"
+          },
+          {
+            "field": "nodePools.name",
+            "label": "POOL"
+          },
+          {
+            "field": "nodePools.config.machineType",
+            "label": "MACHINE"
+          },
+          {
+            "field": "nodePools.autoscaling.minNodeCount",
+            "label": "MIN"
+          },
+          {
+            "field": "nodePools.autoscaling.maxNodeCount",
+            "label": "MAX"
+          },
+          {
+            "field": "nodePools.version",
+            "label": "VERSION"
+          },
+          {
+            "field": "nodePools.status",
+            "label": "STATUS"
+          }
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "clusters": [
+        {
+          "name": "prod-eu",
+          "location": "europe-west1",
+          "currentMasterVersion": "1.30.5-gke.1014001",
+          "currentNodeCount": 9,
+          "status": "RUNNING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": [
+            {
+              "name": "default-pool",
+              "status": "RUNNING",
+              "version": "1.30.5-gke.1014001",
+              "initialNodeCount": 3,
+              "config": {
+                "machineType": "e2-standard-4",
+                "diskSizeGb": 100
+              },
+              "autoscaling": {
+                "enabled": true,
+                "minNodeCount": 3,
+                "maxNodeCount": 6
+              }
+            },
+            {
+              "name": "highmem",
+              "status": "RUNNING",
+              "version": "1.30.5-gke.1014001",
+              "initialNodeCount": 2,
+              "config": {
+                "machineType": "n2-highmem-8",
+                "diskSizeGb": 100
+              },
+              "autoscaling": {
+                "enabled": true,
+                "minNodeCount": 1,
+                "maxNodeCount": 4
+              }
+            }
+          ]
+        },
+        {
+          "name": "staging-eu",
+          "location": "europe-west1-b",
+          "currentMasterVersion": "1.31.1-gke.1146000",
+          "currentNodeCount": 3,
+          "status": "RECONCILING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": [
+            {
+              "name": "default-pool",
+              "status": "RECONCILING",
+              "version": "1.31.1-gke.1146000",
+              "initialNodeCount": 3,
+              "config": {
+                "machineType": "e2-standard-2",
+                "diskSizeGb": 100
+              },
+              "autoscaling": {
+                "enabled": true,
+                "minNodeCount": 1,
+                "maxNodeCount": 3
+              }
+            }
+          ]
+        },
+        {
+          "name": "batch-us",
+          "location": "us-central1",
+          "currentMasterVersion": "1.30.5-gke.1014001",
+          "currentNodeCount": 5,
+          "status": "RUNNING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": [
+            {
+              "name": "spot-pool",
+              "status": "RUNNING",
+              "version": "1.30.5-gke.1014001",
+              "initialNodeCount": 5,
+              "config": {
+                "machineType": "e2-standard-8",
+                "diskSizeGb": 100
+              },
+              "autoscaling": {
+                "enabled": true,
+                "minNodeCount": 0,
+                "maxNodeCount": 20
+              }
+            }
+          ]
+        }
+      ],
+      "pools": [
+        {
+          "name": "prod-eu",
+          "location": "europe-west1",
+          "currentMasterVersion": "1.30.5-gke.1014001",
+          "currentNodeCount": 9,
+          "status": "RUNNING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": {
+            "name": "default-pool",
+            "status": "RUNNING",
+            "version": "1.30.5-gke.1014001",
+            "initialNodeCount": 3,
+            "config": {
+              "machineType": "e2-standard-4",
+              "diskSizeGb": 100
+            },
+            "autoscaling": {
+              "enabled": true,
+              "minNodeCount": 3,
+              "maxNodeCount": 6
+            }
+          }
+        },
+        {
+          "name": "prod-eu",
+          "location": "europe-west1",
+          "currentMasterVersion": "1.30.5-gke.1014001",
+          "currentNodeCount": 9,
+          "status": "RUNNING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": {
+            "name": "highmem",
+            "status": "RUNNING",
+            "version": "1.30.5-gke.1014001",
+            "initialNodeCount": 2,
+            "config": {
+              "machineType": "n2-highmem-8",
+              "diskSizeGb": 100
+            },
+            "autoscaling": {
+              "enabled": true,
+              "minNodeCount": 1,
+              "maxNodeCount": 4
+            }
+          }
+        },
+        {
+          "name": "staging-eu",
+          "location": "europe-west1-b",
+          "currentMasterVersion": "1.31.1-gke.1146000",
+          "currentNodeCount": 3,
+          "status": "RECONCILING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": {
+            "name": "default-pool",
+            "status": "RECONCILING",
+            "version": "1.31.1-gke.1146000",
+            "initialNodeCount": 3,
+            "config": {
+              "machineType": "e2-standard-2",
+              "diskSizeGb": 100
+            },
+            "autoscaling": {
+              "enabled": true,
+              "minNodeCount": 1,
+              "maxNodeCount": 3
+            }
+          }
+        },
+        {
+          "name": "batch-us",
+          "location": "us-central1",
+          "currentMasterVersion": "1.30.5-gke.1014001",
+          "currentNodeCount": 5,
+          "status": "RUNNING",
+          "releaseChannel": {
+            "channel": "REGULAR"
+          },
+          "nodePools": {
+            "name": "spot-pool",
+            "status": "RUNNING",
+            "version": "1.30.5-gke.1014001",
+            "initialNodeCount": 5,
+            "config": {
+              "machineType": "e2-standard-8",
+              "diskSizeGb": 100
+            },
+            "autoscaling": {
+              "enabled": true,
+              "minNodeCount": 0,
+              "maxNodeCount": 20
+            }
+          }
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "Google Cloud console",
+    "url": "https://console.cloud.google.com/kubernetes/list",
+    "borrowed": [
+      "cluster listesi: konum, sürüm, node sayısı, durum",
+      "node pool'lar: makine tipi, autoscaling",
+      "RECONCILING öne çıkar"
+    ]
+  }
+}

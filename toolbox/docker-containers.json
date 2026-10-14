@@ -1,0 +1,209 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "docker-containers",
+  "name": "Docker container'ları",
+  "summary": "Bu makinedeki container'lar, durumları ve kaynak kullanımları; çöken ya da yeniden başlayanlar öne çıkar.",
+  "when": [
+    "docker container'larını izle",
+    "hangi container'lar çalışıyor",
+    "container neden sürekli restart oluyor",
+    "docker ps'i takip et",
+    "compose servisleri ayakta mı",
+    "watch my docker containers",
+    "which containers are down",
+    "container cpu ve bellek kullanımı",
+    "exited container'ları göster",
+    "docker stats"
+  ],
+  "keywords": [
+    "docker",
+    "container",
+    "konteyner",
+    "compose",
+    "image",
+    "restart",
+    "exited",
+    "stats",
+    "cpu",
+    "memory"
+  ],
+  "requires": {
+    "bin": [
+      "docker"
+    ]
+  },
+  "params": {},
+  "instructions": "Panel shows `docker ps -a` every 5s and `docker stats` every 10s. Look at State/Status first: Exited (non-zero), Restarting or unhealthy containers are the problems. For one of them, read `docker logs --tail 100 <name>` and `docker inspect <name>` (State, RestartCount, OOMKilled) before explaining. Row action 'Neden?' sends you the row.",
+  "spec": {
+    "title": "Docker",
+    "sources": {
+      "ps": {
+        "brick": "command",
+        "run": [
+          "docker",
+          "ps",
+          "-a",
+          "--format",
+          "{{json .}}"
+        ],
+        "parse": "jsonl",
+        "every_s": 5
+      },
+      "running": {
+        "brick": "command",
+        "run": [
+          "docker",
+          "ps",
+          "--format",
+          "{{json .}}"
+        ],
+        "parse": "jsonl",
+        "every_s": 5
+      },
+      "stats": {
+        "brick": "command",
+        "run": [
+          "docker",
+          "stats",
+          "--no-stream",
+          "--format",
+          "{{json .}}"
+        ],
+        "parse": "jsonl",
+        "every_s": 10
+      }
+    },
+    "views": [
+      {
+        "id": "running",
+        "brick": "stat",
+        "source": "running",
+        "title": "Çalışan"
+      },
+      {
+        "id": "all",
+        "brick": "stat",
+        "source": "ps",
+        "title": "Toplam"
+      },
+      {
+        "id": "ps",
+        "brick": "table",
+        "source": "ps",
+        "title": "Container'lar",
+        "columns": [
+          "Names",
+          "State",
+          "Status",
+          "Image",
+          "Ports"
+        ],
+        "row_actions": [
+          {
+            "label": "Neden?",
+            "ask": "{Names} neden {Status} durumunda? Loglarına ve inspect çıktısına bak."
+          }
+        ]
+      },
+      {
+        "id": "stats",
+        "brick": "table",
+        "source": "stats",
+        "title": "Kaynak",
+        "columns": [
+          "Name",
+          "CPUPerc",
+          "MemUsage",
+          "NetIO"
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "ps": [
+        {
+          "Names": "api",
+          "State": "running",
+          "Status": "Up 3 hours",
+          "Image": "shop/api:1.8.2",
+          "Ports": "0.0.0.0:8080->8080/tcp"
+        },
+        {
+          "Names": "worker",
+          "State": "restarting",
+          "Status": "Restarting (1) 12 seconds ago",
+          "Image": "shop/worker:1.8.2",
+          "Ports": ""
+        },
+        {
+          "Names": "postgres",
+          "State": "running",
+          "Status": "Up 3 hours (healthy)",
+          "Image": "postgres:16",
+          "Ports": "5432/tcp"
+        },
+        {
+          "Names": "redis",
+          "State": "running",
+          "Status": "Up 3 hours",
+          "Image": "redis:7-alpine",
+          "Ports": "6379/tcp"
+        },
+        {
+          "Names": "migrate",
+          "State": "exited",
+          "Status": "Exited (1) 2 hours ago",
+          "Image": "shop/api:1.8.2",
+          "Ports": ""
+        }
+      ],
+      "running": [
+        {
+          "Names": "api"
+        },
+        {
+          "Names": "postgres"
+        },
+        {
+          "Names": "redis"
+        }
+      ],
+      "stats": [
+        {
+          "Name": "api",
+          "CPUPerc": "12.40%",
+          "MemUsage": "184MiB / 7.6GiB",
+          "NetIO": "21MB / 9MB"
+        },
+        {
+          "Name": "postgres",
+          "CPUPerc": "3.10%",
+          "MemUsage": "96MiB / 7.6GiB",
+          "NetIO": "8MB / 30MB"
+        },
+        {
+          "Name": "redis",
+          "CPUPerc": "0.60%",
+          "MemUsage": "9MiB / 7.6GiB",
+          "NetIO": "2MB / 2MB"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "lazydocker",
+    "url": "https://github.com/jesseduffield/lazydocker",
+    "borrowed": [
+      "durum ve uptime ile container listesi",
+      "container başına CPU/bellek",
+      "çalışan/toplam sayıları"
+    ]
+  }
+}

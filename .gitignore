@@ -1,0 +1,8 @@
+node_modules/
+dist/
+native/.build/
+native/build/
+native/.swiftpm/
+.claude/
+.DS_Store
+eval/results.json

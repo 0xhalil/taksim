@@ -1,0 +1,8 @@
+{
+  "example": true,
+  "id": "example-rename",
+  "title": "Rename a helper and keep the tests green",
+  "repo": "/absolute/path/to/a/repository",
+  "prompt": "Rename check_session to require_session everywhere and keep the tests passing.",
+  "checks": ["! grep -rn 'check_session' src", "python -m pytest -q"]
+}

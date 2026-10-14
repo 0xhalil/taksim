@@ -1,0 +1,317 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "k8s-top",
+  "name": "Kubernetes kaynak kullanımı",
+  "summary": "kubectl top ile pod'ların CPU ve bellek sıralaması canlı yarışta; namespace'in toplam CPU ve belleği zaman içinde.",
+  "when": [
+    "hangi pod çok CPU yiyor",
+    "pod'ların bellek kullanımı",
+    "namespace'in kaynak tüketimi",
+    "kubectl top pods izle",
+    "memory leak var mı bak",
+    "which pod uses the most memory",
+    "cpu usage per pod",
+    "cluster neden yavaş",
+    "node'lar dolu mu",
+    "kaynak limitine yaklaşan pod"
+  ],
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "kubectl",
+    "top",
+    "cpu",
+    "memory",
+    "bellek",
+    "kaynak",
+    "metrics",
+    "node",
+    "pod"
+  ],
+  "requires": {
+    "bin": [
+      "kubectl"
+    ]
+  },
+  "params": {
+    "context": {
+      "desc": "kubeconfig context (kubectl config get-contexts)",
+      "default": null
+    },
+    "namespace": {
+      "desc": "namespace",
+      "default": "default"
+    }
+  },
+  "instructions": "Panel ranks pods by CPU and memory from `kubectl top pods` every 5s, charts the namespace's total CPU (cores) and memory (MiB), and lists nodes with their CPU%/MEMORY%. Needs metrics-server; if top fails say so. Compare a hungry pod with its requests/limits (`kubectl get pod -o jsonpath='{.spec.containers[*].resources}'`) before calling it a problem; a steadily rising memory line suggests a leak, a CPU pinned at its limit suggests throttling. Pass the same --context and -n as the panel.",
+  "spec": {
+    "title": "top · {{namespace}}",
+    "sources": {
+      "top": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "top",
+          "pods",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}"
+        ],
+        "parse": "columns",
+        "every_s": 5
+      },
+      "nodes": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "top",
+          "nodes",
+          "--context",
+          "{{context}}"
+        ],
+        "parse": "columns",
+        "every_s": 10
+      }
+    },
+    "views": [
+      {
+        "id": "cpu-total",
+        "brick": "chart",
+        "source": "top",
+        "title": "Toplam CPU",
+        "y": "CPU(cores)",
+        "agg": "sum",
+        "unit": "core",
+        "kind": "area"
+      },
+      {
+        "id": "mem-total",
+        "brick": "chart",
+        "source": "top",
+        "title": "Toplam bellek",
+        "y": "MEMORY(bytes)",
+        "agg": "sum",
+        "scale": 9.5367431640625e-7,
+        "unit": "Mi",
+        "kind": "line"
+      },
+      {
+        "id": "cpu",
+        "brick": "bars",
+        "source": "top",
+        "title": "CPU",
+        "label": "NAME",
+        "value": "CPU(cores)",
+        "limit": 8
+      },
+      {
+        "id": "mem",
+        "brick": "bars",
+        "source": "top",
+        "title": "Bellek",
+        "label": "NAME",
+        "value": "MEMORY(bytes)",
+        "limit": 8
+      },
+      {
+        "id": "nodes",
+        "brick": "table",
+        "source": "nodes",
+        "title": "Node'lar",
+        "bar": "CPU%",
+        "columns": [
+          "NAME",
+          "CPU(cores)",
+          "CPU%",
+          "MEMORY(bytes)",
+          "MEMORY%"
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "top": [
+        {
+          "NAME": "api-7d9c6b5f8-x2lkq",
+          "CPU(cores)": "212m",
+          "MEMORY(bytes)": "318Mi"
+        },
+        {
+          "NAME": "api-7d9c6b5f8-p8mzt",
+          "CPU(cores)": "187m",
+          "MEMORY(bytes)": "301Mi"
+        },
+        {
+          "NAME": "checkout-6c7f8d9b5-mm2kd",
+          "CPU(cores)": "431m",
+          "MEMORY(bytes)": "612Mi"
+        },
+        {
+          "NAME": "search-84f6d7c9b-tq9wz",
+          "CPU(cores)": "655m",
+          "MEMORY(bytes)": "1210Mi"
+        },
+        {
+          "NAME": "worker-5b8f9c7d4-q7r2n",
+          "CPU(cores)": "38m",
+          "MEMORY(bytes)": "96Mi"
+        },
+        {
+          "NAME": "notifier-7b5c9f6d8-hx4pl",
+          "CPU(cores)": "24m",
+          "MEMORY(bytes)": "88Mi"
+        },
+        {
+          "NAME": "redis-0",
+          "CPU(cores)": "71m",
+          "MEMORY(bytes)": "254Mi"
+        }
+      ],
+      "nodes": [
+        {
+          "NAME": "gke-prod-pool-a-1f2c",
+          "CPU(cores)": "812m",
+          "CPU%": "41%",
+          "MEMORY(bytes)": "3120Mi",
+          "MEMORY%": "52%"
+        },
+        {
+          "NAME": "gke-prod-pool-a-8d0e",
+          "CPU(cores)": "1430m",
+          "CPU%": "73%",
+          "MEMORY(bytes)": "4410Mi",
+          "MEMORY%": "74%"
+        },
+        {
+          "NAME": "gke-prod-pool-b-77aa",
+          "CPU(cores)": "356m",
+          "CPU%": "18%",
+          "MEMORY(bytes)": "1980Mi",
+          "MEMORY%": "33%"
+        }
+      ]
+    },
+    "series": {
+      "cpu-total": [
+        1.45,
+        1.515,
+        1.596,
+        1.576,
+        1.652,
+        1.665,
+        1.699,
+        1.66,
+        1.709,
+        1.712,
+        1.74,
+        1.639,
+        1.724,
+        1.676,
+        1.69,
+        1.602,
+        1.633,
+        1.523,
+        1.527,
+        1.558,
+        1.503,
+        1.394,
+        1.427,
+        1.386,
+        1.423,
+        1.34,
+        1.363,
+        1.336,
+        1.319,
+        1.315,
+        1.317,
+        1.912,
+        1.962,
+        1.977,
+        1.972,
+        1.982,
+        2.062,
+        2.064,
+        1.529,
+        1.528,
+        1.613,
+        1.557,
+        1.578,
+        1.608,
+        1.726,
+        1.695,
+        1.682,
+        1.646,
+        1.618
+      ],
+      "mem-total": [
+        2723,
+        2713,
+        2728,
+        2741,
+        2743,
+        2752,
+        2749,
+        2767,
+        2756,
+        2772,
+        2786,
+        2783,
+        2792,
+        2793,
+        2805,
+        2793,
+        2795,
+        2796,
+        2798,
+        2805,
+        2814,
+        2799,
+        2804,
+        2796,
+        2792,
+        2798,
+        2811,
+        2791,
+        2792,
+        2794,
+        2796,
+        2787,
+        2791,
+        2795,
+        2791,
+        2795,
+        2788,
+        2784,
+        2787,
+        2790,
+        2803,
+        2804,
+        2796,
+        2791,
+        2798,
+        2800,
+        2816,
+        2829,
+        2879
+      ]
+    }
+  },
+  "reference": {
+    "product": "k9s",
+    "url": "https://k9scli.io",
+    "borrowed": [
+      "pod başına CPU/MEM (kubectl top)",
+      "en çok tüketen üstte",
+      "node'ların doluluğu",
+      "toplamın zaman içindeki çizgisi (Grafana gibi)"
+    ]
+  }
+}

@@ -1,0 +1,228 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "k8s-pods",
+  "name": "Kubernetes pod'ları",
+  "summary": "Bir namespace'teki pod'lar, hazır olmayanlar ve canlı olay akışı; CrashLoop ve yeniden başlamalar öne çıkar.",
+  "when": [
+    "kubernetes'e bak",
+    "pod'lar neden restart oluyor",
+    "cluster'daki pod'ları izle",
+    "k8s namespace durumunu göster",
+    "CrashLoopBackOff olan pod var mı",
+    "watch the pods in prod",
+    "kubectl get pods takip et",
+    "deployment ayağa kalktı mı",
+    "kubernetes olaylarını izle",
+    "which pods are failing"
+  ],
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "kubectl",
+    "pod",
+    "namespace",
+    "deployment",
+    "cluster",
+    "crashloopbackoff",
+    "events",
+    "restart",
+    "crash"
+  ],
+  "requires": {
+    "bin": [
+      "kubectl"
+    ]
+  },
+  "params": {
+    "context": {
+      "desc": "kubeconfig context (kubectl config get-contexts)",
+      "default": null
+    },
+    "namespace": {
+      "desc": "namespace",
+      "default": "default"
+    }
+  },
+  "instructions": "Panel shows pods every 5s, the ones not Running, and the namespace's events as they happen. For a failing pod read `kubectl describe pod` (Events, Last State, exit code, OOMKilled) and `kubectl logs --previous` before explaining. Always pass the same --context and -n as the panel. Don't change the cluster unless the user asks.",
+  "spec": {
+    "title": "k8s · {{namespace}}",
+    "sources": {
+      "pods": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "pods",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}",
+          "-o",
+          "wide"
+        ],
+        "parse": "columns",
+        "every_s": 5
+      },
+      "notready": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "pods",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}"
+        ],
+        "parse": "columns",
+        "every_s": 5,
+        "where": {
+          "STATUS": {
+            "ne": "Running"
+          }
+        }
+      },
+      "events": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "events",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}",
+          "--watch-only"
+        ],
+        "parse": "lines",
+        "stream": true
+      }
+    },
+    "views": [
+      {
+        "id": "pods-n",
+        "brick": "stat",
+        "source": "pods",
+        "title": "Pod"
+      },
+      {
+        "id": "bad-n",
+        "brick": "stat",
+        "source": "notready",
+        "title": "Sorunlu",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 2
+      },
+      {
+        "id": "pods",
+        "brick": "table",
+        "source": "pods",
+        "title": "Pod'lar",
+        "columns": [
+          "NAME",
+          "READY",
+          "STATUS",
+          "RESTARTS",
+          "AGE",
+          "NODE"
+        ],
+        "row_actions": [
+          {
+            "label": "Neden?",
+            "ask": "{NAME} pod'u neden {STATUS}? describe ve önceki loglara bak."
+          }
+        ]
+      },
+      {
+        "id": "events",
+        "brick": "log",
+        "source": "events",
+        "title": "Olaylar"
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "pods": [
+        {
+          "NAME": "api-7d9c6b5f8-x2lkq",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "2d",
+          "NODE": "node-a"
+        },
+        {
+          "NAME": "api-7d9c6b5f8-p8mzt",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "2d",
+          "NODE": "node-b"
+        },
+        {
+          "NAME": "worker-5b8f9c7d4-q7r2n",
+          "READY": "0/1",
+          "STATUS": "CrashLoopBackOff",
+          "RESTARTS": "14 (2m ago)",
+          "AGE": "47m",
+          "NODE": "node-a"
+        },
+        {
+          "NAME": "redis-0",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "9d",
+          "NODE": "node-c"
+        },
+        {
+          "NAME": "migrate-28fz1",
+          "READY": "0/1",
+          "STATUS": "Error",
+          "RESTARTS": "0",
+          "AGE": "1h",
+          "NODE": "node-b"
+        }
+      ],
+      "notready": [
+        {
+          "NAME": "worker-5b8f9c7d4-q7r2n",
+          "STATUS": "CrashLoopBackOff"
+        },
+        {
+          "NAME": "migrate-28fz1",
+          "STATUS": "Error"
+        }
+      ],
+      "events": [
+        {
+          "text": "0s   Warning   BackOff   pod/worker-5b8f9c7d4-q7r2n   Back-off restarting failed container"
+        },
+        {
+          "text": "0s   Normal    Pulled    pod/worker-5b8f9c7d4-q7r2n   Container image already present on machine"
+        },
+        {
+          "text": "1s   Warning   Unhealthy pod/api-7d9c6b5f8-p8mzt   Readiness probe failed: HTTP probe failed with statuscode: 503"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "k9s",
+    "url": "https://k9scli.io",
+    "borrowed": [
+      "pod tablosu: READY, STATUS, RESTARTS, NODE",
+      "sorunlu pod sayısı",
+      "namespace olay akışı",
+      "context/namespace sabit"
+    ]
+  }
+}

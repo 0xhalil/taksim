@@ -1,0 +1,153 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "top-processes",
+  "name": "Süreçler (CPU/bellek)",
+  "summary": "En çok CPU ve bellek kullanan süreçler, 5 saniyede bir güncellenir.",
+  "when": [
+    "makine neden yavaş",
+    "en çok cpu yiyen süreçler",
+    "hangi process bellek tüketiyor",
+    "top gibi göster",
+    "fan neden çalışıyor",
+    "what is using my cpu",
+    "show top processes",
+    "sistem yükünü izle"
+  ],
+  "keywords": [
+    "process",
+    "süreç",
+    "cpu",
+    "memory",
+    "bellek",
+    "top",
+    "ps",
+    "load",
+    "yavaş"
+  ],
+  "requires": {
+    "bin": [
+      "ps"
+    ]
+  },
+  "params": {},
+  "instructions": "Panel lists processes by CPU and by memory. Explain what the top ones are (by COMM path) and whether they look normal. Don't kill anything unless the user asks.",
+  "spec": {
+    "title": "Süreçler",
+    "sources": {
+      "cpu": {
+        "brick": "command",
+        "run": [
+          "ps",
+          "-Ao",
+          "pid,%cpu,%mem,comm"
+        ],
+        "parse": "columns",
+        "every_s": 5,
+        "sort": "-%CPU",
+        "limit": 12
+      },
+      "mem": {
+        "brick": "command",
+        "run": [
+          "ps",
+          "-Ao",
+          "pid,%mem,rss,comm"
+        ],
+        "parse": "columns",
+        "every_s": 10,
+        "sort": "-%MEM",
+        "limit": 8
+      }
+    },
+    "views": [
+      {
+        "id": "cpu",
+        "brick": "table",
+        "source": "cpu",
+        "title": "CPU",
+        "columns": [
+          "PID",
+          "%CPU",
+          "%MEM",
+          "COMM"
+        ],
+        "row_actions": [
+          {
+            "label": "Nedir?",
+            "ask": "{COMM} (pid {PID}) nedir, %{%CPU} CPU kullanması normal mi?"
+          }
+        ]
+      },
+      {
+        "id": "mem",
+        "brick": "table",
+        "source": "mem",
+        "title": "Bellek",
+        "columns": [
+          "PID",
+          "%MEM",
+          "RSS",
+          "COMM"
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "cpu": [
+        {
+          "PID": "4127",
+          "%CPU": "86.2",
+          "%MEM": "3.1",
+          "COMM": "node"
+        },
+        {
+          "PID": "812",
+          "%CPU": "22.5",
+          "%MEM": "9.8",
+          "COMM": "/Applications/Slack.app/Contents/MacOS/Slack"
+        },
+        {
+          "PID": "377",
+          "%CPU": "7.9",
+          "%MEM": "1.2",
+          "COMM": "/System/Library/CoreServices/WindowServer"
+        },
+        {
+          "PID": "9021",
+          "%CPU": "4.4",
+          "%MEM": "0.6",
+          "COMM": "python3"
+        }
+      ],
+      "mem": [
+        {
+          "PID": "812",
+          "%MEM": "9.8",
+          "RSS": "1611520",
+          "COMM": "/Applications/Slack.app/Contents/MacOS/Slack"
+        },
+        {
+          "PID": "4127",
+          "%MEM": "3.1",
+          "RSS": "508132",
+          "COMM": "node"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "htop",
+    "url": "https://htop.dev",
+    "borrowed": [
+      "CPU ve belleğe göre iki sıralama",
+      "komut adları"
+    ]
+  }
+}

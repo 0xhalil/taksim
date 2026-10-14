@@ -1,0 +1,309 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "pr-queue",
+  "name": "PR kuyruğu",
+  "summary": "Açık PR'lar ne kadar süredir bekliyor: zaman çizelgesinde canlı uzayan çubuklar, inceleme bekleyenler en eskisi üstte.",
+  "when": [
+    "hangi PR'lar bekliyor",
+    "review bekleyen PR'lar",
+    "en eski açık PR hangisi",
+    "PR kuyruğu ne durumda",
+    "kim review bekliyor",
+    "which pull requests are waiting for review",
+    "how long have PRs been open",
+    "gh pr list",
+    "merge edilmeyi bekleyenler",
+    "takımın PR yaşı"
+  ],
+  "keywords": [
+    "pr",
+    "pull request",
+    "review",
+    "inceleme",
+    "github",
+    "gh",
+    "merge",
+    "kuyruk",
+    "manager"
+  ],
+  "requires": {
+    "bin": [
+      "gh"
+    ]
+  },
+  "params": {
+    "limit": {
+      "desc": "how many open PRs",
+      "default": "50"
+    }
+  },
+  "instructions": "Panel lists the repository's open pull requests every 60s (gh pr list in the agent's working directory; gh's --jq adds review = DRAFT / WAITING / REVIEW_REQUIRED / CHANGES_REQUESTED / APPROVED, size = lines changed, age_h = hours open), oldest first. The timeline grows each PR's bar until now; the table ranks them by age. When asked about a PR, read `gh pr view <number>` and `gh pr diff <number> --stat`, then say what it changes, what blocks it and who could review it (CODEOWNERS, recent authors of the files). Don't approve, comment or merge unless the user asks.",
+  "spec": {
+    "title": "PR kuyruğu",
+    "sources": {
+      "prs": {
+        "brick": "command",
+        "run": [
+          "gh",
+          "pr",
+          "list",
+          "--state",
+          "open",
+          "--limit",
+          "{{limit}}",
+          "--json",
+          "number,title,author,createdAt,isDraft,reviewDecision,headRefName,additions,deletions",
+          "--jq",
+          ".[] | {number, title, author: .author.login, createdAt, review: (if .isDraft then \"DRAFT\" elif (.reviewDecision // \"\") == \"\" then \"WAITING\" else .reviewDecision end), branch: .headRefName, size: (.additions + .deletions), age_h: (((now - (.createdAt | fromdate)) / 3600) | floor)}"
+        ],
+        "parse": "jsonl",
+        "sort": "createdAt",
+        "every_s": 60
+      },
+      "waiting": {
+        "brick": "command",
+        "run": [
+          "gh",
+          "pr",
+          "list",
+          "--state",
+          "open",
+          "--limit",
+          "{{limit}}",
+          "--json",
+          "number,title,author,createdAt,isDraft,reviewDecision,headRefName,additions,deletions",
+          "--jq",
+          ".[] | {number, title, author: .author.login, createdAt, review: (if .isDraft then \"DRAFT\" elif (.reviewDecision // \"\") == \"\" then \"WAITING\" else .reviewDecision end), branch: .headRefName, size: (.additions + .deletions), age_h: (((now - (.createdAt | fromdate)) / 3600) | floor)}"
+        ],
+        "parse": "jsonl",
+        "sort": "-age_h",
+        "every_s": 60,
+        "where": {
+          "review": {
+            "in": [
+              "WAITING",
+              "REVIEW_REQUIRED"
+            ]
+          }
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "open-n",
+        "brick": "stat",
+        "source": "prs",
+        "title": "Açık"
+      },
+      {
+        "id": "waiting-n",
+        "brick": "stat",
+        "source": "waiting",
+        "title": "Review bekliyor",
+        "warn_above": 3,
+        "error_above": 8
+      },
+      {
+        "id": "oldest",
+        "brick": "stat",
+        "source": "waiting",
+        "title": "En eski (sa)",
+        "value": "age_h",
+        "warn_above": 48,
+        "error_above": 120
+      },
+      {
+        "id": "by-author",
+        "brick": "bars",
+        "source": "prs",
+        "title": "Yazar",
+        "label": "author",
+        "limit": 5,
+        "span": 1
+      },
+      {
+        "id": "ages",
+        "brick": "timeline",
+        "source": "prs",
+        "title": "Açık kalma süresi",
+        "start": "createdAt",
+        "label": "title",
+        "status": "review"
+      },
+      {
+        "id": "waiting",
+        "brick": "table",
+        "source": "waiting",
+        "title": "Review bekleyenler",
+        "key": "number",
+        "columns": [
+          {
+            "field": "number",
+            "label": "#"
+          },
+          {
+            "field": "title",
+            "label": "TITLE"
+          },
+          {
+            "field": "author",
+            "label": "AUTHOR"
+          },
+          {
+            "field": "review",
+            "label": "REVIEW"
+          },
+          {
+            "field": "age_h",
+            "label": "YAŞ (sa)"
+          },
+          {
+            "field": "size",
+            "label": "SATIR"
+          }
+        ],
+        "bar": "age_h",
+        "row_actions": [
+          {
+            "label": "Özetle",
+            "ask": "#{number} PR'ını özetle: ne değişiyor, neden bekliyor, kim review edebilir?"
+          }
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "prs": [
+        {
+          "number": 781,
+          "title": "Migrate orders to the new pricing service",
+          "author": "deniz",
+          "createdAt": "2026-09-28T13:30:00Z",
+          "review": "CHANGES_REQUESTED",
+          "branch": "feat/pricing-v2",
+          "size": 1840,
+          "age_h": 214
+        },
+        {
+          "number": 794,
+          "title": "Add rate limiting to public API",
+          "author": "mert",
+          "createdAt": "2026-10-02T10:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "feat/rate-limit",
+          "size": 412,
+          "age_h": 121
+        },
+        {
+          "number": 803,
+          "title": "search: faster facet query",
+          "author": "ayse",
+          "createdAt": "2026-10-05T07:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "perf/facets",
+          "size": 236,
+          "age_h": 52
+        },
+        {
+          "number": 806,
+          "title": "On-call runbook for checkout",
+          "author": "selin",
+          "createdAt": "2026-10-06T05:30:00Z",
+          "review": "APPROVED",
+          "branch": "docs/runbook",
+          "size": 95,
+          "age_h": 30
+        },
+        {
+          "number": 809,
+          "title": "WIP: GraphQL gateway spike",
+          "author": "can",
+          "createdAt": "2026-10-06T09:30:00Z",
+          "review": "DRAFT",
+          "branch": "spike/graphql",
+          "size": 2210,
+          "age_h": 26
+        },
+        {
+          "number": 812,
+          "title": "checkout: retry payment on 502",
+          "author": "ayse",
+          "createdAt": "2026-10-07T06:30:00Z",
+          "review": "WAITING",
+          "branch": "fix/payment-retry",
+          "size": 64,
+          "age_h": 5
+        },
+        {
+          "number": 813,
+          "title": "Bump eslint from 9.11 to 9.12",
+          "author": "dependabot",
+          "createdAt": "2026-10-07T09:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "dependabot/npm/eslint-9.12",
+          "size": 18,
+          "age_h": 2
+        }
+      ],
+      "waiting": [
+        {
+          "number": 794,
+          "title": "Add rate limiting to public API",
+          "author": "mert",
+          "createdAt": "2026-10-02T10:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "feat/rate-limit",
+          "size": 412,
+          "age_h": 121
+        },
+        {
+          "number": 803,
+          "title": "search: faster facet query",
+          "author": "ayse",
+          "createdAt": "2026-10-05T07:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "perf/facets",
+          "size": 236,
+          "age_h": 52
+        },
+        {
+          "number": 812,
+          "title": "checkout: retry payment on 502",
+          "author": "ayse",
+          "createdAt": "2026-10-07T06:30:00Z",
+          "review": "WAITING",
+          "branch": "fix/payment-retry",
+          "size": 64,
+          "age_h": 5
+        },
+        {
+          "number": 813,
+          "title": "Bump eslint from 9.11 to 9.12",
+          "author": "dependabot",
+          "createdAt": "2026-10-07T09:30:00Z",
+          "review": "REVIEW_REQUIRED",
+          "branch": "dependabot/npm/eslint-9.12",
+          "size": 18,
+          "age_h": 2
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "Graphite / GitHub pull requests",
+    "url": "https://graphite.dev",
+    "borrowed": [
+      "PR'ların yaşı ve review durumu",
+      "en uzun bekleyen üstte",
+      "draft ayrı renk",
+      "yazara göre dağılım"
+    ]
+  }
+}

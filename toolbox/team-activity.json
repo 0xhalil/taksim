@@ -1,0 +1,578 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "team-activity",
+  "name": "Ekip aktivitesi",
+  "summary": "Bir dönemde kim kaç commit attı canlı sıralamada; günlük commit ritmi çubuk grafikte.",
+  "when": [
+    "ekip bu ay ne yaptı",
+    "kim kaç commit attı",
+    "son iki haftanın aktivitesi",
+    "repo'da kim çalışıyor",
+    "git shortlog",
+    "team activity this sprint",
+    "commits per author",
+    "commits per day",
+    "takımın ritmi nasıl",
+    "who worked on this repo lately"
+  ],
+  "keywords": [
+    "git",
+    "commit",
+    "author",
+    "team",
+    "ekip",
+    "activity",
+    "aktivite",
+    "shortlog",
+    "sprint",
+    "velocity",
+    "manager"
+  ],
+  "requires": {
+    "bin": [
+      "git"
+    ]
+  },
+  "params": {
+    "since": {
+      "desc": "period for git log --since, e.g. 14.days, 1.month, 2026-09-01",
+      "default": "14.days"
+    }
+  },
+  "instructions": "Panel reads `git log --since --no-merges` in the agent's working directory every 5 minutes (author and day per commit), ranks authors by commits and charts commits per day. Commit counts are a rhythm, not a performance measure: when asked about the team, describe the trend (busy days, quiet stretches, who carried which area by looking at the files they touched with `git log --author <name> --stat`), and don't rank people as better or worse.",
+  "spec": {
+    "title": "ekip · {{since}}",
+    "sources": {
+      "commits": {
+        "brick": "command",
+        "run": [
+          "git",
+          "log",
+          "--since={{since}}",
+          "--no-merges",
+          "--date=short",
+          "--format=%an%x09%ad"
+        ],
+        "parse": {
+          "regex": "^(?<author>[^\\t]+)\\t(?<day>\\S+)$"
+        },
+        "every_s": 300
+      }
+    },
+    "views": [
+      {
+        "id": "total",
+        "brick": "stat",
+        "source": "commits",
+        "title": "Commit"
+      },
+      {
+        "id": "per-day",
+        "brick": "chart",
+        "source": "commits",
+        "title": "Günlük",
+        "x": "day",
+        "kind": "bar",
+        "span": 3
+      },
+      {
+        "id": "by-author",
+        "brick": "bars",
+        "source": "commits",
+        "title": "Kişi",
+        "label": "author",
+        "limit": 10,
+        "span": 4
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "commits": [
+        {
+          "author": "mert",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-24"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-25"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-27"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-27"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-28"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "can",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-29"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "selin",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "mert",
+          "day": "2026-09-30"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-01"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-02"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-04"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "selin",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-05"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "can",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "dependabot[bot]",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-06"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-07"
+        },
+        {
+          "author": "mert",
+          "day": "2026-10-07"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-07"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-07"
+        },
+        {
+          "author": "deniz",
+          "day": "2026-10-07"
+        },
+        {
+          "author": "ayse",
+          "day": "2026-10-07"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "Swarmia / LinearB",
+    "url": "https://www.swarmia.com",
+    "borrowed": [
+      "kişi başına commit",
+      "günlük aktivite ritmi",
+      "dönem seçimi (--since)"
+    ]
+  }
+}

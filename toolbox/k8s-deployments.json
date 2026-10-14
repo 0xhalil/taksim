@@ -1,0 +1,405 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "k8s-deployments",
+  "name": "Kubernetes deployment'ları",
+  "summary": "Deployment'ların hazır/istenen replika sayısı, devam eden rollout'lar ve en çok yeniden başlayan pod'lar canlı sıralamada.",
+  "when": [
+    "deployment'lar ayakta mı",
+    "rollout bitti mi",
+    "hangi deployment hazır değil",
+    "deploy sonrası replika durumu",
+    "en çok restart olan pod hangisi",
+    "is the rollout done",
+    "check deployment status in prod",
+    "which deployments are unavailable",
+    "kubectl rollout status takip et",
+    "restart sayılarını göster"
+  ],
+  "keywords": [
+    "kubernetes",
+    "k8s",
+    "kubectl",
+    "deployment",
+    "rollout",
+    "replica",
+    "restart",
+    "ready",
+    "namespace",
+    "cluster"
+  ],
+  "requires": {
+    "bin": [
+      "kubectl"
+    ]
+  },
+  "params": {
+    "context": {
+      "desc": "kubeconfig context (kubectl config get-contexts)",
+      "default": null
+    },
+    "namespace": {
+      "desc": "namespace",
+      "default": "default"
+    }
+  },
+  "instructions": "Panel shows the namespace's deployments every 5s (ready vs desired replicas, up-to-date, unavailable), how many are still rolling out, and pods ranked by restarts. For a deployment that isn't ready, run `kubectl rollout status deployment/<name>` and `kubectl rollout history`, then `kubectl describe` its newest ReplicaSet and the failing pod (Events, Last State, exit code) before explaining. Always pass the same --context and -n as the panel. Don't roll back, restart or scale unless the user asks.",
+  "spec": {
+    "title": "rollout · {{namespace}}",
+    "sources": {
+      "deps": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "deployments",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}",
+          "-o",
+          "json"
+        ],
+        "parse": "json",
+        "pick": "items",
+        "every_s": 5
+      },
+      "rolling": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "deployments",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}",
+          "-o",
+          "json"
+        ],
+        "parse": "json",
+        "pick": "items",
+        "every_s": 5,
+        "where": {
+          "status.unavailableReplicas": {
+            "gt": 0
+          }
+        }
+      },
+      "pods": {
+        "brick": "command",
+        "run": [
+          "kubectl",
+          "get",
+          "pods",
+          "--context",
+          "{{context}}",
+          "-n",
+          "{{namespace}}"
+        ],
+        "parse": "columns",
+        "every_s": 5
+      }
+    },
+    "views": [
+      {
+        "id": "deps-n",
+        "brick": "stat",
+        "source": "deps",
+        "title": "Deployment"
+      },
+      {
+        "id": "rolling-n",
+        "brick": "stat",
+        "source": "rolling",
+        "title": "Hazır değil",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 2
+      },
+      {
+        "id": "deps",
+        "brick": "table",
+        "source": "deps",
+        "title": "Deployment'lar",
+        "key": "metadata.name",
+        "columns": [
+          {
+            "field": "metadata.name",
+            "label": "NAME"
+          },
+          {
+            "field": "status.readyReplicas",
+            "label": "READY"
+          },
+          {
+            "field": "spec.replicas",
+            "label": "WANT"
+          },
+          {
+            "field": "status.updatedReplicas",
+            "label": "UP-TO-DATE"
+          },
+          {
+            "field": "status.unavailableReplicas",
+            "label": "UNAVAILABLE"
+          },
+          {
+            "field": "spec.template.spec.containers.0.image",
+            "label": "IMAGE"
+          }
+        ],
+        "row_actions": [
+          {
+            "label": "Neden?",
+            "ask": "{metadata.name} deployment'ı neden hazır değil? rollout status, history ve son ReplicaSet'in pod'larına bak."
+          }
+        ]
+      },
+      {
+        "id": "restarts",
+        "brick": "bars",
+        "source": "pods",
+        "title": "Restart",
+        "label": "NAME",
+        "value": "RESTARTS",
+        "limit": 8,
+        "warn_above": 2,
+        "error_above": 10,
+        "span": 4
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "deps": [
+        {
+          "metadata": {
+            "name": "api"
+          },
+          "spec": {
+            "replicas": 2,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/api:1.42.0"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 2,
+            "updatedReplicas": 2,
+            "availableReplicas": 2
+          }
+        },
+        {
+          "metadata": {
+            "name": "worker"
+          },
+          "spec": {
+            "replicas": 1,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/worker:1.42.0"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 0,
+            "updatedReplicas": 1,
+            "availableReplicas": 0,
+            "unavailableReplicas": 1
+          }
+        },
+        {
+          "metadata": {
+            "name": "checkout"
+          },
+          "spec": {
+            "replicas": 3,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/checkout:2.8.1"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 3,
+            "updatedReplicas": 3,
+            "availableReplicas": 3
+          }
+        },
+        {
+          "metadata": {
+            "name": "search"
+          },
+          "spec": {
+            "replicas": 3,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/search:0.19.4"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 2,
+            "updatedReplicas": 2,
+            "availableReplicas": 2,
+            "unavailableReplicas": 1
+          }
+        },
+        {
+          "metadata": {
+            "name": "notifier"
+          },
+          "spec": {
+            "replicas": 1,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/notifier:1.3.0"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 1,
+            "updatedReplicas": 1,
+            "availableReplicas": 1
+          }
+        }
+      ],
+      "rolling": [
+        {
+          "metadata": {
+            "name": "worker"
+          },
+          "spec": {
+            "replicas": 1,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/worker:1.42.0"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 0,
+            "updatedReplicas": 1,
+            "availableReplicas": 0,
+            "unavailableReplicas": 1
+          }
+        },
+        {
+          "metadata": {
+            "name": "search"
+          },
+          "spec": {
+            "replicas": 3,
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "europe-docker.pkg.dev/acme/app/search:0.19.4"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "readyReplicas": 2,
+            "updatedReplicas": 2,
+            "availableReplicas": 2,
+            "unavailableReplicas": 1
+          }
+        }
+      ],
+      "pods": [
+        {
+          "NAME": "api-7d9c6b5f8-x2lkq",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "2d"
+        },
+        {
+          "NAME": "api-7d9c6b5f8-p8mzt",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "1 (3h ago)",
+          "AGE": "2d"
+        },
+        {
+          "NAME": "worker-5b8f9c7d4-q7r2n",
+          "READY": "0/1",
+          "STATUS": "CrashLoopBackOff",
+          "RESTARTS": "14 (2m ago)",
+          "AGE": "47m"
+        },
+        {
+          "NAME": "checkout-6c7f8d9b5-mm2kd",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "3 (40m ago)",
+          "AGE": "6h"
+        },
+        {
+          "NAME": "search-84f6d7c9b-tq9wz",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "9d"
+        },
+        {
+          "NAME": "notifier-7b5c9f6d8-hx4pl",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "6 (12m ago)",
+          "AGE": "1d"
+        },
+        {
+          "NAME": "redis-0",
+          "READY": "1/1",
+          "STATUS": "Running",
+          "RESTARTS": "0",
+          "AGE": "9d"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "k9s",
+    "url": "https://k9scli.io",
+    "borrowed": [
+      "deployment READY / UP-TO-DATE / AVAILABLE",
+      "rollout'u süren deployment sayısı",
+      "pod'lar restart sayısına göre",
+      "context/namespace sabit"
+    ]
+  }
+}

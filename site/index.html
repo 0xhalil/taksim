@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>taksim</title>
+<meta name="description" content="A live canvas for the agent CLIs you already pay for: Claude Code, Codex, Gemini, Copilot and opencode work side by side, build their own tools and talk to each other.">
+<meta name="theme-color" content="#1E1F22">
+<meta property="og:title" content="taksim">
+<meta property="og:description" content="A live canvas for the agent CLIs you already pay for. No API key.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1000 1000%22 style=%22color:%233574F0%22%3E%3Cmask id=%22m%22%3E%3Cpath d=%22M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z%22 fill=%22%23fff%22/%3E%3Cg fill=%22none%22 stroke=%22%23000%22 stroke-width=%2234%22%3E%3Cg transform=%22rotate%280 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%2890 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28180 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28270 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3C/g%3E%3C/mask%3E%3Crect width=%221000%22 height=%221000%22 fill=%22currentColor%22 mask=%22url%28%23m%29%22/%3E%3C/svg%3E">
+<style>html, body { margin: 0; } body { font-size: 14px; -webkit-font-smoothing: antialiased; } [hidden] { display: none !important; }</style>
+<style>
+/* Layout: one full-height canvas that plays a session by itself. The camera follows the story:
+   orchestrator in front -> a job typed in -> its team is born -> they talk -> the IDE docks. Nodes are drawn to the native app's own measurements. */
+:root {
+  --bg: #1E1F22; --panel: #2B2D30; --panel2: #393B40; --line: #43454A; --ink: #DFE1E5; --text: #BCBEC4;
+  --muted: #868A91; --muted1: #9DA0A8; --muted2: #6F737A; --accent: #3574F0; --accent-ink: #FFFFFF; --sel: #2E436E;
+  --ok: #5FB865; --err: #F75464; --warn: #F2C55C; --wait: #2AACB8; --grid: #35373B; --node-head: #323438; --node-body: #2B2D30;
+  --tint: rgba(255, 255, 255, .13); --tint-lo: rgba(255, 255, 255, .06); --msg: #6B6862; --shadow: rgba(0, 0, 0, .12);
+  --kw: #CF8E6D; --str: #6AAB73; --com: #7A7E85; --fn: #56A8F5; --line-hl: #26282E;
+  --b-claude: #C4552D; --b-codex: #2B7A98; --b-opencode: #6A4FB3; --b-gemini: #3A7D44; --b-copilot: #57606A; --group: #548AF7; --on-brand: #FFFFFF;
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --title: Arial, "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.3, 1.35, .5, 1);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #FFFFFF; --panel: #F7F8FA; --panel2: #EBECF0; --line: #DFE1E5; --ink: #1E1F22; --text: #2B2D30;
+    --muted: #6C707E; --muted1: #5A5D6B; --muted2: #A8ADBD; --sel: #D4E2FF; --ok: #208A3C; --err: #DB3B4B; --warn: #B27A00; --wait: #0B8A96;
+    --grid: #DFE1E5; --node-head: #F2F3F5; --node-body: #FFFFFF; --tint: rgba(0, 0, 0, .09); --tint-lo: rgba(0, 0, 0, .05);
+    --kw: #0033B3; --str: #067D17; --com: #8C8C8C; --fn: #00627A; --line-hl: #F5F8FE;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #FFFFFF; --panel: #F7F8FA; --panel2: #EBECF0; --line: #DFE1E5; --ink: #1E1F22; --text: #2B2D30;
+  --muted: #6C707E; --muted1: #5A5D6B; --muted2: #A8ADBD; --sel: #D4E2FF; --ok: #208A3C; --err: #DB3B4B; --warn: #B27A00; --wait: #0B8A96;
+  --grid: #DFE1E5; --node-head: #F2F3F5; --node-body: #FFFFFF; --tint: rgba(0, 0, 0, .09); --tint-lo: rgba(0, 0, 0, .05);
+  --kw: #0033B3; --str: #067D17; --com: #8C8C8C; --fn: #00627A; --line-hl: #F5F8FE;
+  color-scheme: light;
+}
+
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); }
+* { box-sizing: border-box; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+#stage { position: relative; height: 100svh; min-height: 520px; overflow: hidden; background: var(--bg); }
+#grid { position: absolute; inset: 0; background-image: radial-gradient(circle, var(--grid) 1.1px, transparent 1.4px); background-size: 40px 40px; }
+
+#stage::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 200px; z-index: 4; pointer-events: none; background: linear-gradient(transparent, var(--bg) 62%); }
+.mark { position: absolute; left: 16px; top: 16px; z-index: 5; font: 700 16px/1 var(--ui); letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
+.mark svg { width: 22px; height: 22px; color: var(--accent); display: block; }
+.top { position: absolute; right: 16px; top: 10px; z-index: 6; display: flex; align-items: center; gap: 6px; }
+#lang { height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: 500 13px/1 var(--ui); cursor: pointer; }
+#lang:hover { background: var(--tint-lo); }
+#lang:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+#gh { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--ink); text-decoration: none; }
+#gh:hover { background: var(--tint-lo); }
+#gh svg { width: 18px; height: 18px; }
+#gh:focus-visible, footer a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+#cta {
+  border: 0; border-radius: 8px; padding: 9px 16px; cursor: pointer; text-decoration: none;
+  background: var(--accent); color: var(--accent-ink); font: 600 13.5px/1 var(--ui); display: flex; align-items: center; gap: 7px;
+}
+#cta.glow { animation: glow 1.6s ease-out 2; }
+@keyframes glow { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 16px transparent; } }
+#cta:focus-visible, #replay:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.say { position: absolute; left: 16px; right: 64px; bottom: 44px; z-index: 5; }
+#cap { margin: 0; font: 650 clamp(24px, 4.4vw, 44px)/1.08 var(--ui); letter-spacing: -.025em; text-wrap: balance; }
+#bar { position: absolute; left: 16px; bottom: 22px; z-index: 5; display: flex; gap: 6px; }
+#bar i { width: 20px; height: 4px; border-radius: 2px; background: var(--line); transition: background .3s; }
+#bar i.on { background: var(--accent); }
+#replay {
+  position: absolute; right: 16px; bottom: 16px; z-index: 5; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink); display: grid; place-items: center;
+}
+
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; transition: transform .95s var(--ease); will-change: transform; }
+#edges { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.pill {
+  position: absolute; height: 18px; padding: 0 7px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line);
+  font: 500 11px/16px var(--ui); color: var(--text); white-space: nowrap; transform: translate(-50%, -50%); opacity: 0; transition: opacity .25s;
+}
+.pill.on { opacity: 1; }
+.pill.soft { font-weight: 400; color: var(--muted); }
+
+/* ---- the agent node (GraphDraw.drawNode) ---- */
+.node {
+  position: absolute; border-radius: 8px; background: var(--node-body); box-shadow: 0 1px 3px var(--shadow);
+  opacity: 0; transition: transform .55s var(--spring), opacity .22s; cursor: grab; user-select: none;
+}
+.node.on { opacity: 1; transform: none !important; }
+.node.lift { box-shadow: 0 5px 12px rgba(0, 0, 0, .22); cursor: grabbing; z-index: 4; }
+.ring { position: absolute; inset: -4px; border-radius: 11px; border: 2px solid transparent; pointer-events: none; }
+.node[data-status="running"] .ring { border-color: var(--ok); animation: pulse 1.4s linear infinite; }
+.node[data-status="waiting"] .ring { border-color: var(--wait); animation: pulse 1.4s linear infinite; }
+@keyframes pulse { 0%, 50%, 100% { opacity: .45; } 25%, 75% { opacity: .9; } }
+
+.tbar { position: relative; height: 30px; background: var(--node-head); border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--grid); }
+.logo { position: absolute; left: 6px; top: 5px; width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: var(--on-brand); }
+.logo svg { width: 14px; height: 14px; fill: currentColor; }
+.logo svg.i { fill: none; }
+.nm { position: absolute; left: 30px; top: 0; font: 400 14px/30px var(--title); color: var(--ink); white-space: nowrap; }
+.why { font: 400 11.5px/30px var(--ui); color: var(--muted); margin-left: 8px; opacity: 0; transition: opacity .3s; }
+.why.on { opacity: 1; }
+.tb { position: absolute; top: 6px; width: 22px; height: 18px; border-radius: 5px; background: var(--tint-lo); display: grid; place-items: center; color: var(--ink); transition: background .25s, color .25s; }
+.tb.term { right: 6px; background: var(--tint); } .tb.code { right: 32px; } .tb.help { right: 58px; } .tb.wand { right: 84px; color: var(--muted1); }
+.tb.lit { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.tb.flash { background: var(--accent); color: var(--accent-ink); }
+.sdot { position: absolute; right: 87px; top: 11px; width: 8px; height: 8px; border-radius: 50%; display: none; }
+.node[data-status="running"] .sdot { display: block; background: var(--ok); animation: pulse 1.4s linear infinite; }
+.node[data-status="waiting"] .sdot { display: block; background: var(--wait); }
+
+.acct { margin-left: 12px; font: 400 11.5px/30px var(--ui); color: var(--muted1); display: inline-flex; align-items: center; gap: 4px; vertical-align: top; height: 30px; }
+.acct svg { width: 12px; height: 12px; }
+.acct { transition: color .3s; }
+.acct b { font-weight: 400; }
+.acct.hi { color: var(--ink); }
+.rail { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 8px 0 0 8px; background: var(--group); z-index: 1; transform: scaleY(0); transition: transform .4s var(--ease); }
+.node.grouped .rail { transform: none; }
+
+/* ---- a group: a quiet frame, its name, its shared note (GraphDraw.drawGroups) ---- */
+.grp { position: absolute; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--group) 28%, transparent); background: color-mix(in srgb, var(--group) 5.5%, transparent);
+  opacity: 0; transform: scale(1.12); transition: transform .6s var(--spring), opacity .3s; pointer-events: none; font: 500 12px/1 var(--ui); color: var(--ink); }
+.grp.on { opacity: 1; transform: none; }
+.grp i { position: absolute; left: 11px; top: 11px; width: 5px; height: 5px; border-radius: 50%; background: var(--group); }
+.grp span { position: absolute; left: 23px; top: 8px; }
+.grp em { position: absolute; right: 10px; top: 6px; display: flex; align-items: center; gap: 4px; font: 500 10.5px/1 var(--ui); font-style: normal; color: var(--muted); transition: color .3s; }
+.grp em.has { color: var(--group); }
+.grp q { quotes: none; font: 500 11.5px/1 var(--ui); animation: rise .35s var(--ease); }
+.grp em.has svg { fill: color-mix(in srgb, var(--group) 35%, transparent); }
+.spark { position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--group); box-shadow: 0 0 12px var(--group); transition: left .7s var(--ease), top .7s var(--ease), opacity .2s; z-index: 6; }
+
+.tb.help.lit svg { fill: currentColor; }
+.tools .orc { display: none; }
+.node.orch .tools .orc { display: flex; }
+.node.orch .tools .orc svg { color: var(--accent); }
+#cur { position: absolute; width: 20px; height: 20px; z-index: 8; opacity: 0; pointer-events: none; transition: left .8s var(--ease), top .8s var(--ease), opacity .25s; }
+#cur.on { opacity: 1; }
+#cur svg { width: 20px; height: 20px; fill: var(--ink); stroke: var(--bg); stroke-width: 1.2; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45)); }
+#cur::after { content: ""; position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent); opacity: 0; }
+#cur.click::after { animation: ripple .45s ease-out; }
+@keyframes ripple { from { opacity: 1; transform: scale(.3); } to { opacity: 0; transform: scale(1.8); } }
+
+/* ---- the chat in the node ---- */
+.chat { position: absolute; left: 4px; top: 32px; right: 10px; bottom: 10px; background: var(--bg); overflow: hidden; }
+.chead { height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 11px; }
+.chead b { font-weight: 600; color: var(--ink); margin-right: auto; }
+.msgs { position: absolute; left: 0; right: 0; top: 34px; bottom: 102px; padding: 2px 12px 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; font-size: 12.5px; line-height: 1.4; }
+.msgs > * { animation: rise .3s var(--ease); flex: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.empty { margin: auto; text-align: center; color: var(--ink); font: 500 14px/1 var(--ui); display: grid; gap: 12px; }
+.empty span { display: flex; gap: 14px; justify-content: center; color: var(--muted); font: 400 11px/19px var(--ui); }
+.empty kbd { display: inline-block; width: 19px; height: 19px; border-radius: 4px; background: var(--panel2); font: 400 11px/19px var(--mono); margin-right: 6px; }
+.user { background: color-mix(in srgb, var(--panel) 55%, transparent); border-radius: 8px; padding: 8px 10px; color: var(--ink); }
+.ai { color: var(--ink); }
+.act { display: flex; align-items: center; gap: 7px; font: 400 11px/1.3 var(--mono); color: var(--muted); }
+.act svg { width: 12px; height: 12px; }
+.chip { position: absolute; z-index: 6; transform: translate(-50%, -50%); padding: 4px 9px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font: 600 11px/1 var(--ui); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 60%, transparent); transition: left .6s var(--ease), top .6s var(--ease); pointer-events: none; }
+.work { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
+.work i { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: blink 1.2s infinite; }
+.work i:nth-child(2) { animation-delay: .2s; } .work i:nth-child(3) { animation-delay: .4s; }
+.work i + i { margin-left: -4px; }
+@keyframes blink { 0%, 100% { opacity: .3; } 40% { opacity: 1; } }
+.changes { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font: 400 11px/1 var(--mono); }
+.changes div { display: flex; gap: 8px; align-items: center; height: 24px; padding: 0 10px; }
+.changes div:first-child { border-bottom: 1px solid var(--line); height: 28px; }
+.changes b { font: 600 11.5px/1 var(--ui); color: var(--ink); margin-right: auto; }
+.changes span { font: 400 12px/1 var(--ui); color: var(--ink); margin-right: auto; }
+.changes em { font-style: normal; color: var(--ok); } .changes s { text-decoration: none; color: var(--err); }
+
+.comp { position: absolute; left: 10px; right: 10px; bottom: 9px; height: 86px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); background: color-mix(in srgb, var(--panel) 45%, var(--bg)); }
+.model { position: absolute; left: 12px; top: 9px; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); }
+.field { position: absolute; left: 14px; right: 14px; top: 12px; font-size: 13px; line-height: 1.35; color: var(--ink); max-height: 36px; overflow: hidden; }
+.field:empty::before { content: attr(data-ph); color: var(--muted2); }
+.field.typing::after { content: ""; display: inline-block; width: 1.5px; height: 14px; background: var(--accent); vertical-align: -2px; margin-left: 1px; animation: blink 1s steps(2) infinite; }
+.tools { position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: var(--ink); }
+.tools span { display: flex; align-items: center; gap: 5px; }
+.tools svg { color: var(--muted); }
+.tools svg.v { width: 9px; height: 9px; margin-left: -2px; }
+.clip { position: absolute; right: 44px; bottom: 14px; color: var(--muted); }
+.go { position: absolute; right: 9px; bottom: 9px; width: 26px; height: 26px; border-radius: 7px; background: var(--sel); color: var(--accent-ink); display: grid; place-items: center; transition: background .2s, transform .2s var(--spring); }
+.go.ready { background: var(--accent); }
+.go.press { transform: scale(.82); }
+.go .stop { display: none; width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+.node[data-status="running"] .go, .node[data-status="waiting"] .go { background: var(--err); }
+.node[data-status="running"] .go svg, .node[data-status="waiting"] .go svg { display: none; }
+.node[data-status="running"] .go .stop, .node[data-status="waiting"] .go .stop { display: block; }
+.node[data-status="running"] .tools, .node[data-status="waiting"] .tools { color: var(--muted); }
+
+/* ---- the docked IDE (IDEDock + IDEView) ---- */
+#ide { position: absolute; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; opacity: 0; transform: scaleX(.05); transform-origin: 0 50%; transition: transform .6s var(--spring), opacity .25s; }
+#ide.on { opacity: 1; transform: none; }
+.ihead { height: 30px; background: var(--node-head); display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; font: 600 12px/1 var(--ui); color: var(--ink); }
+.ihead > svg { color: var(--accent); width: 13px; height: 13px; stroke-width: 1.8; }
+.ihead span { margin-left: auto; display: flex; gap: 10px; color: var(--muted); }
+.ibody { position: absolute; inset: 30px 0 0 0; display: flex; border-top: 1px solid var(--line); }
+.strip { width: 34px; flex: none; padding: 6px 3px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--line); color: var(--muted); }
+.strip div { position: relative; width: 28px; height: 26px; border-radius: 6px; display: grid; place-items: center; }
+.strip .lit { background: var(--sel); color: var(--accent); }
+.strip u { position: absolute; right: -2px; top: -2px; min-width: 12px; height: 12px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font: 700 8px/12px var(--ui); text-align: center; text-decoration: none; opacity: 0; transition: opacity .3s; }
+.strip u.on { opacity: 1; }
+.tree { width: 32%; max-width: 230px; flex: none; border-right: 1px solid var(--line); font-size: 12px; color: var(--text); overflow: hidden; }
+.tree .root { height: 32px; padding: 0 10px; display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
+.tree .root svg { color: var(--accent); fill: currentColor; width: 12px; height: 12px; }
+.tree p { margin: 0 4px; height: 22px; border-radius: 4px; display: flex; align-items: center; gap: 5px; white-space: nowrap; padding-right: 4px; }
+.tree p svg { width: 11px; height: 11px; color: var(--muted); }
+.tree p.d0 { padding-left: 4px; } .tree p.d1 { padding-left: 18px; } .tree p.d2 { padding-left: 32px; }
+.tree p.sel { background: var(--sel); }
+.tree .m { color: var(--accent); } .tree .a { color: var(--ok); }
+.tree p.new { max-height: 0; opacity: 0; overflow: hidden; transition: max-height .35s var(--ease), opacity .3s; }
+.tree p.new.on { max-height: 22px; opacity: 1; }
+.edit { flex: 1; min-width: 0; background: var(--bg); display: flex; flex-direction: column; }
+.tabs { height: 30px; flex: none; border-bottom: 1px solid var(--line); display: flex; font-size: 12px; }
+.tabs div { padding: 0 12px; display: flex; align-items: center; gap: 6px; color: var(--ink); border-bottom: 2px solid var(--accent); white-space: nowrap; }
+.tabs svg { width: 11px; height: 11px; color: var(--fn); }
+.src { padding: 6px 0; font: 400 12px/20px var(--mono); color: var(--text); white-space: pre; overflow: hidden; counter-reset: ln; }
+.src div { counter-increment: ln; padding-right: 10px; opacity: 0; transition: opacity .25s, background .6s; }
+.src div::before { content: counter(ln); display: inline-block; width: 30px; padding-right: 10px; text-align: right; color: var(--muted2); }
+.src div.on { opacity: 1; } .src div.hot { background: var(--line-hl); }
+.k { color: var(--kw); } .s { color: var(--str); } .f { color: var(--fn); } .c { color: var(--com); font-style: italic; }
+
+/* ---- a tool: the panel an agent builds from bricks (PanelChrome, stat / table / log bricks) ---- */
+#tool { position: absolute; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 18px var(--shadow); overflow: hidden; opacity: 0; transform: scale(.2); transform-origin: 0 20%; transition: transform .6s var(--spring), opacity .25s; }
+#tool.on { opacity: 1; transform: none; }
+.phead { height: 29px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border-bottom: 1px solid var(--line); font: 600 13px/1 var(--ui); color: var(--ink); }
+.phead .pdot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.phead span { margin-left: auto; display: flex; gap: 15px; color: var(--muted); }
+.phead .keep { transition: color .3s, transform .4s var(--spring); }
+.phead .keep.on { color: var(--accent); fill: currentColor; transform: scale(1.15); }
+.pbody { padding: 8px; display: flex; flex-direction: column; gap: 9px; }
+.pop { opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .3s, transform .45s var(--spring); }
+.pop.on { opacity: 1; transform: none; }
+.tiles { display: flex; gap: 8px; }
+.tile { width: 129px; height: 59px; border-radius: 6px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 45%, var(--panel)); padding: 7px 9px; }
+.tile small { display: block; font: 600 11.5px/1 var(--ui); color: var(--muted); }
+.tile strong { display: block; margin-top: 7px; font: 700 26px/1 var(--ui); letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tile strong.ok { color: var(--ok); } .tile strong.warn { color: var(--warn); } .tile strong.err { color: var(--err); }
+.card { border-radius: 6px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 45%, var(--panel)); padding: 6px 8px 9px; }
+.ct { display: flex; justify-content: space-between; align-items: baseline; height: 18px; font: 600 12px/1 var(--ui); color: var(--muted); }
+.ct span { font: 400 10.5px/1 var(--ui); color: var(--muted2); }
+.tr { display: grid; grid-template-columns: 111px 49px 119px 66px; height: 21px; align-items: center; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--text); white-space: nowrap; }
+.tr.th { color: var(--muted); font-size: 12px; }
+.tr .num { position: relative; text-align: right; padding-right: 2px; font-variant-numeric: tabular-nums; }
+.tr .num::before { content: ""; position: absolute; left: 0; top: 3px; bottom: 3px; width: var(--bar, 0%); background: var(--sel); border-radius: 2px; transition: width .4s var(--ease); z-index: 0; }
+.tr .num b { position: relative; font-weight: 400; }
+.tr .good { color: var(--ok); } .tr .bad { color: var(--err); }
+.tr.row { max-height: 0; opacity: 0; border-bottom-width: 0; overflow: hidden; transition: max-height .3s var(--ease), opacity .3s; }
+.tr.row.on { max-height: 21px; opacity: 1; border-bottom-width: 1px; }
+.cell-flash { animation: cellflash .9s ease-out; }
+@keyframes cellflash { 0% { background: color-mix(in srgb, var(--accent) 45%, transparent); } 100% { background: transparent; } }
+.lines { height: 62px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; font: 400 11.5px/14.6px var(--mono); color: var(--text); white-space: pre; }
+.lines div { animation: rise .25s var(--ease); }
+.lines em { display: inline-block; width: 44px; font-style: normal; font-size: 10.5px; color: var(--muted); }
+.lines em.warn { color: var(--warn); font-weight: 700; } .lines em.error { color: var(--err); font-weight: 700; }
+
+.axis { display: flex; justify-content: space-between; margin-left: 170px; padding-bottom: 4px; border-bottom: 1px solid var(--line); font: 400 10.5px/1 var(--ui); color: var(--muted2); font-variant-numeric: tabular-nums; }
+.lanes { position: relative; padding-top: 3px; }
+.lane { display: flex; align-items: center; height: 20px; font-size: 12.5px; color: var(--text); }
+.lane span { width: 170px; flex: none; }
+.lane i { position: relative; flex: 1; height: 12px; background: linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat; }
+.lane b { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: var(--ok); transform: scaleX(0); transform-origin: 0 50%; transition: transform .5s var(--ease), background .4s; font: 500 10.5px/12px var(--ui); color: var(--accent-ink); padding-left: 5px; white-space: nowrap; overflow: hidden; }
+.lane b.on { transform: none; }
+.lane b.run { background: var(--accent); }
+.nowline { position: absolute; top: 0; bottom: 0; left: calc(170px + (100% - 170px) * .97); border-left: 1px dashed var(--err); opacity: 0; transition: opacity .3s; }
+.nowline.on { opacity: .8; }
+
+/* the macOS notification an agent sends when it has something to say */
+#note { position: absolute; z-index: 7; top: 58px; right: 16px; width: min(350px, calc(100% - 32px)); padding: 11px 13px; border-radius: 16px; display: flex; gap: 11px; align-items: center;
+  background: color-mix(in srgb, var(--panel2) 82%, transparent); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border: 1px solid var(--line); box-shadow: 0 12px 32px rgba(0, 0, 0, .3);
+  transform: translateX(calc(100% + 32px)); transition: transform .6s var(--spring); }
+#note.on { transform: none; }
+#note i { width: 36px; height: 36px; border-radius: 9px; background: var(--accent); flex: none; display: grid; place-items: center; }
+#note i::after { content: ""; width: 14px; height: 14px; border-radius: 4px; background: var(--accent-ink); }
+#note b { display: block; font: 600 13px/1.3 var(--ui); color: var(--ink); }
+#note span { display: block; font: 400 12.5px/1.3 var(--ui); color: var(--text); }
+
+footer { border-top: 1px solid var(--line); padding-block: 26px; padding-inline: 16px; display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; }
+footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 20px; }
+footer li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+footer .logo { position: static; }
+footer .repo { display: flex; align-items: center; gap: 7px; color: var(--ink); font: 400 12px/1 var(--mono); text-decoration: none; }
+footer .repo svg { width: 15px; height: 15px; }
+footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4 var(--mono); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  #world, .node, #ide, #tool, #note, .grp, #cur, .chip, .rail, .spark, .lane b, .pop, .tr.row, .pill, .msgs > *, .src div, .lines div { transition: none; animation: none; }
+  .ring, .sdot, .work i, .cell-flash, #cta.glow { animation: none !important; }
+}
+</style>
+
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div class="mark"><svg viewBox="100 100 800 800" aria-hidden="true"><mask id="m"><path d="M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z" fill="#fff"/><g fill="none" stroke="#000" stroke-width="34"><g transform="rotate(0 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(90 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(180 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(270 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g></g></mask><rect width="1000" height="1000" fill="currentColor" mask="url(#m)"/></svg>taksim</div>
+  <div class="top">
+    <button id="lang" type="button">中文</button>
+    <a id="gh" href="https://github.com/0xhalil/taksim" aria-label="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+    <a id="cta" href="https://github.com/0xhalil/taksim/releases/latest/download/Taksim.dmg">
+    <svg class="i" viewBox="0 0 16 16" style="stroke-width:1.8"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg><span data-t="Download for Mac">Download for Mac</span>
+    </a>
+  </div>
+  <div id="world"></div>
+  <div id="note" aria-hidden="true"><i></i><div><b>deploy</b><span>api-7c9f4d-q5tz was OOMKilled at 256Mi. Raise the limit to 512Mi?</span></div></div>
+  <div class="say"><p id="cap" aria-live="polite">Start with one agent.</p></div>
+  <div id="bar" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <button id="replay" type="button" aria-label="Replay">
+    <svg class="i" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v3h-3"/></svg>
+  </button>
+</div>
+
+<footer>
+  <ul id="clis"></ul>
+  <p data-t="macOS 15+ · Node 20+ · your own subscriptions · no API key · 127.0.0.1">macOS 15+ · Node 20+ · your own subscriptions · no API key · 127.0.0.1</p>
+  <a class="repo" href="https://github.com/0xhalil/taksim"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>0xhalil/taksim</a>
+</footer>
+
+<script>
+(function () {
+  // logos:start (generated by site/scripts/sync-logos.mjs from native/Sources/Taksim/Logos.swift)
+  var LOGO = {
+    claude: 'm4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z',
+    gemini: 'M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81',
+    opencode: 'M22 24H2V0h20zM17 4.8H7v14.4h10z',
+    copilot: 'M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z'
+  };
+  // logos:end
+  var IC = {
+    term: '<rect x="1.5" y="3" width="13" height="10" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5"/>',
+    code: '<path d="M6 4.5 2.5 8 6 11.5M10 4.5 13.5 8 10 11.5M9 3.5 7 12.5"/>',
+    help: '<circle cx="6" cy="6" r="2.2"/><circle cx="11.3" cy="6.6" r="1.7"/><path d="M2 13c0-2.2 1.8-3.6 4-3.6s4 1.4 4 3.6M11.3 9.8c1.7 0 2.9 1.1 2.9 2.9"/>',
+    wand: '<path d="M3 13 9.5 6.5"/><path d="M11.5 2v3M10 3.5h3M5 2.5v2M4 3.5h2M13 8.5v2M12 9.5h2"/>',
+    folder: '<path d="M2 4.5h4l1.5 1.5H14v6.5H2z"/>',
+    branch: '<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5" r="1.5"/><path d="M4.5 5v6M11.5 6.5c0 3-7 2-7 4.5"/>',
+    plus: '<path d="M8 3v10M3 8h10"/>',
+    search: '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>',
+    dots: '<circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/>',
+    clip: '<path d="M11.5 6 7 10.5a1.5 1.5 0 0 0 2.1 2.1l4-4.1a3 3 0 0 0-4.2-4.2L4.6 8.6a4.2 4.2 0 0 0 5.9 5.9"/>',
+    bolt: '<path d="M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z"/>',
+    up: '<path d="M8 13V3M4 7l4-4 4 4"/>',
+    chev: '<path d="M4 6l4 4 4-4"/>',
+    file: '<path d="M4 2h5l3 3v9H4z"/>',
+    right: '<path d="M6 4l4 4-4 4"/>',
+    refresh: '<path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v3h-3"/>',
+    keep: '<path d="M4.5 2.5h7v11L8 10.5l-3.5 3z"/>',
+    expand: '<path d="M3 3l10 10M3 7V3h4M13 9v4H9"/>',
+    minus: '<path d="M3.5 8h9"/>',
+    close: '<path d="M4 4l8 8M12 4l-8 8"/>',
+    user: '<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>',
+    book: '<path d="M4 2.5h8v11H4zM6.5 2.5v11"/>'
+  };
+  function ic(n, extra) { return '<svg class="i" viewBox="0 0 16 16"' + (extra || '') + '>' + IC[n] + '</svg>'; }
+  function logo(b) {
+    var inner = LOGO[b] ? '<svg viewBox="0 0 24 24"><path d="' + LOGO[b] + '"/></svg>' : ic('term');
+    return '<span class="logo" style="background:var(--b-' + b + ')">' + inner + '</span>';
+  }
+
+  var TH = 30;
+  // graph units, as the app's canvas: rect = title bar + body
+  var DEF = {
+    orch:   { name: 'orchestrator', backend: 'claude',   model: 'opus',           x: 540,  y: 0,   w: 640, h: 440, helpers: false },
+    docs:   { name: 'docs',         backend: 'copilot',  model: 'auto',           x: 0,    y: 590, w: 520, h: 380, by: 'orch', why: 'update the README' },
+    review: { name: 'review',       backend: 'gemini',   model: 'gemini-2.5-pro', x: 600,  y: 590, w: 520, h: 380, by: 'orch', why: 'review token flow' },
+    tests:  { name: 'tests',        backend: 'codex',    model: 'gpt-5',          x: 1320, y: 590, w: 520, h: 380, by: 'orch', why: 'write the tests' },
+    deploy: { name: 'deploy',       backend: 'claude',   model: 'sonnet',         x: 1340, y: 20,  w: 520, h: 380, by: 'orch', why: 'watch the rollout' }
+  };
+  var ACCT = { orch: 'Claude Max', tests: 'ChatGPT Plus', review: 'Google AI Pro', docs: 'Copilot Pro', deploy: 'Claude Max' };
+  // groups are areas of the codebase, each with its own shared memory
+  var GROUPS = {
+    backend: { x: 560, y: 542, w: 1320, h: 462, color: '#548AF7', members: ['review', 'tests'] },
+    infra: { x: 1300, y: -30, w: 1174, h: 562, color: '#4A9C5D', members: ['deploy'] }
+  };
+  var IDE = { w: 1100, h: 680 }, TOOL = { w: 560, h: 480 };
+  var PODS = ['api-7c9f4d-x2kq', 'api-7c9f4d-m8wd', 'api-7c9f4d-q5tz'];
+
+  var $ = function (s) { return document.querySelector(s); };
+  var stage = $('#stage'), world = $('#world'), cap = $('#cap'), cta = $('#cta'), bar = [].slice.call(document.querySelectorAll('#bar i'));
+  var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var run = 0, fast = false, nodes = {}, edges = [], pulses = [], svg, ide, tool, group, cur, note = $('#note'), cam = { s: 1 }, lastFocus = null;
+
+  $('#clis').innerHTML = [['claude', 'Claude Code'], ['codex', 'Codex'], ['gemini', 'Gemini'], ['copilot', 'GitHub Copilot'], ['opencode', 'opencode']]
+    .map(function (c) { return '<li>' + logo(c[0]) + c[1] + '</li>'; }).join('');
+
+  function nodeHTML(d, id) {
+    var vee = ic('chev').replace('class="i"', 'class="i v"');
+    return '<div class="ring"></div><i class="rail"></i>' +
+      '<div class="tbar">' + logo(d.backend) + '<span class="nm">' + d.name + '<span class="why">' + t(d.why || '') + '</span><span class="acct">' + ic('user') + '<b>' + ACCT[id] + '</b></span></span>' +
+        '<span class="sdot"></span>' +
+        '<span class="tb help' + (d.helpers ? ' lit' : '') + '">' + ic('help') + '</span>' +
+        '<span class="tb code">' + ic('code') + '</span><span class="tb term">' + ic('term') + '</span></div>' +
+      '<div class="chat"><div class="chead"><b>Chat</b>' + ic('plus') + ic('search') + ic('dots', ' style="fill:currentColor"') + '</div>' +
+        '<div class="msgs"><div class="empty">New chat<span><span><kbd>@</kbd>Context</span><span><kbd>/</kbd>Command</span></span></div></div>' +
+        '<div class="comp"><div class="field" data-ph="Ask for something…"></div>' +
+          '<div class="tools"><span>' + ic('bolt') + 'Agent' + vee + '</span><span>' + d.model + vee + '</span><span class="orc">' + ic('help') + '</span></div>' +
+          '<span class="clip">' + ic('clip') + '</span>' +
+          '<div class="go">' + ic('up', ' style="stroke-width:1.8"') + '<i class="stop"></i></div></div></div>';
+  }
+
+  function build() {
+    world.innerHTML = '<svg id="edges" aria-hidden="true"></svg>';
+    svg = world.firstChild; nodes = {}; edges = []; pulses = [];
+    group = {};
+    Object.keys(GROUPS).forEach(function (name) {
+      var g = GROUPS[name], e = document.createElement('div'); e.className = 'grp';
+      e.innerHTML = '<i></i><span>' + name + '</span><em>' + ic('book') + '</em>';
+      e.style.cssText = '--group:' + g.color + ';left:' + g.x + 'px;top:' + g.y + 'px;width:' + g.w + 'px;height:' + g.h + 'px';
+      world.appendChild(e); group[name] = e;
+    });
+    cur = document.createElement('div'); cur.id = 'cur';
+    cur.innerHTML = '<svg viewBox="0 0 20 20"><path d="M2 1.5v14l3.8-3.4 2.6 5.6 2.2-1-2.6-5.5h5z"/></svg>';
+    Object.keys(DEF).forEach(function (id) {
+      var d = DEF[id], el = document.createElement('div');
+      el.className = 'node'; el.dataset.id = id; el.dataset.status = 'idle';
+      el.innerHTML = nodeHTML(d, id);
+      world.appendChild(el);
+      nodes[id] = { id: id, el: el, x: d.x, y: d.y, w: d.w, h: d.h, shown: false };
+      Object.keys(GROUPS).forEach(function (name) { if (GROUPS[name].members.indexOf(id) >= 0) el.style.setProperty('--group', GROUPS[name].color); });
+      place(id);
+    });
+    ide = document.createElement('div'); ide.id = 'ide';
+    ide.innerHTML = '<div class="ihead">' + ic('code') + 'taksim<span>' + ic('search') + ic('dots', ' style="fill:currentColor"') + '</span></div>' +
+      '<div class="ibody"><div class="strip"><div class="lit">' + ic('folder') + '</div><div>' + ic('branch') + '<u>3</u></div></div>' +
+      '<div class="tree"><div class="root">' + ic('folder') + 'taksim</div>' +
+        '<p class="d0">' + ic('chev') + ic('folder') + 'src</p><p class="d1">' + ic('chev') + ic('folder') + 'auth</p>' +
+        '<p class="d2">' + ic('file') + 'login.ts</p><p class="d2">' + ic('file') + 'session.ts</p>' +
+        '<p class="d2 m">' + ic('file') + 'token.ts</p><p class="d2 a sel new">' + ic('file') + 'token.test.ts</p>' +
+        '<p class="d0 m">' + ic('file') + 'README.md</p></div>' +
+      '<div class="edit"><div class="tabs"><div>' + ic('file') + 'token.test.ts</div></div><div class="src">' +
+        '<div><span class="k">import</span> { refresh, isRevoked } <span class="k">from</span> <span class="s">"./token"</span></div>' +
+        '<div> </div>' +
+        '<div><span class="f">test</span>(<span class="s">"rotates the refresh token"</span>, <span class="k">async</span> () =&gt; {</div>' +
+        '<div>  <span class="k">const</span> next = <span class="k">await</span> <span class="f">refresh</span>(old)</div>' +
+        '<div>  <span class="f">expect</span>(next.id).not.<span class="f">toBe</span>(old.id)</div>' +
+        '<div>  <span class="f">expect</span>(<span class="k">await</span> <span class="f">isRevoked</span>(old.id)).<span class="f">toBe</span>(<span class="k">true</span>)</div>' +
+        '<div>})</div>' +
+        '<div> </div>' +
+        '<div><span class="f">test</span>(<span class="s">"rejects a token that was already rotated"</span>, <span class="k">async</span> () =&gt; {</div>' +
+        '<div>  <span class="k">await</span> <span class="f">refresh</span>(old)</div>' +
+        '<div>  <span class="k">await</span> <span class="f">expect</span>(<span class="f">refresh</span>(old)).rejects.<span class="f">toThrow</span>(<span class="s">"revoked"</span>)</div>' +
+        '<div>})</div>' +
+        '<div> </div>' +
+        '<div><span class="f">test</span>(<span class="s">"an expired token cannot be refreshed"</span>, <span class="k">async</span> () =&gt; {</div>' +
+        '<div>  <span class="k">const</span> stale = { ...old, expiresAt: Date.<span class="f">now</span>() - 1 }  <span class="c">// one millisecond late</span></div>' +
+        '<div>  <span class="k">await</span> <span class="f">expect</span>(<span class="f">refresh</span>(stale)).rejects.<span class="f">toThrow</span>(<span class="s">"expired"</span>)</div>' +
+        '<div>})</div></div></div></div>';
+    world.appendChild(ide);
+    nodes.ide = { id: 'ide', el: ide, w: IDE.w, h: IDE.h, shown: false };
+    tool = document.createElement('div'); tool.id = 'tool';
+    tool.innerHTML = '<div class="phead"><i class="pdot"></i>api rollout<span>' + ic('refresh') + ic('keep').replace('class="i"', 'class="i keep"') + ic('expand') + ic('minus') + ic('close') + '</span></div>' +
+      '<div class="pbody"><div class="card pop"><div class="ct">pipeline<span>now</span></div><div class="axis"><span>18:00</span><span>18:02</span><span>18:04</span><span>18:06</span><span>18:08</span></div>' +
+        '<div class="lanes"><div class="lane"><span>build</span><i><b style="left:0;width:27%"></b></i></div><div class="lane"><span>test</span><i><b style="left:27%;width:44%"></b></i></div>' +
+        '<div class="lane"><span>push image</span><i><b style="left:71%;width:10%"></b></i></div><div class="lane"><span>rollout</span><i><b class="run" style="left:81%;width:16%">40 s</b></i></div><u class="nowline"></u></div></div>' +
+      '<div class="tiles"><div class="tile pop"><small>ready</small><strong class="ok" data-v="ready">3/3</strong></div>' +
+        '<div class="tile pop"><small>restarts</small><strong data-v="restarts">0</strong></div></div>' +
+      '<div class="card pop"><div class="ct">pods<span>now</span></div><div class="tr th"><span>NAME</span><span>READY</span><span>STATUS</span><span class="num">RESTARTS</span></div>' +
+        PODS.map(function (p) { return '<div class="tr row"><span>' + p + '</span><span>1/1</span><span class="good">Running</span><span class="num"><b>0</b></span></div>'; }).join('') + '</div>' +
+      '<div class="card pop"><div class="ct">logs<span>now</span></div><div class="lines"></div></div></div>';
+    world.appendChild(tool);
+    world.appendChild(cur);
+    nodes.tool = { id: 'tool', el: tool, w: TOOL.w, h: TOOL.h, shown: false };
+    note.classList.remove('on');
+    dock();
+  }
+  function logLine(level, text) { var d = document.createElement('div'); d.innerHTML = '<em class="' + level + '">' + level.toUpperCase() + '</em>' + text; tool.querySelector('.lines').appendChild(d); }
+  function cell(el, text, cls) { el.textContent = text; if (cls != null) el.className = cls; el.classList.remove('cell-flash'); void el.offsetWidth; el.classList.add('cell-flash'); }
+  function place(id) { var n = nodes[id], s = n.el.style; s.left = n.x + 'px'; s.top = n.y + 'px'; s.width = n.w + 'px'; s.height = n.h + 'px'; }
+  function dock() {
+    var t = nodes.tests, n = nodes.ide; n.x = t.x + t.w + 8; n.y = t.y; place('ide');
+    var d = nodes.deploy, p = nodes.tool; p.x = d.x + d.w + 14; p.y = d.y; place('tool');
+  }
+
+  // ---- timing ----
+  function sleep(ms, my) {
+    return new Promise(function (ok, no) {
+      if (fast) return my === run ? ok() : no('x');
+      setTimeout(function () { my === run ? ok() : no('x'); }, ms);
+    });
+  }
+  function tween(ms, fn, my) {
+    if (fast) { fn(1); return Promise.resolve(); }
+    return new Promise(function (ok) {
+      var t0 = performance.now();
+      (function f(t) {
+        if (my !== run) return ok();
+        var k = Math.min(1, Math.max(0, (performance.now() - t0) / ms)); fn(1 - Math.pow(1 - k, 3));
+        k < 1 ? requestAnimationFrame(f) : ok();
+      })(t0);
+    });
+  }
+
+  // ---- camera: fit the named nodes, never closer than `max` ----
+  function focus(ids, max) {
+    lastFocus = [ids, max];
+    var W = stage.clientWidth, H = stage.clientHeight, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    ids.forEach(function (id) { var n = nodes[id]; x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x + n.w); y1 = Math.max(y1, n.y + n.h); });
+    var top = 64, bottom = W < 640 ? 150 : 170, bw = x1 - x0, bh = y1 - y0, ah = Math.max(160, H - top - bottom);
+    var s = Math.min((W - 40) / bw, ah / bh, max || 1);
+    cam.s = s;
+    var tx = W / 2 - (x0 + bw / 2) * s, ty = top + (ah - bh * s) / 2 - y0 * s;
+    world.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+    $('#grid').style.backgroundSize = 40 * s + 'px ' + 40 * s + 'px';
+    $('#grid').style.backgroundPosition = tx + 'px ' + ty + 'px';
+  }
+
+  // ---- edges (GraphDraw.edgePoint / endpoints / drawArrow) ----
+  function edgePoint(r, p) {
+    var cx = r.x + r.w / 2, cy = r.y + r.h / 2, dx = p.x - cx, dy = p.y - cy;
+    if (!dx && !dy) return { x: cx, y: cy };
+    var s = Math.min(Math.abs((r.w / 2 + 6) / (dx || 1e-9)), Math.abs((r.h / 2 + 6) / (dy || 1e-9)));
+    return { x: cx + dx * s, y: cy + dy * s };
+  }
+  function ends(from, to, off) {
+    var A = nodes[from], B = nodes[to];
+    var ca = { x: A.x + A.w / 2, y: A.y + A.h / 2 }, cb = { x: B.x + B.w / 2, y: B.y + B.h / 2 };
+    var len = Math.max(Math.hypot(cb.x - ca.x, cb.y - ca.y), 1), ox = -(cb.y - ca.y) / len * off, oy = (cb.x - ca.x) / len * off;
+    var a = edgePoint(A, { x: cb.x + ox, y: cb.y + oy }), b = edgePoint(B, { x: ca.x + ox, y: ca.y + oy });
+    return [{ x: a.x + ox, y: a.y + oy }, { x: b.x + ox, y: b.y + oy }];
+  }
+  var STYLE = {
+    created: { c: 'var(--muted2)', w: 2, dash: '', a: 1, off: 0, t: .4 },
+    message: { c: 'var(--msg)', w: 1.2, dash: '5 5', a: .8, off: 0, t: .62 },
+    waiting: { c: 'var(--wait)', w: 2, dash: '8 6', a: .9, off: 6 }
+  };
+  function el(tag) { return document.createElementNS('http://www.w3.org/2000/svg', tag); }
+  function addEdge(from, to, kind, label) {
+    var st = STYLE[kind], g = el('g'), ln = el('line'), hd = el('polygon'), pill = null;
+    g.setAttribute('opacity', st.a); ln.setAttribute('stroke', st.c); ln.setAttribute('stroke-width', st.w);
+    if (st.dash) ln.setAttribute('stroke-dasharray', st.dash);
+    hd.setAttribute('fill', st.c); g.appendChild(ln); g.appendChild(hd); svg.appendChild(g);
+    if (label) { pill = document.createElement('div'); pill.className = 'pill' + (kind === 'message' ? ' soft' : ''); pill.textContent = label; world.insertBefore(pill, svg.nextSibling); }
+    var e = { from: from, to: to, st: st, g: g, ln: ln, hd: hd, pill: pill, p: 0 };
+    edges.push(e); return e;
+  }
+  function dropEdge(e) { e.g.remove(); if (e.pill) e.pill.remove(); edges.splice(edges.indexOf(e), 1); }
+  function pulse(from, to) { var g = el('g'), ln = el('line'), c = el('circle'); ln.setAttribute('stroke', 'var(--accent)'); ln.setAttribute('stroke-width', 2.5); c.setAttribute('r', 5); c.setAttribute('fill', 'var(--accent)'); g.appendChild(ln); g.appendChild(c); svg.appendChild(g); pulses.push({ from: from, to: to, g: g, ln: ln, c: c, t0: performance.now() }); }
+  function frame() {
+    var now = performance.now();
+    edges.forEach(function (e) {
+      var ab = ends(e.from, e.to, e.st.off), a = ab[0], b = { x: a.x + (ab[1].x - a.x) * e.p, y: a.y + (ab[1].y - a.y) * e.p };
+      e.ln.setAttribute('x1', a.x); e.ln.setAttribute('y1', a.y); e.ln.setAttribute('x2', b.x); e.ln.setAttribute('y2', b.y);
+      var ang = Math.atan2(b.y - a.y, b.x - a.x);
+      e.hd.setAttribute('points', b.x + ',' + b.y + ' ' + (b.x - 10 * Math.cos(ang - .4)) + ',' + (b.y - 10 * Math.sin(ang - .4)) + ' ' + (b.x - 10 * Math.cos(ang + .4)) + ',' + (b.y - 10 * Math.sin(ang + .4)));
+      e.g.style.display = e.p > .03 ? '' : 'none';
+      if (e.pill) { e.pill.style.left = a.x + (ab[1].x - a.x) * e.st.t + 'px'; e.pill.style.top = a.y + (ab[1].y - a.y) * e.st.t + 'px'; e.pill.classList.toggle('on', e.p >= 1 && !e.quiet); }
+    });
+    pulses = pulses.filter(function (p) {
+      var t = (now - p.t0) / 900; if (t >= 1) { p.g.remove(); return false; }
+      var ab = ends(p.from, p.to, 6), a = ab[0], b = ab[1];
+      p.ln.setAttribute('x1', a.x); p.ln.setAttribute('y1', a.y); p.ln.setAttribute('x2', b.x); p.ln.setAttribute('y2', b.y);
+      p.g.setAttribute('opacity', 1 - t * .6); p.c.setAttribute('cx', a.x + (b.x - a.x) * t); p.c.setAttribute('cy', a.y + (b.y - a.y) * t);
+      return true;
+    });
+    requestAnimationFrame(frame);
+  }
+
+  // ---- what happens on a node ----
+  function q(id, s) { return nodes[id].el.querySelector(s); }
+  function status(id, s) { nodes[id].el.dataset.status = s; q(id, '.field').dataset.ph = s === 'idle' ? 'Ask for something…' : 'Add to queue'; }
+  function say(id, cls, html) {
+    var m = q(id, '.msgs'), e = m.querySelector('.empty'), w = m.querySelector('.work'), d = document.createElement('div');
+    if (e) e.remove();
+    d.className = cls; d.innerHTML = html;
+    m.insertBefore(d, w); return d;
+  }
+  function working(id, on) {
+    var m = q(id, '.msgs'), w = m.querySelector('.work'), e = m.querySelector('.empty');
+    if (on && !w) { if (e) e.remove(); w = document.createElement('div'); w.className = 'work'; w.innerHTML = '<i></i><i></i><i></i><span>Working…</span>'; m.appendChild(w); }
+    if (!on && w) w.remove();
+  }
+  function show(id) { var n = nodes[id]; n.shown = true; n.el.classList.add('on'); }
+  // born where its creator is, then it flies to its own place
+  function born(id) {
+    var n = nodes[id], c = nodes[DEF[id].by];
+    n.el.style.transform = 'translate(' + (c.x + c.w / 2 - n.x - n.w / 2) + 'px,' + (c.y + c.h / 2 - n.y - n.h / 2) + 'px) scale(.15)';
+    void n.el.offsetWidth; show(id);
+  }
+  function caption(i, text) {
+    bar.forEach(function (b, k) { b.classList.toggle('on', k <= i); });
+    if (cap.textContent === text) return;
+    cap.textContent = text;
+    if (!fast && cap.animate) cap.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'ease-out' });
+  }
+
+  // the site in English or Chinese; the app's own labels (Chat, Agent, panel bricks) stay as the app draws them
+  var ZH = { "Start with one agent.": "从一个智能体开始。", "Give it a job.": "交给它一项任务。", "Turn on Create agents. It builds a team.": "打开“创建智能体”，它会组建团队。", "Each on its own subscription.": "每个智能体用各自的订阅。", "They talk to each other.": "它们彼此对话。", "Group by area. Each group keeps its memory.": "按领域分组，每组保留自己的记忆。", "Watch the code land.": "看着代码落地。", "No tool for it? It builds one on the fly.": "没有现成工具？它当场造一个。", "They watch, and tell you.": "它们盯着，出事就告诉你。", "Talk to any agent directly.": "直接和任意一个智能体对话。", "Your own CLIs. No API key.": "用你自己的 CLI，无需 API key。", "Refactor the auth module and ship it": "重构 auth 模块并上线", "On it. Reading auth/token.ts and its callers myself.": "好的，我先自己读 auth/token.ts 及其调用方。", "Create agents is on. Splitting it up: tests, a review of the token flow, and the docs.": "“创建智能体”已打开。拆分任务：测试、审查 token 流程、更新文档。", "update the README": "更新 README", "review token flow": "审查 token 流程", "write the tests": "编写测试", "watch the rollout": "盯住发布", "is the old token revoked?": "旧 token 撤销了吗？", "review: not yet, refresh() never revokes it.": "review：还没有，refresh() 从不撤销它。", "TypeScript · vitest · refresh() revokes the old token": "TypeScript · vitest · refresh() 撤销旧 token", "From the backend notes: rotation must revoke the old token.": "根据 backend 笔记：轮换时必须撤销旧 token。", "Shipping it. A deploy agent will watch the rollout.": "开始上线，由 deploy 智能体盯住发布。", "No saved tool for this rollout. Building one.": "没有适合这次发布的现成工具，现在造一个。", "Built from 4 bricks in 9 s. Saved as a tool for next time.": "用 4 个组件 9 秒搭好，已存为工具，下次直接用。", " was OOMKilled at 256Mi. Raise the limit to 512Mi?": " 在 256Mi 时被 OOMKilled。把上限提到 512Mi？", "Yes, raise it to 512Mi": "好，提到 512Mi", "Done. All 3 pods are ready.": "完成，3 个 pod 全部就绪。", "cluster: prod-eu · api needs 512Mi": "cluster: prod-eu · api 需要 512Mi", "token.test.ts passes: 3 cases.": "token.test.ts 通过：3 个用例。", "token.ts now revokes the old token on rotation.": "token.ts 现在会在轮换时撤销旧 token。", "README: the auth section is updated.": "README：auth 部分已更新。", "Download for Mac": "下载 Mac 版", "macOS 15+ · Node 20+ · your own subscriptions · no API key · 127.0.0.1": "macOS 15+ · Node 20+ · 用你自己的订阅 · 无需 API key · 127.0.0.1", "Replay": "重播" };
+  var lang = 'en';
+  try { lang = localStorage.getItem('lang') || ''; } catch (e) { lang = ''; }
+  if (lang !== 'en' && lang !== 'zh') lang = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+  function t(s) { return lang === 'zh' && ZH[s] ? ZH[s] : s; }
+  function texts() {
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    [].forEach.call(document.querySelectorAll('[data-t]'), function (e) { e.textContent = t(e.dataset.t); });
+    $('#lang').textContent = lang === 'zh' ? 'EN' : '中文';
+    $('#lang').setAttribute('aria-label', lang === 'zh' ? 'English' : '中文');
+    $('#replay').setAttribute('aria-label', t('Replay'));
+  }
+  $('#lang').addEventListener('click', function () {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+    texts(); start(still);
+  });
+  var JOB = 'Refactor the auth module and ship it';
+
+  async function play(instant) {
+    var my = ++run; fast = !!instant;
+    var S = function (ms) { return sleep(ms, my); }, T = function (ms, fn) { return tween(ms, fn, my); };
+    cta.classList.remove('glow');
+    build();
+    if (!instant) markPlay();
+    // a message typed into an agent's own composer and sent
+    async function send(id, text) {
+      var f = q(id, '.field'), go = q(id, '.go');
+      f.classList.add('typing');
+      for (var i = 1; i <= text.length; i++) { f.textContent = text.slice(0, i); if (i === 1) go.classList.add('ready'); await S(34); }
+      await S(450);
+      go.classList.add('press'); await S(160); go.classList.remove('press', 'ready');
+      f.textContent = ''; f.classList.remove('typing');
+      say(id, 'user', text); status(id, 'running'); working(id, true);
+    }
+    function spark(from, to) {
+      var s = document.createElement('div'); s.className = 'spark'; s.style.left = from.x + 'px'; s.style.top = from.y + 'px';
+      world.appendChild(s); void s.offsetWidth; s.style.left = to.x + 'px'; s.style.top = to.y + 'px';
+      setTimeout(function () { s.remove(); }, fast ? 0 : 760);
+    }
+    function mid(id) { var n = nodes[id]; return { x: n.x + n.w / 2, y: n.y + n.h / 2 }; }
+    function noteAt(name) { var g = GROUPS[name]; return { x: g.x + g.w - 20, y: g.y + 14 }; }
+    // a group frame closes around its members; what it remembers shows by its note
+    async function gather(name) {
+      group[name].classList.add('on'); await S(500);
+      GROUPS[name].members.forEach(function (m) { nodes[m].el.classList.add('grouped'); });
+    }
+    function remember(name, text) {
+      var e = group[name].querySelector('em'), old = e.querySelector('q'); if (old) old.remove();
+      e.classList.add('has'); e.insertAdjacentHTML('afterbegin', '<q>' + text + '</q>');
+    }
+
+    // 1. the orchestrator, in front
+    caption(0, t('Start with one agent.'));
+    show('orch'); focus(['orch'], 1.25);
+    await S(1500);
+
+    // 2. a job, typed and sent
+    caption(1, t('Give it a job.'));
+    await send('orch', t(JOB));
+    await S(1100);
+    say('orch', 'ai', t('On it. Reading auth/token.ts and its callers myself.'));
+    await S(1900);
+
+    // 3. its team is born
+    // Create agents off: it works alone. On: the same agent is an orchestrator and makes its team.
+    caption(2, t('Turn on Create agents. It builds a team.'));
+    var o = nodes.orch;
+    cur.style.left = o.x + o.w - 30 + 'px'; cur.style.top = o.y + o.h - 44 + 'px'; cur.classList.add('on');
+    await S(300);
+    cur.style.left = o.x + o.w - 69 + 'px'; cur.style.top = o.y + 16 + 'px';
+    await S(900);
+    cur.classList.add('click'); q('orch', '.help').classList.add('lit'); o.el.classList.add('orch');
+    await S(450); cur.classList.remove('click');
+    await S(700);
+    say('orch', 'ai', t('Create agents is on. Splitting it up: tests, a review of the token flow, and the docs.'));
+    await S(1100);
+    cur.classList.remove('on');
+    focus(['orch', 'docs', 'review', 'tests'], 1);
+    await S(700);
+    for (var id of ['tests', 'review', 'docs']) {
+      born(id);
+      var e = addEdge('orch', id, 'created', t(DEF[id].why));
+      T(520, (function (e) { return function (k) { e.p = k; }; })(e));
+      await S(380);
+      status(id, 'running'); working(id, true); q(id, '.why').classList.add('on');
+      await S(260);
+    }
+    await S(900);
+
+    // each agent runs on its own login
+    caption(3, t('Each on its own subscription.'));
+    for (var id2 of ['orch', 'tests', 'review', 'docs']) { var ac = q(id2, '.acct'); ac.classList.add('hi'); await S(650); ac.classList.remove('hi'); }
+    await S(500);
+
+    // 4. they talk
+    caption(4, t('They talk to each other.'));
+    focus(['review', 'tests'], 1.1);
+    edges.forEach(function (e) { e.quiet = true; }); // the labels step back while they talk
+    pulse('tests', 'review');
+    var m = addEdge('tests', 'review', 'message', t('is the old token revoked?'));
+    T(500, function (k) { m.p = k; });
+    await S(700);
+    status('tests', 'waiting'); q('review', '.why').textContent = t('is the old token revoked?');
+    var w = addEdge('tests', 'review', 'waiting'); T(300, function (k) { w.p = k; });
+    await S(1700);
+    pulse('review', 'tests'); await S(900);
+    dropEdge(w); status('tests', 'running');
+    say('tests', 'ai', t('review: not yet, refresh() never revokes it.'));
+    await S(1300);
+
+    // a group closes around the two; what one learns goes into the group's note, the other reads it
+    caption(5, t('Group by area. Each group keeps its memory.'));
+    await gather('backend');
+    await S(700);
+    spark(mid('review'), noteAt('backend')); await S(720);
+    remember('backend', t('TypeScript · vitest · refresh() revokes the old token'));
+    await S(500);
+    spark(noteAt('backend'), mid('tests')); await S(720);
+    say('tests', 'ai', t('From the backend notes: rotation must revoke the old token.'));
+    await S(1500);
+
+    // 5. the IDE docks on the work
+    caption(6, t('Watch the code land.'));
+    var cb = q('tests', '.code'); cb.classList.add('flash'); await S(260); cb.classList.remove('flash'); cb.classList.add('lit');
+    nodes.ide.shown = true; ide.classList.add('on');
+    focus(['tests', 'ide'], 1);
+    await S(900);
+    focus(['ide'], 1);
+    ide.querySelector('.new').classList.add('on'); ide.querySelector('.strip u').classList.add('on');
+    var lines = ide.querySelectorAll('.src div');
+    for (var l = 0; l < lines.length; l++) { lines[l].classList.add('on', 'hot'); await S(170); lines[l].classList.remove('hot'); }
+    await S(1200);
+
+    // 6. a tool builds itself: the deploy agent opens a panel on the rollout, brick by brick
+    caption(7, t('No tool for it? It builds one on the fly.'));
+    focus(['orch', 'deploy', 'tool'], 1);
+    say('orch', 'ai', t('Shipping it. A deploy agent will watch the rollout.'));
+    await S(800);
+    born('deploy');
+    var de = addEdge('orch', 'deploy', 'created', t(DEF.deploy.why)); de.quiet = false;
+    T(520, function (k) { de.p = k; });
+    await S(420);
+    status('deploy', 'running'); working('deploy', true); q('deploy', '.why').classList.add('on');
+    await gather('infra'); remember('infra', 'cluster: prod-eu · namespace: api');
+    await S(900);
+    say('deploy', 'ai', t('No saved tool for this rollout. Building one.'));
+    nodes.tool.shown = true; tool.classList.add('on');
+    focus(['deploy', 'tool'], 1.15);
+    await S(750);
+    var pops = tool.querySelectorAll('.pop'), rows = tool.querySelectorAll('.tr.row'), bars = tool.querySelectorAll('.lane b'), acts = [];
+    // one brick at a time: the command it reads, then the brick flies from the agent into the panel
+    async function brick(name, cmd, target) {
+      acts.push(say('deploy', 'act', ic('term') + cmd));
+      await S(420);
+      var d = nodes.deploy, t = nodes.tool, c = document.createElement('div');
+      c.className = 'chip'; c.textContent = name; c.style.left = d.x + d.w - 60 + 'px'; c.style.top = d.y + 150 + 'px';
+      world.appendChild(c); void c.offsetWidth;
+      c.style.left = t.x + 70 + 'px'; c.style.top = t.y + target.offsetTop + 24 + 'px';
+      await S(620); c.remove();
+    }
+    await brick('timeline', 'gh run list --json name,status', pops[0]);
+    pops[0].classList.add('on'); await S(300);
+    for (var b = 0; b < bars.length; b++) { bars[b].classList.add('on'); await S(300); }
+    tool.querySelector('.nowline').classList.add('on');
+    await brick('stat', 'kubectl get deploy api -o json', pops[1]);
+    pops[1].classList.add('on'); await S(180); pops[2].classList.add('on'); await S(250);
+    await brick('table', 'kubectl get pods -l app=api', pops[3]);
+    pops[3].classList.add('on'); await S(220);
+    for (var r = 0; r < rows.length; r++) { rows[r].classList.add('on'); await S(170); }
+    await brick('log', 'kubectl logs -f deploy/api', pops[4]);
+    pops[4].classList.add('on'); await S(280);
+    logLine('info', PODS[0] + '  listening on :8080'); await S(350);
+    logLine('info', PODS[1] + '  GET /health 200 3ms'); await S(500);
+    acts.forEach(function (x) { x.remove(); });
+    say('deploy', 'ai', t('Built from 4 bricks in 9 s. Saved as a tool for next time.'));
+    tool.querySelector('.keep').classList.add('on');
+    await S(1700);
+
+    // 7. it watches, and says so when something breaks
+    caption(8, t('They watch, and tell you.'));
+    logLine('warn', PODS[2] + '  heap limit reached, allocation failed'); await S(800);
+    logLine('error', PODS[2] + '  OOMKilled: container exceeded 256Mi');
+    var bad = rows[2].children, num = bad[3];
+    cell(bad[1], '0/1'); cell(bad[2], 'CrashLoopBackOff', 'bad');
+    cell(tool.querySelector('[data-v="ready"]'), '2/3', 'warn');
+    for (var c = 1; c <= 3; c++) {
+      num.firstChild.textContent = c; num.style.setProperty('--bar', c / 3 * 78 + '%');
+      cell(tool.querySelector('[data-v="restarts"]'), c, c > 2 ? 'err' : 'warn');
+      await S(520);
+    }
+    await S(500);
+    working('deploy', false); status('deploy', 'idle');
+    say('deploy', 'ai', PODS[2] + t(' was OOMKilled at 256Mi. Raise the limit to 512Mi?'));
+    note.querySelector('span').textContent = PODS[2] + t(' was OOMKilled at 256Mi. Raise the limit to 512Mi?');
+    note.classList.add('on');
+    await S(3000);
+    note.classList.remove('on');
+
+    // you answer that one agent, in its own chat
+    caption(9, t('Talk to any agent directly.'));
+    await S(600);
+    await send('deploy', t('Yes, raise it to 512Mi'));
+    await S(1100);
+    logLine('info', 'deployment/api  memory limit set to 512Mi'); await S(700);
+    cell(bad[1], '1/1'); cell(bad[2], 'Running', 'good');
+    cell(tool.querySelector('[data-v="ready"]'), '3/3', 'ok');
+    logLine('info', PODS[2] + '  listening on :8080');
+    var roll = bars[bars.length - 1]; roll.classList.remove('run'); roll.textContent = '';
+    await S(500);
+    working('deploy', false); status('deploy', 'idle');
+    say('deploy', 'ai', t('Done. All 3 pods are ready.'));
+    spark(mid('deploy'), noteAt('infra')); await S(720);
+    remember('infra', t('cluster: prod-eu · api needs 512Mi'));
+    await S(2200);
+
+    // 8. done
+    caption(10, t('Your own CLIs. No API key.'));
+    focus(['orch', 'docs', 'review', 'tests', 'ide', 'deploy', 'tool'], 1);
+    edges.filter(function (e) { return e.st === STYLE.message; }).forEach(dropEdge);
+    ['tests', 'review', 'docs'].forEach(function (id) { working(id, false); status(id, 'idle'); q(id, '.why').classList.remove('on'); });
+    say('tests', 'ai', t('token.test.ts passes: 3 cases.'));
+    say('review', 'ai', t('token.ts now revokes the old token on rotation.'));
+    say('docs', 'ai', t('README: the auth section is updated.'));
+    await S(900);
+    working('orch', false); status('orch', 'idle');
+    say('orch', 'changes', '<div><b>3 files</b><em>+84</em><s>−12</s></div><div><span>token.ts</span><em>+9</em><s>−4</s></div><div><span>token.test.ts</span><em>+61</em></div>');
+    cta.classList.add('glow');
+    if (fast) return;
+    await S(9000);
+    play();
+  }
+  function start(instant) { play(instant).catch(function () {}); }
+
+  // direct manipulation: drag a node with the mouse; the IDE stays docked to its agent
+  world.addEventListener('pointerdown', function (ev) {
+    var t = ev.target.closest('.node');
+    if (!t || ev.pointerType === 'touch') return;
+    var n = nodes[t.dataset.id], sx = ev.clientX, sy = ev.clientY, x0 = n.x, y0 = n.y;
+    t.classList.add('lift'); t.setPointerCapture(ev.pointerId); ev.preventDefault();
+    function move(e) { n.x = x0 + (e.clientX - sx) / cam.s; n.y = y0 + (e.clientY - sy) / cam.s; place(n.id); if (n.id === 'tests' || n.id === 'deploy') dock(); }
+    function up() { t.classList.remove('lift'); t.removeEventListener('pointermove', move); t.removeEventListener('pointerup', up); t.removeEventListener('pointercancel', up); }
+    t.addEventListener('pointermove', move); t.addEventListener('pointerup', up); t.addEventListener('pointercancel', up);
+  });
+
+  // The logo in the corner plays the opening now and then: lines come out of the transparent air around it,
+  // run through it as its stripes (each corner turning the same way round), draw themselves back out, and the
+  // star pops in last. Times are in ms; `pass` is one line's whole run at one steady speed.
+  var MARK = { pass: 1100, stagger: 150, band: 60, tail: 500, star: 1250, starTime: 380, reach: 1500 };
+  function markPlay() {
+    var host = $('.mark svg'); if (!host || still || !host.animate) return;
+    var W = 130, L = 400, D = 170, G = 34, C = 500 - D, far = 500 - MARK.reach;
+    var sil = 'M500 ' + (500 - L) + ' L' + (500 + W) + ' ' + (500 - L + W) + ' V' + (500 - W) + ' H' + (500 + L - W) + ' L' + (500 + L) + ' 500 L' + (500 + L - W) + ' ' + (500 + W) +
+      ' H' + (500 + W) + ' V' + (500 + L - W) + ' L500 ' + (500 + L) + ' L' + (500 - W) + ' ' + (500 + L - W) + ' V' + (500 + W) + ' H' + (500 - L + W) + ' L' + (500 - L) + ' 500 L' + (500 - L + W) + ' ' + (500 - W) +
+      ' H' + (500 - W) + ' V' + (500 - L + W) + ' Z';
+    var rot = function (inner, a) { return '<g transform="rotate(' + a + ' 500 500)">' + inner + '</g>'; };
+    var road = function (r, y) { return 'M' + (C + r) + ' ' + y + ' V' + C + ' A' + r + ' ' + r + ' 0 0 1 ' + C + ' ' + (C + r) + ' H' + y; };
+    var cut = 'M' + (C + D) + ' 40 V' + C + ' A' + D + ' ' + D + ' 0 0 1 ' + C + ' ' + (C + D) + ' H40 M500 40 V' + C;
+    // the pinwheel: right -> up, left -> down, top -> left, bottom -> right
+    var order = [90, 270, 0, 180], sub = [{ r: 79, w: 78 }, { r: 147, w: 34 }];
+    var lines = '', reveals = '';
+    order.forEach(function (a) {
+      sub.forEach(function (s) { lines += rot('<path class="ln" pathLength="1" fill="none" stroke="currentColor" stroke-width="' + s.w + '" d="' + road(s.r, far) + '"/>', a); });
+      reveals += rot('<path class="rv" pathLength="1" fill="none" stroke="#fff" stroke-width="124" d="' + road(102, far) + '"/>', a);
+    });
+    host.style.overflow = 'visible';
+    host.innerHTML =
+      '<radialGradient id="mg" gradientUnits="userSpaceOnUse" cx="500" cy="500" r="' + MARK.reach + '"><stop offset=".3" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>' +
+      '<mask id="mf" maskUnits="userSpaceOnUse" x="-3000" y="-3000" width="7000" height="7000"><rect x="-3000" y="-3000" width="7000" height="7000" fill="url(#mg)"/></mask>' +
+      '<clipPath id="mo"><path clip-rule="evenodd" d="M-3000 -3000 H4000 V4000 H-3000 Z ' + sil + '"/></clipPath>' +
+      '<mask id="mc"><path d="' + sil + '" fill="#fff"/><g fill="none" stroke="#000" stroke-width="' + G + '">' + [0, 90, 180, 270].map(function (a) { return rot('<path d="' + cut + '"/>', a); }).join('') + '</g></mask>' +
+      '<mask id="mr" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="1000">' + reveals + '<circle class="st" cx="500" cy="500" r="182" fill="#fff"/></mask>' +
+      '<g mask="url(#mf)"><g clip-path="url(#mo)">' + lines + '</g></g>' +
+      '<g mask="url(#mr)"><rect width="1000" height="1000" fill="currentColor" mask="url(#mc)"/></g>';
+    var ln = host.querySelectorAll('.ln'), rv = host.querySelectorAll('.rv'), st = host.querySelector('.st');
+    st.style.transformBox = 'fill-box'; st.style.transformOrigin = 'center';
+    var lenIn = 100 - far, through = function (r) { return (C - 100) * 2 + Math.PI / 2 * r; };
+    order.forEach(function (a, i) {
+      sub.forEach(function (s, j) {
+        var p = ln[i * 2 + j], at = i * MARK.stagger + j * MARK.band, total = 2 * lenIn + through(s.r), exit = (lenIn + through(s.r)) / total;
+        p.style.strokeDasharray = '1 1'; p.style.strokeDashoffset = 1;
+        p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: MARK.pass, delay: at, easing: 'linear', fill: 'forwards' });
+        p.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: -1 }], { duration: MARK.tail, delay: at + MARK.pass * exit, easing: 'cubic-bezier(.4,0,.8,.6)', fill: 'forwards' });
+      });
+      var r = rv[i], total = 2 * lenIn + through(102);
+      r.style.strokeDasharray = '1 1'; r.style.strokeDashoffset = 1;
+      r.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: MARK.pass, delay: i * MARK.stagger, easing: 'linear', fill: 'forwards' });
+    });
+    st.animate([{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: MARK.starTime, delay: MARK.star, easing: 'cubic-bezier(.3,1.4,.5,1)', fill: 'backwards' });
+  }
+
+  $('#replay').addEventListener('click', function () { start(false); });
+  window.addEventListener('resize', function () { if (lastFocus) focus(lastFocus[0], lastFocus[1]); });
+  requestAnimationFrame(frame);
+  texts();
+  start(still);
+})();
+</script>
+
+</body>
+</html>

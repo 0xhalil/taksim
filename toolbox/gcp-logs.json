@@ -1,0 +1,433 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "gcp-logs",
+  "name": "Google Cloud logları",
+  "summary": "Cloud Logging'den son kayıtlar seviyesine göre renkli; hata sayısının çizgisi ve en çok log üreten servisler.",
+  "when": [
+    "gcp loglarına bak",
+    "cloud run hata logları",
+    "son 10 dakikadaki hatalar",
+    "gcloud logging read",
+    "prod'da error var mı",
+    "show me the errors in cloud logging",
+    "stackdriver loglarını izle",
+    "hangi servis hata veriyor",
+    "tail gcp logs",
+    "log explorer'daki hatalar"
+  ],
+  "keywords": [
+    "gcp",
+    "gcloud",
+    "logging",
+    "logs",
+    "log",
+    "stackdriver",
+    "error",
+    "hata",
+    "severity",
+    "cloud run",
+    "google cloud"
+  ],
+  "requires": {
+    "bin": [
+      "gcloud"
+    ]
+  },
+  "params": {
+    "project": {
+      "desc": "Google Cloud project id (gcloud projects list)",
+      "default": null
+    },
+    "filter": {
+      "desc": "Cloud Logging filter, e.g. resource.type=cloud_run_revision",
+      "default": "severity>=DEFAULT"
+    },
+    "freshness": {
+      "desc": "how far back to read (gcloud --freshness), e.g. 10m, 1h",
+      "default": "10m"
+    }
+  },
+  "instructions": "Panel reads the newest 200 log entries matching the filter every 15s (gcloud logging read, --freshness window), shows them colored by severity, counts errors over time and ranks services by how much they log. To explain an error, read more context around its timestamp (`gcloud logging read '<filter> AND timestamp>=\"<t-1m>\" AND timestamp<=\"<t+1m>\"' --project <project>`) and find the code that logs it. Keep the same --project; narrow the filter with the user rather than reading everything.",
+  "spec": {
+    "title": "loglar · {{project}}",
+    "sources": {
+      "logs": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "logging",
+          "read",
+          "{{filter}}",
+          "--project",
+          "{{project}}",
+          "--freshness={{freshness}}",
+          "--limit=200",
+          "--format=json"
+        ],
+        "parse": "json",
+        "sort": "timestamp",
+        "every_s": 15
+      },
+      "errors": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "logging",
+          "read",
+          "{{filter}}",
+          "--project",
+          "{{project}}",
+          "--freshness={{freshness}}",
+          "--limit=200",
+          "--format=json"
+        ],
+        "parse": "json",
+        "every_s": 15,
+        "where": {
+          "severity": {
+            "in": [
+              "ERROR",
+              "CRITICAL",
+              "ALERT",
+              "EMERGENCY"
+            ]
+          }
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "err-n",
+        "brick": "stat",
+        "source": "errors",
+        "title": "Hata",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 5
+      },
+      {
+        "id": "err-trend",
+        "brick": "chart",
+        "source": "errors",
+        "title": "Hatalar",
+        "kind": "bar",
+        "warn_above": 3,
+        "error_above": 8,
+        "span": 3
+      },
+      {
+        "id": "log",
+        "brick": "log",
+        "source": "logs",
+        "title": "Kayıtlar",
+        "text": [
+          "textPayload",
+          "jsonPayload.message",
+          "protoPayload.status.message"
+        ],
+        "level": "severity",
+        "row_actions": [
+          {
+            "label": "Açıkla",
+            "ask": "Bu {severity} log kaydını açıkla ve kaynağını bul."
+          }
+        ]
+      },
+      {
+        "id": "by-svc",
+        "brick": "bars",
+        "source": "logs",
+        "title": "Servis",
+        "label": "resource.labels.service_name",
+        "limit": 6
+      },
+      {
+        "id": "by-sev",
+        "brick": "bars",
+        "source": "logs",
+        "title": "Seviye",
+        "label": "severity",
+        "limit": 6
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "logs": [
+        {
+          "timestamp": "2026-10-07T11:16:00Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "api"
+            }
+          },
+          "jsonPayload": {
+            "message": "POST /api/cart 201 87ms"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:16:54Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "textPayload": "POST /api/cart 201 87ms"
+        },
+        {
+          "timestamp": "2026-10-07T11:17:48Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "web"
+            }
+          },
+          "textPayload": "GET /healthz 200 2ms"
+        },
+        {
+          "timestamp": "2026-10-07T11:18:42Z",
+          "severity": "WARNING",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "checkout"
+            }
+          },
+          "jsonPayload": {
+            "message": "slow query on orders (1840ms)"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:19:36Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "api"
+            }
+          },
+          "textPayload": "GET /api/products?page=2 200 63ms"
+        },
+        {
+          "timestamp": "2026-10-07T11:20:30Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "textPayload": "panic: runtime error: invalid memory address or nil pointer dereference"
+        },
+        {
+          "timestamp": "2026-10-07T11:21:24Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "web"
+            }
+          },
+          "jsonPayload": {
+            "message": "GET /healthz 200 2ms"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:22:18Z",
+          "severity": "DEFAULT",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "checkout"
+            }
+          },
+          "textPayload": "Container called exit(0)."
+        },
+        {
+          "timestamp": "2026-10-07T11:23:12Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "api"
+            }
+          },
+          "textPayload": "worker: processed 120 jobs"
+        },
+        {
+          "timestamp": "2026-10-07T11:24:06Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "jsonPayload": {
+            "message": "upstream connect error or disconnect/reset before headers"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:25:00Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "web"
+            }
+          },
+          "textPayload": "GET /api/orders 200 41ms"
+        },
+        {
+          "timestamp": "2026-10-07T11:25:54Z",
+          "severity": "WARNING",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "checkout"
+            }
+          },
+          "textPayload": "retrying payment provider (attempt 2/3)"
+        },
+        {
+          "timestamp": "2026-10-07T11:26:48Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "api"
+            }
+          },
+          "jsonPayload": {
+            "message": "worker: processed 120 jobs"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:27:42Z",
+          "severity": "INFO",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "textPayload": "worker: processed 120 jobs"
+        },
+        {
+          "timestamp": "2026-10-07T11:28:36Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "web"
+            }
+          },
+          "textPayload": "panic: runtime error: invalid memory address or nil pointer dereference"
+        }
+      ],
+      "errors": [
+        {
+          "timestamp": "2026-10-07T11:20:30Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "textPayload": "panic: runtime error: invalid memory address or nil pointer dereference"
+        },
+        {
+          "timestamp": "2026-10-07T11:24:06Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "worker"
+            }
+          },
+          "jsonPayload": {
+            "message": "upstream connect error or disconnect/reset before headers"
+          }
+        },
+        {
+          "timestamp": "2026-10-07T11:28:36Z",
+          "severity": "ERROR",
+          "resource": {
+            "type": "cloud_run_revision",
+            "labels": {
+              "service_name": "web"
+            }
+          },
+          "textPayload": "panic: runtime error: invalid memory address or nil pointer dereference"
+        }
+      ]
+    },
+    "series": {
+      "err-trend": [
+        2,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        3,
+        2,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        2,
+        1,
+        1,
+        2,
+        1,
+        1,
+        0,
+        1,
+        1,
+        7,
+        7,
+        10,
+        10,
+        12,
+        13,
+        2,
+        2,
+        2,
+        2,
+        3,
+        2,
+        3,
+        3,
+        3,
+        3
+      ]
+    }
+  },
+  "reference": {
+    "product": "Google Cloud Logs Explorer",
+    "url": "https://console.cloud.google.com/logs",
+    "borrowed": [
+      "seviyeye göre renkli kayıtlar",
+      "hata sayısının histogramı",
+      "kaynağa (servise) göre dağılım",
+      "--freshness penceresi"
+    ]
+  }
+}

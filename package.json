@@ -1,0 +1,35 @@
+{
+  "name": "taksim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A live canvas for coding agents on your own subscriptions: Claude Code, Codex, Gemini CLI, opencode and GitHub Copilot run side by side, talk to each other and build tools you can see.",
+  "scripts": {
+    "start": "node bin/taksim.mjs serve",
+    "test": "node --test --test-timeout=30000 test/*.test.mjs",
+    "site:logos": "node site/scripts/sync-logos.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "taksim": "bin/taksim.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "ui",
+    "toolbox"
+  ],
+  "dependencies": {
+    "monaco-editor": "^0.57.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.22.0"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0xhalil/taksim.git"
+  },
+  "homepage": "https://github.com/0xhalil/taksim"
+}

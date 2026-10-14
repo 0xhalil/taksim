@@ -1,0 +1,389 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "http-latency",
+  "name": "HTTP gecikmesi",
+  "summary": "Bir adrese 5 saniyede bir istek; toplam yanıt ve ilk bayta kadar geçen zaman milisaniye olarak canlı çizgide, eşikler renkli.",
+  "when": [
+    "site yavaş mı",
+    "endpoint'in gecikmesini izle",
+    "api ne kadar sürede cevap veriyor",
+    "health check'e bak",
+    "curl ile response time ölç",
+    "watch the latency of this url",
+    "is the api slow",
+    "monitor response time",
+    "servis ayakta mı",
+    "ttfb ne kadar"
+  ],
+  "keywords": [
+    "http",
+    "latency",
+    "gecikme",
+    "curl",
+    "url",
+    "endpoint",
+    "api",
+    "health",
+    "response time",
+    "ttfb",
+    "uptime"
+  ],
+  "requires": {
+    "bin": [
+      "curl"
+    ]
+  },
+  "params": {
+    "url": {
+      "desc": "the URL to measure",
+      "default": "http://localhost:3000/health"
+    }
+  },
+  "instructions": "Panel calls the URL with curl every 5s (10s timeout) and charts total time and time to first byte in ms, with amber above 500 ms and red above 1000 ms; the status code shows big (000 means no connection). A slow TTFB with a fast connect points at the server's work (database, upstream calls); a slow connect points at the network or TLS. When it spikes, look at the service's logs and recent deploys around that time before explaining.",
+  "spec": {
+    "title": "gecikme · {{url}}",
+    "sources": {
+      "probe": {
+        "brick": "command",
+        "run": [
+          "curl",
+          "-o",
+          "/dev/null",
+          "-s",
+          "-m",
+          "10",
+          "-w",
+          "%{http_code} %{time_connect} %{time_starttransfer} %{time_total}",
+          "{{url}}"
+        ],
+        "parse": {
+          "regex": "^(?<code>\\d{3}) (?<connect>[\\d.]+) (?<ttfb>[\\d.]+) (?<total>[\\d.]+)$"
+        },
+        "every_s": 5
+      }
+    },
+    "views": [
+      {
+        "id": "code",
+        "brick": "stat",
+        "source": "probe",
+        "title": "HTTP",
+        "value": "code",
+        "ok": "200"
+      },
+      {
+        "id": "latency",
+        "brick": "chart",
+        "source": "probe",
+        "title": "Gecikme",
+        "y": [
+          "total",
+          "ttfb"
+        ],
+        "scale": 1000,
+        "unit": "ms",
+        "kind": "area",
+        "warn_above": 500,
+        "error_above": 1000,
+        "span": 3
+      },
+      {
+        "id": "now",
+        "brick": "kv",
+        "source": "probe",
+        "title": "Son ölçüm",
+        "fields": [
+          {
+            "field": "connect",
+            "label": "connect (s)"
+          },
+          {
+            "field": "ttfb",
+            "label": "ttfb (s)"
+          },
+          {
+            "field": "total",
+            "label": "total (s)"
+          }
+        ],
+        "span": 4
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "probe": [
+        {
+          "code": "200",
+          "connect": "0.012",
+          "ttfb": "0.084",
+          "total": "0.131"
+        }
+      ]
+    },
+    "series": {
+      "latency": [
+        [
+          115,
+          79
+        ],
+        [
+          128,
+          75
+        ],
+        [
+          127,
+          78
+        ],
+        [
+          130,
+          94
+        ],
+        [
+          148,
+          96
+        ],
+        [
+          153,
+          99
+        ],
+        [
+          139,
+          96
+        ],
+        [
+          136,
+          86
+        ],
+        [
+          140,
+          97
+        ],
+        [
+          127,
+          84
+        ],
+        [
+          139,
+          93
+        ],
+        [
+          128,
+          81
+        ],
+        [
+          127,
+          85
+        ],
+        [
+          125,
+          82
+        ],
+        [
+          110,
+          69
+        ],
+        [
+          136,
+          81
+        ],
+        [
+          124,
+          72
+        ],
+        [
+          115,
+          76
+        ],
+        [
+          108,
+          70
+        ],
+        [
+          113,
+          67
+        ],
+        [
+          126,
+          72
+        ],
+        [
+          107,
+          68
+        ],
+        [
+          108,
+          70
+        ],
+        [
+          121,
+          76
+        ],
+        [
+          122,
+          77
+        ],
+        [
+          125,
+          83
+        ],
+        [
+          122,
+          86
+        ],
+        [
+          127,
+          81
+        ],
+        [
+          131,
+          82
+        ],
+        [
+          125,
+          85
+        ],
+        [
+          137,
+          93
+        ],
+        [
+          133,
+          83
+        ],
+        [
+          150,
+          97
+        ],
+        [
+          146,
+          97
+        ],
+        [
+          133,
+          97
+        ],
+        [
+          138,
+          91
+        ],
+        [
+          141,
+          88
+        ],
+        [
+          111,
+          73
+        ],
+        [
+          108,
+          71
+        ],
+        [
+          103,
+          68
+        ],
+        [
+          128,
+          74
+        ],
+        [
+          533,
+          451
+        ],
+        [
+          664,
+          564
+        ],
+        [
+          753,
+          641
+        ],
+        [
+          689,
+          588
+        ],
+        [
+          510,
+          419
+        ],
+        [
+          115,
+          77
+        ],
+        [
+          123,
+          78
+        ],
+        [
+          105,
+          66
+        ],
+        [
+          115,
+          77
+        ],
+        [
+          111,
+          71
+        ],
+        [
+          130,
+          84
+        ],
+        [
+          139,
+          84
+        ],
+        [
+          122,
+          79
+        ],
+        [
+          120,
+          85
+        ],
+        [
+          124,
+          81
+        ],
+        [
+          124,
+          84
+        ],
+        [
+          150,
+          99
+        ],
+        [
+          139,
+          95
+        ],
+        [
+          149,
+          95
+        ],
+        [
+          131,
+          84
+        ]
+      ]
+    }
+  },
+  "reference": {
+    "product": "Uptime Kuma",
+    "url": "https://github.com/louislam/uptime-kuma",
+    "borrowed": [
+      "5 sn'de bir ölçüm",
+      "yanıt süresinin çizgisi",
+      "durum kodu büyük",
+      "eşik renkleri (Grafana gibi)"
+    ]
+  }
+}

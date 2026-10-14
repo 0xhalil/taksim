@@ -1,0 +1,316 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "issues-by-owner",
+  "name": "Issue'lar kimde",
+  "summary": "Açık issue'ların kişilere ve etiketlere dağılımı canlı sıralamada; sahipsizler sayılır, en eski issue'lar yaşına göre.",
+  "when": [
+    "issue'lar kimde",
+    "kimin üstünde kaç iş var",
+    "sahipsiz issue var mı",
+    "açık issue sayısı",
+    "gh issue list",
+    "who has the most open issues",
+    "issues by assignee",
+    "iş yükü dağılımı",
+    "en eski açık issue'lar",
+    "issue'lar kime atanmış"
+  ],
+  "keywords": [
+    "issue",
+    "github",
+    "gh",
+    "assignee",
+    "owner",
+    "label",
+    "backlog",
+    "iş yükü",
+    "manager",
+    "triage"
+  ],
+  "requires": {
+    "bin": [
+      "gh"
+    ]
+  },
+  "params": {
+    "limit": {
+      "desc": "how many open issues to read",
+      "default": "300"
+    }
+  },
+  "instructions": "Panel reads the repository's open issues every 2 minutes (gh issue list in the agent's working directory; gh's --jq keeps the first assignee as owner, \"—\" when nobody, the first label, and age_d = days open) and ranks owners and labels by count, counts unassigned issues and lists the oldest. When asked about workload, compare owners by count and age, not just count; suggest owners for unassigned issues from who touched the related code (git log on the files). Don't assign, label or close issues unless the user asks.",
+  "spec": {
+    "title": "Issue'lar",
+    "sources": {
+      "issues": {
+        "brick": "command",
+        "run": [
+          "gh",
+          "issue",
+          "list",
+          "--state",
+          "open",
+          "--limit",
+          "{{limit}}",
+          "--json",
+          "number,title,assignees,labels,createdAt",
+          "--jq",
+          ".[] | {number, title, owner: (.assignees[0].login // \"—\"), label: (.labels[0].name // \"—\"), createdAt, age_d: (((now - (.createdAt | fromdate)) / 86400) | floor)}"
+        ],
+        "parse": "jsonl",
+        "sort": "-age_d",
+        "every_s": 120
+      },
+      "unassigned": {
+        "brick": "command",
+        "run": [
+          "gh",
+          "issue",
+          "list",
+          "--state",
+          "open",
+          "--limit",
+          "{{limit}}",
+          "--json",
+          "number,title,assignees,labels,createdAt",
+          "--jq",
+          ".[] | {number, title, owner: (.assignees[0].login // \"—\"), label: (.labels[0].name // \"—\"), createdAt, age_d: (((now - (.createdAt | fromdate)) / 86400) | floor)}"
+        ],
+        "parse": "jsonl",
+        "every_s": 120,
+        "where": {
+          "owner": "—"
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "open-n",
+        "brick": "stat",
+        "source": "issues",
+        "title": "Açık"
+      },
+      {
+        "id": "unassigned-n",
+        "brick": "stat",
+        "source": "unassigned",
+        "title": "Sahipsiz",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 10
+      },
+      {
+        "id": "by-owner",
+        "brick": "bars",
+        "source": "issues",
+        "title": "Kişi",
+        "label": "owner",
+        "limit": 10
+      },
+      {
+        "id": "by-label",
+        "brick": "bars",
+        "source": "issues",
+        "title": "Etiket",
+        "label": "label",
+        "limit": 8
+      },
+      {
+        "id": "oldest",
+        "brick": "table",
+        "source": "issues",
+        "title": "En eskiler",
+        "key": "number",
+        "columns": [
+          {
+            "field": "number",
+            "label": "#"
+          },
+          {
+            "field": "title",
+            "label": "TITLE"
+          },
+          {
+            "field": "owner",
+            "label": "OWNER"
+          },
+          {
+            "field": "label",
+            "label": "LABEL"
+          },
+          {
+            "field": "age_d",
+            "label": "YAŞ (g)"
+          }
+        ],
+        "bar": "age_d",
+        "row_actions": [
+          {
+            "label": "Kime?",
+            "ask": "#{number} issue'su ({title}) kime atanmalı? İlgili koda en son kim dokundu?"
+          }
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "issues": [
+        {
+          "number": 402,
+          "title": "Checkout fails for saved cards on Safari",
+          "owner": "ayse",
+          "label": "bug",
+          "createdAt": "2026-10-04T11:30:00Z",
+          "age_d": 3
+        },
+        {
+          "number": 388,
+          "title": "Pricing service: currency rounding",
+          "owner": "deniz",
+          "label": "bug",
+          "createdAt": "2026-09-28T11:30:00Z",
+          "age_d": 9
+        },
+        {
+          "number": 377,
+          "title": "Add audit log for admin actions",
+          "owner": "mert",
+          "label": "feature",
+          "createdAt": "2026-09-21T11:30:00Z",
+          "age_d": 16
+        },
+        {
+          "number": 371,
+          "title": "Search returns stale facets",
+          "owner": "ayse",
+          "label": "bug",
+          "createdAt": "2026-09-18T11:30:00Z",
+          "age_d": 19
+        },
+        {
+          "number": 360,
+          "title": "Flaky e2e: cart badge",
+          "owner": "—",
+          "label": "flaky-test",
+          "createdAt": "2026-09-12T11:30:00Z",
+          "age_d": 25
+        },
+        {
+          "number": 352,
+          "title": "Dark mode for admin",
+          "owner": "selin",
+          "label": "feature",
+          "createdAt": "2026-09-06T11:30:00Z",
+          "age_d": 31
+        },
+        {
+          "number": 349,
+          "title": "Rate limit headers missing",
+          "owner": "mert",
+          "label": "bug",
+          "createdAt": "2026-09-04T11:30:00Z",
+          "age_d": 33
+        },
+        {
+          "number": 340,
+          "title": "Upgrade to Node 22",
+          "owner": "—",
+          "label": "chore",
+          "createdAt": "2026-08-28T11:30:00Z",
+          "age_d": 40
+        },
+        {
+          "number": 331,
+          "title": "Runbook for payment outages",
+          "owner": "selin",
+          "label": "docs",
+          "createdAt": "2026-08-22T11:30:00Z",
+          "age_d": 46
+        },
+        {
+          "number": 320,
+          "title": "Export orders as CSV",
+          "owner": "can",
+          "label": "feature",
+          "createdAt": "2026-08-10T11:30:00Z",
+          "age_d": 58
+        },
+        {
+          "number": 311,
+          "title": "Memory growth in worker",
+          "owner": "deniz",
+          "label": "bug",
+          "createdAt": "2026-08-04T11:30:00Z",
+          "age_d": 64
+        },
+        {
+          "number": 305,
+          "title": "Image resizer cold starts",
+          "owner": "—",
+          "label": "performance",
+          "createdAt": "2026-07-28T11:30:00Z",
+          "age_d": 71
+        },
+        {
+          "number": 298,
+          "title": "SSO with Google Workspace",
+          "owner": "mert",
+          "label": "feature",
+          "createdAt": "2026-07-19T11:30:00Z",
+          "age_d": 80
+        },
+        {
+          "number": 291,
+          "title": "Pagination on orders API",
+          "owner": "ayse",
+          "label": "feature",
+          "createdAt": "2026-07-11T11:30:00Z",
+          "age_d": 88
+        }
+      ],
+      "unassigned": [
+        {
+          "number": 360,
+          "title": "Flaky e2e: cart badge",
+          "owner": "—",
+          "label": "flaky-test",
+          "createdAt": "2026-09-12T11:30:00Z",
+          "age_d": 25
+        },
+        {
+          "number": 340,
+          "title": "Upgrade to Node 22",
+          "owner": "—",
+          "label": "chore",
+          "createdAt": "2026-08-28T11:30:00Z",
+          "age_d": 40
+        },
+        {
+          "number": 305,
+          "title": "Image resizer cold starts",
+          "owner": "—",
+          "label": "performance",
+          "createdAt": "2026-07-28T11:30:00Z",
+          "age_d": 71
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "Linear / GitHub issues",
+    "url": "https://linear.app",
+    "borrowed": [
+      "kişiye göre açık iş sayısı",
+      "etikete göre dağılım",
+      "sahipsiz issue'lar",
+      "yaşa göre sıralı liste"
+    ]
+  }
+}

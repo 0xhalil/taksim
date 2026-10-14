@@ -1,0 +1,119 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "git-activity",
+  "name": "Git durumu",
+  "summary": "Çalışma dizinindeki değişen dosyalar ve son commit'ler.",
+  "when": [
+    "neler değişti",
+    "git status göster",
+    "son commitleri listele",
+    "repo durumunu izle",
+    "what changed in the repo",
+    "commitlenmemiş dosyalar"
+  ],
+  "keywords": [
+    "git",
+    "commit",
+    "status",
+    "branch",
+    "diff",
+    "değişiklik",
+    "repo"
+  ],
+  "requires": {
+    "bin": [
+      "git"
+    ]
+  },
+  "params": {},
+  "instructions": "Panel shows `git status --short` and the last 15 commits of the working directory. To explain a change, open the file in the IDE.",
+  "spec": {
+    "title": "Git",
+    "sources": {
+      "status": {
+        "brick": "command",
+        "run": [
+          "git",
+          "status",
+          "--short",
+          "--branch"
+        ],
+        "parse": "lines",
+        "every_s": 10
+      },
+      "log": {
+        "brick": "command",
+        "run": [
+          "git",
+          "log",
+          "--oneline",
+          "--decorate",
+          "-n",
+          "15"
+        ],
+        "parse": "lines",
+        "every_s": 30
+      }
+    },
+    "views": [
+      {
+        "id": "status",
+        "brick": "log",
+        "source": "status",
+        "title": "Değişiklikler",
+        "span": 2
+      },
+      {
+        "id": "log",
+        "brick": "log",
+        "source": "log",
+        "title": "Son commit'ler",
+        "span": 2
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "status": [
+        {
+          "text": "## main...origin/main [ahead 2]"
+        },
+        {
+          "text": " M src/cart.py"
+        },
+        {
+          "text": " M tests/test_cart.py"
+        },
+        {
+          "text": "?? notes.md"
+        }
+      ],
+      "log": [
+        {
+          "text": "a1f3c2e (HEAD -> main) cart: round totals"
+        },
+        {
+          "text": "9c0d7b1 coupons: SAVE20"
+        },
+        {
+          "text": "41e8a90 initial shop"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "lazygit",
+    "url": "https://github.com/jesseduffield/lazygit",
+    "borrowed": [
+      "branch ve ahead/behind",
+      "değişen dosyalar",
+      "son commitler"
+    ]
+  }
+}

@@ -1,0 +1,219 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1791372600000,
+  "uses": 0,
+  "learned": [],
+  "id": "gcp-compute",
+  "name": "Compute Engine VM'leri",
+  "summary": "Projedeki VM'ler: zone, makine tipi, IP'ler ve durum; çalışmayanlar sayılır, zone'lara dağılım çubukta.",
+  "when": [
+    "vm'lere bak",
+    "compute engine instance'ları",
+    "hangi makineler kapalı",
+    "gcloud compute instances list",
+    "sunucuların IP'leri ne",
+    "show my gcp vms",
+    "which instances are stopped",
+    "makine tipleri ne",
+    "bastion açık mı",
+    "list compute instances in prod"
+  ],
+  "keywords": [
+    "gcp",
+    "gcloud",
+    "compute",
+    "vm",
+    "instance",
+    "gce",
+    "sunucu",
+    "makine",
+    "zone",
+    "google cloud"
+  ],
+  "requires": {
+    "bin": [
+      "gcloud"
+    ]
+  },
+  "params": {
+    "project": {
+      "desc": "Google Cloud project id (gcloud projects list)",
+      "default": null
+    }
+  },
+  "instructions": "Panel lists the project's VM instances every 30s (gcloud's own table: zone, machine type, preemptible, internal/external IP, status), counts the ones not RUNNING and shows how instances spread over zones. To explain a stopped or failing VM read `gcloud compute instances describe <name> --zone <zone> --project <project>` and its serial output (`gcloud compute instances get-serial-port-output`) before guessing. Always pass the same --project. Don't start, stop, ssh or delete unless the user asks.",
+  "spec": {
+    "title": "VM · {{project}}",
+    "sources": {
+      "vms": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "compute",
+          "instances",
+          "list",
+          "--project",
+          "{{project}}"
+        ],
+        "parse": "columns",
+        "every_s": 30
+      },
+      "down": {
+        "brick": "command",
+        "run": [
+          "gcloud",
+          "compute",
+          "instances",
+          "list",
+          "--project",
+          "{{project}}"
+        ],
+        "parse": "columns",
+        "every_s": 30,
+        "where": {
+          "STATUS": {
+            "ne": "RUNNING"
+          }
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "vm-n",
+        "brick": "stat",
+        "source": "vms",
+        "title": "VM"
+      },
+      {
+        "id": "down-n",
+        "brick": "stat",
+        "source": "down",
+        "title": "Çalışmıyor",
+        "ok": 0,
+        "warn_above": 0,
+        "error_above": 3
+      },
+      {
+        "id": "zones",
+        "brick": "bars",
+        "source": "vms",
+        "title": "Zone",
+        "label": "ZONE",
+        "limit": 6
+      },
+      {
+        "id": "vms",
+        "brick": "table",
+        "source": "vms",
+        "title": "VM'ler",
+        "key": "NAME",
+        "columns": [
+          "NAME",
+          "ZONE",
+          "MACHINE_TYPE",
+          "INTERNAL_IP",
+          "EXTERNAL_IP",
+          "STATUS"
+        ],
+        "row_actions": [
+          {
+            "label": "Neden?",
+            "ask": "{NAME} VM'i neden {STATUS}? describe ve seri port çıktısına bak."
+          }
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1791372600000,
+    "data": {
+      "vms": [
+        {
+          "NAME": "web-1",
+          "ZONE": "europe-west1-b",
+          "MACHINE_TYPE": "e2-standard-2",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.2",
+          "EXTERNAL_IP": "34.76.12.8",
+          "STATUS": "RUNNING"
+        },
+        {
+          "NAME": "web-2",
+          "ZONE": "europe-west1-c",
+          "MACHINE_TYPE": "e2-standard-2",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.3",
+          "EXTERNAL_IP": "34.140.2.91",
+          "STATUS": "RUNNING"
+        },
+        {
+          "NAME": "db-primary",
+          "ZONE": "europe-west1-b",
+          "MACHINE_TYPE": "n2-highmem-8",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.10",
+          "EXTERNAL_IP": "",
+          "STATUS": "RUNNING"
+        },
+        {
+          "NAME": "db-replica",
+          "ZONE": "europe-west1-d",
+          "MACHINE_TYPE": "n2-highmem-8",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.11",
+          "EXTERNAL_IP": "",
+          "STATUS": "RUNNING"
+        },
+        {
+          "NAME": "batch-7",
+          "ZONE": "us-central1-a",
+          "MACHINE_TYPE": "e2-standard-8",
+          "PREEMPTIBLE": "true",
+          "INTERNAL_IP": "10.128.0.7",
+          "EXTERNAL_IP": "",
+          "STATUS": "TERMINATED"
+        },
+        {
+          "NAME": "bastion",
+          "ZONE": "europe-west1-b",
+          "MACHINE_TYPE": "e2-micro",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.5",
+          "EXTERNAL_IP": "35.205.66.4",
+          "STATUS": "STOPPING"
+        }
+      ],
+      "down": [
+        {
+          "NAME": "batch-7",
+          "ZONE": "us-central1-a",
+          "MACHINE_TYPE": "e2-standard-8",
+          "PREEMPTIBLE": "true",
+          "INTERNAL_IP": "10.128.0.7",
+          "EXTERNAL_IP": "",
+          "STATUS": "TERMINATED"
+        },
+        {
+          "NAME": "bastion",
+          "ZONE": "europe-west1-b",
+          "MACHINE_TYPE": "e2-micro",
+          "PREEMPTIBLE": "",
+          "INTERNAL_IP": "10.132.0.5",
+          "EXTERNAL_IP": "35.205.66.4",
+          "STATUS": "STOPPING"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "Google Cloud console",
+    "url": "https://console.cloud.google.com/compute/instances",
+    "borrowed": [
+      "VM listesi: zone, makine tipi, IP'ler, durum",
+      "çalışmayan VM sayısı",
+      "zone dağılımı"
+    ]
+  }
+}

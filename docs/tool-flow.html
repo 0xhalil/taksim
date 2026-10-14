@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tool flow</title>
+<style>
+  :root {
+    --bg: #141312; --panel: #1d1c1a; --panel-2: #262522; --ink: #ecebe7; --muted: #8d897f; --line: #34322e;
+    --accent: #e0774f; --ok: #5fb382; --warn: #e0a030; --err: #f2867d; --claude: #c4552d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; overflow: hidden; }
+  #fit { position: fixed; inset: 0 0 50px; }
+  #stage { width: 1200px; height: 720px; position: absolute; left: 50%; top: 50%; transform-origin: center; background:
+    radial-gradient(circle at 1px 1px, #ffffff0d 1px, transparent 0) 0 0 / 22px 22px; border-radius: 18px; overflow: hidden; }
+
+  /* toolbar: only icons */
+  .bar { position: absolute; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 22px; border-bottom: 1px solid var(--line); background: #191816; }
+  .logo { font-weight: 700; letter-spacing: -.02em; }
+  .bar .sp { flex: 1; }
+  .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); position: relative; transition: color .3s, background .3s, transform .3s; }
+  .ic svg { width: 20px; height: 20px; }
+  .ic.hot { color: var(--ink); background: var(--panel-2); }
+  .ic.bump { animation: bump .5s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes bump { 40% { transform: scale(1.3); } }
+  .badge { position: absolute; top: 2px; right: 1px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--accent); color: #141312; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; transform: scale(0); transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .badge.on { transform: scale(1); }
+
+  /* agent node */
+  .node { position: absolute; left: 90px; top: 190px; width: 300px; height: 210px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px #0006; overflow: hidden; }
+  .nhead { height: 34px; background: var(--claude); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-weight: 600; font-size: 13px; }
+  .nhead i { width: 14px; height: 14px; border-radius: 4px; background: #ffffff55; }
+  .chat { padding: 16px; display: grid; gap: 10px; }
+  .msg { justify-self: end; background: var(--panel-2); border-radius: 12px 12px 4px 12px; padding: 8px 12px; min-height: 36px; font-size: 14px; white-space: pre; }
+  .caret { display: inline-block; width: 2px; height: 16px; background: var(--accent); vertical-align: -3px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .think { display: flex; gap: 5px; padding: 6px 2px; opacity: 0; transition: opacity .3s; }
+  .think.on { opacity: 1; }
+  .think b { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: dot 1.2s infinite; }
+  .think b:nth-child(2) { animation-delay: .15s; } .think b:nth-child(3) { animation-delay: .3s; }
+  @keyframes dot { 30% { transform: translateY(-4px); background: var(--ink); } }
+  .link { position: absolute; left: 390px; top: 294px; width: 36px; height: 2px; background: linear-gradient(90deg, var(--line), var(--accent)); transform-origin: left; transform: scaleX(0); transition: transform .5s; }
+  .link.on { transform: scaleX(1); }
+
+  /* panel (ghost -> live) */
+  .panel { position: absolute; left: 426px; top: 150px; width: 560px; height: 380px; border-radius: 14px; background: var(--panel); border: 1.5px dashed #5a5650; overflow: hidden;
+    opacity: 0; transform: translateX(-20px) scale(.97); transition: opacity .6s, transform .6s cubic-bezier(.2,.9,.3,1), border-color .4s, box-shadow .4s; }
+  .panel.ghost { opacity: 1; transform: none; }
+  .panel.live { border: 1.5px solid var(--line); box-shadow: 0 14px 40px #0007; }
+  .phead { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+  .pdot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); transition: background .4s, box-shadow .4s; }
+  .live .pdot { background: var(--ok); box-shadow: 0 0 0 4px #5fb38226; }
+  .plogo { width: 22px; height: 22px; border-radius: 6px; background: #326ce5; display: grid; place-items: center; }
+  .plogo svg { width: 15px; height: 15px; }
+  .ptitle { font-weight: 600; font-size: 14px; }
+  .phead .sp { flex: 1; }
+  .keep { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); opacity: 0; transition: opacity .4s, color .3s, background .3s; }
+  .keep svg { width: 17px; height: 17px; }
+  .keep.on { opacity: 1; }
+  .keep.pulse { animation: pulse 1.4s infinite; color: var(--accent); }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 #e0774f55; } 50% { box-shadow: 0 0 0 7px #e0774f00; } }
+  .keep.done { color: var(--accent); background: #e0774f22; animation: none; }
+  .keep.done svg path { fill: currentColor; }
+  .pbody { padding: 14px; display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; filter: saturate(.2) blur(.6px); opacity: .45; transition: filter .6s, opacity .6s; }
+  .live .pbody { filter: none; opacity: 1; }
+  .stat { background: var(--panel-2); border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+  .stat .n { font-size: 34px; font-weight: 700; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .k { display: flex; gap: 4px; }
+  .pill { height: 6px; border-radius: 3px; background: var(--line); }
+  .spark { background: var(--panel-2); border-radius: 10px; padding: 12px; display: flex; align-items: flex-end; gap: 4px; }
+  .spark b { flex: 1; background: #ffffff22; border-radius: 2px; transition: height .5s; }
+  .spark b.hi { background: var(--err); }
+  .rows { grid-column: span 3; display: grid; gap: 6px; }
+  .row { display: grid; grid-template-columns: 14px 1.6fr .5fr .7fr; gap: 12px; align-items: center; height: 30px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); }
+  .row .s { width: 10px; height: 10px; border-radius: 50%; }
+  .row .bar { height: 7px; border-radius: 4px; background: #ffffff1f; }
+  .row.bad { background: #f2867d14; box-shadow: inset 2px 0 var(--err); }
+  .live .row { animation: rowin .5s both; }
+  @keyframes rowin { from { opacity: 0; transform: translateY(6px); } }
+  .rst { justify-self: end; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+  .bad .rst { color: var(--err); font-weight: 600; }
+
+  .open { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); width: 64px; height: 64px; border-radius: 50%; background: var(--accent); display: grid; place-items: center;
+    box-shadow: 0 10px 30px #e0774f55; transition: transform .35s cubic-bezier(.3,1.6,.5,1), opacity .3s; z-index: 2; }
+  .open svg { width: 26px; height: 26px; margin-left: 4px; }
+  .open.press { transform: translate(-50%, -50%) scale(.86); }
+  .open.gone { opacity: 0; transform: translate(-50%, -50%) scale(.4); pointer-events: none; }
+
+  /* flying card when kept */
+  .fly { position: absolute; border-radius: 14px; border: 1.5px solid var(--accent); background: var(--panel); z-index: 5; pointer-events: none;
+    transition: all .8s cubic-bezier(.6,0,.3,1); }
+
+  /* gallery sheet */
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 56px; background: #151413f2; backdrop-filter: blur(14px); transform: translateY(102%); transition: transform .7s cubic-bezier(.2,.9,.3,1); z-index: 4; padding: 34px 60px; }
+  .sheet.on { transform: none; }
+  .shelf { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; color: var(--muted); }
+  .shelf .av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #141312; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+  .card { position: relative; aspect-ratio: 4 / 3; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; transition: transform .3s cubic-bezier(.2,.9,.3,1), box-shadow .3s, border-color .3s;
+    opacity: 0; transform: translateY(20px); }
+  .sheet.on .card { opacity: 1; transform: none; transition-delay: var(--d); }
+  .card.hover { transform: translateY(-6px) scale(1.02) !important; box-shadow: 0 18px 40px #0008; border-color: #5a5650; }
+  .card .mini { position: absolute; inset: 12px 12px 46px; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; align-content: start; }
+  .card .mini .stat { padding: 8px; } .card .mini .stat .n { font-size: 20px; }
+  .card .mini .rows { grid-column: span 2; gap: 4px; } .card .mini .row { height: 16px; grid-template-columns: 8px 1.6fr .6fr; gap: 6px; padding: 0 6px; }
+  .card .mini .row .s { width: 7px; height: 7px; } .card .mini .row .bar { height: 5px; }
+  .card .foot { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 28px; display: flex; align-items: center; gap: 8px; }
+  .card .foot .lg { width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex: none; }
+  .card .foot .lg svg { width: 15px; height: 15px; }
+  .card .foot .nm { flex: 1; height: 8px; border-radius: 4px; background: var(--line); max-width: 90px; }
+  .card .foot .nm.t { height: auto; background: none; max-width: none; font-weight: 600; font-size: 13px; }
+  .plus { width: 30px; height: 30px; border-radius: 50%; background: var(--panel-2); display: grid; place-items: center; color: var(--ink); transition: background .25s, color .25s, transform .3s cubic-bezier(.3,1.6,.5,1); }
+  .plus svg { width: 15px; height: 15px; }
+  .card.hover .plus { background: var(--accent); color: #141312; }
+  .plus.ok { background: var(--ok) !important; transform: rotate(360deg); }
+  .share { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: #1d1c1acc; color: var(--muted); opacity: 0; transition: opacity .3s; }
+  .share svg { width: 15px; height: 15px; }
+  .card.mine.hover .share { opacity: 1; }
+  .share.press { color: var(--accent); background: #e0774f22; }
+  .toast { position: absolute; left: 50%; bottom: 30px; transform: translate(-50%, 30px); opacity: 0; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); z-index: 6; transition: all .45s cubic-bezier(.3,1.4,.5,1); }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+  .toast .av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #141312; }
+  .toast .av + .av { margin-left: -14px; border: 2px solid var(--panel-2); }
+
+  /* pointer */
+  .cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 9; pointer-events: none; transition: transform .9s cubic-bezier(.5,0,.25,1); filter: drop-shadow(0 2px 3px #0009); }
+  .cursor::after { content: ""; position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; opacity: 0; }
+  .cursor.click::after { animation: ripple .45s; }
+  @keyframes ripple { from { opacity: .9; transform: scale(.3); } to { opacity: 0; transform: scale(1.6); } }
+
+  /* scene dots */
+  .dots { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; }
+  .dots button { width: 9px; height: 9px; border-radius: 5px; border: 0; padding: 0; background: #ffffff30; cursor: pointer; transition: width .4s, background .4s; }
+  .dots button.on { width: 28px; background: var(--accent); }
+  .dots .re { width: 28px; height: 28px; border-radius: 50%; background: none; color: var(--muted); display: grid; place-items: center; }
+  .dots .re:hover { color: var(--ink); }
+  .dots .re svg { width: 16px; height: 16px; }
+</style>
+</head>
+<body>
+<div id="fit"><div id="stage">
+  <div class="bar">
+    <span class="logo">taksim</span><span class="sp"></span>
+    <span class="ic" id="tray" title="Tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="badge" id="badge">1</span></span>
+    <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></span>
+    <span class="ic" style="background:var(--accent);color:#141312"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+  </div>
+
+  <div class="node"><div class="nhead"><i></i>ops</div>
+    <div class="chat"><div class="msg" id="msg"><span class="caret"></span></div><div class="think" id="think"><b></b><b></b><b></b></div></div>
+  </div>
+  <div class="link" id="link"></div>
+
+  <div class="panel" id="panel">
+    <div class="phead">
+      <span class="pdot"></span>
+      <span class="plogo"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2 3.5 6.3l-2 9.4L7.6 23h8.8l6.1-7.3-2-9.4z" opacity=".25"/><circle cx="12" cy="12" r="3.2"/><path d="M12 4.5v4M12 15.5v4M5 9.5l3.6 1.6M15.4 12.9 19 14.5M5 14.5l3.6-1.6M15.4 11.1 19 9.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+      <span class="ptitle">prod</span>
+      <span class="sp"></span>
+      <span class="keep" id="keep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg></span>
+    </div>
+    <div class="pbody">
+      <div class="stat"><span class="n" id="nPods">12</span><span class="k"><span class="pill" style="width:34px;background:var(--ok)"></span></span></div>
+      <div class="stat"><span class="n" style="color:var(--warn)" id="nBad">2</span><span class="k"><span class="pill" style="width:22px;background:var(--warn)"></span></span></div>
+      <div class="spark" id="spark"></div>
+      <div class="rows" id="rows"></div>
+    </div>
+    <div class="open" id="open"><svg viewBox="0 0 24 24" fill="#141312"><path d="M7 4.5v15l12.5-7.5z"/></svg></div>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <div class="shelf"><span class="av" style="background:var(--accent)">S</span><span class="pill" style="width:60px"></span></div>
+    <div class="grid" id="gMine"></div>
+    <div class="shelf"><span class="av" style="background:#7aa2f7">E</span><span class="av" style="background:#9ece6a;margin-left:-14px">K</span><span class="pill" style="width:60px"></span></div>
+    <div class="grid" id="gTeam"></div>
+  </div>
+  <div class="toast" id="toast"><span class="av" style="background:#7aa2f7">E</span><span class="av" style="background:#9ece6a">K</span><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+
+  <svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M4 2.5v17l4.6-4.2 3 6.7 3-1.4-3-6.6 6.4-.4z" fill="#fff" stroke="#141312" stroke-width="1.3" stroke-linejoin="round"/></svg>
+</div></div>
+<div class="dots"><button data-s="0"></button><button data-s="1"></button><button data-s="2"></button>
+  <button class="re" id="replay" title="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const stage = $("#stage");
+const fit = () => { const k = Math.min(innerWidth / 1240, (innerHeight - 50) / 760); stage.style.transform = `translate(-50%, -50%) scale(${k})`; };
+addEventListener("resize", fit); fit();
+
+// ---- content: shapes instead of words ----
+const POD = [["ok", .9, "0"], ["ok", .7, "0"], ["err", .8, "14"], ["ok", .6, "0"], ["warn", .5, "3"], ["ok", .75, "0"]];
+const color = { ok: "var(--ok)", warn: "var(--warn)", err: "var(--err)" };
+$("#rows").innerHTML = POD.map(([s, w, r], i) => `<div class="row ${s === "err" ? "bad" : ""}" style="animation-delay:${.08 * i}s"><span class="s" style="background:${color[s]}"></span><span class="bar" style="width:${w * 100}%"></span><span class="bar" style="width:60%"></span><span class="rst">${r}</span></div>`).join("");
+const spark = $("#spark");
+const heights = [30, 34, 28, 40, 36, 52, 44, 80, 92, 60, 46, 38, 42, 35];
+spark.innerHTML = heights.map((h) => `<b style="height:${h}%" class="${h > 70 ? "hi" : ""}"></b>`).join("");
+
+const LOGO = {
+  k8s: ["#326ce5", '<circle cx="12" cy="12" r="3.2" fill="#fff"/><path d="M12 4.5v4M12 15.5v4M5 9.5l3.6 1.6M15.4 12.9 19 14.5M5 14.5l3.6-1.6M15.4 11.1 19 9.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>'],
+  docker: ["#1d63ed", '<path d="M3 12h15c1.5 0 2.5-1 3-2-1 3-4 7-10 7-4 0-7-2-8-5z" fill="#fff"/><rect x="6" y="8" width="3" height="3" fill="#fff"/><rect x="10" y="8" width="3" height="3" fill="#fff"/><rect x="10" y="4.5" width="3" height="3" fill="#fff"/>'],
+  log: ["#6b6862", '<path d="M6 7h12M6 11h9M6 15h12M6 19h7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>'],
+  pg: ["#336791", '<ellipse cx="12" cy="6.5" rx="6.5" ry="2.8" fill="#fff"/><path d="M5.5 6.5v11c0 1.5 3 2.8 6.5 2.8s6.5-1.3 6.5-2.8v-11" stroke="#fff" stroke-width="1.8" fill="none"/>'],
+  cpu: ["#8a5cf6", '<rect x="7" y="7" width="10" height="10" rx="2" stroke="#fff" stroke-width="1.8" fill="none"/><path d="M10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>'],
+  queue: ["#ff6600", '<rect x="4" y="5" width="16" height="4" rx="1.5" fill="#fff"/><rect x="4" y="10.5" width="12" height="4" rx="1.5" fill="#fff" opacity=".8"/><rect x="4" y="16" width="8" height="4" rx="1.5" fill="#fff" opacity=".6"/>'],
+  git: ["#f05033", '<circle cx="7" cy="6" r="2.2" fill="#fff"/><circle cx="7" cy="18" r="2.2" fill="#fff"/><circle cx="17" cy="9" r="2.2" fill="#fff"/><path d="M7 8v8M17 11c0 3-4 3-8.5 5.5" stroke="#fff" stroke-width="1.8" fill="none"/>'],
+  disk: ["#2f9e6e", '<circle cx="12" cy="12" r="8" stroke="#fff" stroke-width="1.8" fill="none"/><path d="M12 12 12 4a8 8 0 0 1 7.5 5.3z" fill="#fff"/>'],
+};
+const shades = (seed) => Array.from({ length: 4 }, (_, i) => ["ok", "ok", seed % (i + 2) ? "ok" : "err", "warn"][i]);
+function card(kind, i, { mine, title } = {}) {
+  const [bg, svg] = LOGO[kind];
+  const rows = shades(i + 3).map((s, j) => `<div class="row"><span class="s" style="background:${color[s]}"></span><span class="bar" style="width:${50 + ((i * 17 + j * 23) % 45)}%"></span><span class="bar" style="width:55%"></span></div>`).join("");
+  return `<div class="card ${mine ? "mine" : ""}" style="--d:${.06 * i}s" data-k="${kind}">
+    <div class="mini"><div class="stat"><span class="n">${[12, 5, 3, 48, 7, 2, 9, 61][i % 8]}</span></div><div class="stat"><span class="n" style="color:${i % 3 ? "var(--ok)" : "var(--warn)"}">${[2, 0, 1, 4][i % 4]}</span></div><div class="rows">${rows}</div></div>
+    <div class="foot"><span class="lg" style="background:${bg}"><svg viewBox="0 0 24 24">${svg}</svg></span><span class="nm ${title ? "t" : ""}" style="max-width:${60 + (i * 13) % 50}px">${title || ""}</span><span style="flex:1"></span><span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div>
+    ${mine ? '<span class="share"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>' : ""}
+  </div>`;
+}
+const drawGallery = (kept) => {
+  $("#gMine").innerHTML = (kept ? [card("k8s", 0, { mine: true, title: "prod" })] : []).concat([card("git", 1, { mine: true }), card("log", 2, { mine: true })]).join("");
+  $("#gTeam").innerHTML = ["docker", "pg", "queue", "cpu"].map((k, i) => card(k, i + 4)).join("");
+};
+
+// ---- timeline ----
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const cur = $("#cursor");
+let run = 0;
+const alive = (id) => { if (id !== run) throw "stop"; };
+const pos = (el, dx = 0, dy = 0) => {
+  const s = stage.getBoundingClientRect(), r = el.getBoundingClientRect(), k = s.width / 1200;
+  return [(r.left - s.left) / k + r.width / k / 2 + dx, (r.top - s.top) / k + r.height / k / 2 + dy];
+};
+const move = async (id, el, dx, dy, ms = 900) => { const [x, y] = pos(el, dx, dy); cur.style.transitionDuration = ms + "ms"; cur.style.transform = `translate(${x}px, ${y}px)`; await sleep(ms); alive(id); };
+const click = async (id) => { cur.classList.remove("click"); void cur.offsetWidth; cur.classList.add("click"); await sleep(260); alive(id); };
+
+function reset() {
+  $("#msg").innerHTML = '<span class="caret"></span>';
+  $("#think").classList.remove("on");
+  $("#link").classList.remove("on");
+  $("#panel").className = "panel";
+  $("#open").className = "open";
+  $("#keep").className = "keep";
+  $("#badge").classList.remove("on");
+  $("#tray").classList.remove("hot", "bump");
+  $("#sheet").classList.remove("on");
+  $("#toast").classList.remove("on");
+  document.querySelectorAll(".fly").forEach((f) => f.remove());
+  cur.style.transitionDuration = "0ms";
+  cur.style.transform = "translate(1000px, 640px)";
+}
+const setDot = (n) => document.querySelectorAll(".dots [data-s]").forEach((b) => b.classList.toggle("on", +b.dataset.s === n));
+
+async function scene0(id) { // a request; the right tool appears as a ghost; one press opens it
+  setDot(0);
+  await sleep(500); alive(id);
+  const text = "watch kubernetes";
+  for (let i = 1; i <= text.length; i++) { $("#msg").innerHTML = `${text.slice(0, i)}<span class="caret"></span>`; await sleep(55); alive(id); }
+  $("#msg").textContent = text;
+  $("#think").classList.add("on");
+  await sleep(700); alive(id);
+  $("#link").classList.add("on");
+  $("#panel").classList.add("ghost");
+  await sleep(900); alive(id);
+  await move(id, $("#open"), 6, 10, 1000);
+  await click(id);
+  $("#open").classList.add("press");
+  await sleep(160); alive(id);
+  $("#open").classList.add("gone");
+  $("#panel").classList.add("live");
+  $("#think").classList.remove("on");
+  await sleep(1800); alive(id);
+}
+
+async function scene1(id) { // keep it: one press, it flies into the tray
+  setDot(1);
+  if (!$("#panel").classList.contains("live")) { $("#msg").textContent = "watch kubernetes"; $("#link").classList.add("on"); $("#panel").className = "panel ghost live"; $("#open").className = "open gone"; }
+  await sleep(600); alive(id);
+  $("#keep").classList.add("on", "pulse");
+  await sleep(900); alive(id);
+  await move(id, $("#keep"), 4, 8, 1000);
+  await click(id);
+  $("#keep").className = "keep on done";
+  const p = $("#panel"), s = stage.getBoundingClientRect(), r = p.getBoundingClientRect(), k = s.width / 1200;
+  const fly = document.createElement("div");
+  fly.className = "fly";
+  Object.assign(fly.style, { left: `${(r.left - s.left) / k}px`, top: `${(r.top - s.top) / k}px`, width: `${r.width / k}px`, height: `${r.height / k}px`, opacity: .9 });
+  stage.appendChild(fly);
+  await sleep(40);
+  const [tx, ty] = pos($("#tray"));
+  Object.assign(fly.style, { left: `${tx - 10}px`, top: `${ty - 8}px`, width: "20px", height: "16px", opacity: .2, borderRadius: "5px" });
+  await sleep(820); alive(id);
+  fly.remove();
+  $("#badge").classList.add("on");
+  $("#tray").classList.add("hot", "bump");
+  await sleep(1500); alive(id);
+}
+
+async function scene2(id) { // the gallery: live previews, one + ; share is one icon
+  setDot(2);
+  drawGallery(true);
+  $("#badge").classList.add("on");
+  await move(id, $("#tray"), 4, 8, 800);
+  await click(id);
+  $("#sheet").classList.add("on");
+  $("#badge").classList.remove("on");
+  await sleep(1100); alive(id);
+  const team = document.querySelectorAll("#gTeam .card");
+  for (const c of [team[0], team[1]]) {
+    await move(id, c, 0, -10, 700);
+    document.querySelectorAll(".card").forEach((x) => x.classList.toggle("hover", x === c));
+    await sleep(500); alive(id);
+  }
+  const pg = team[1];
+  await move(id, pg.querySelector(".plus"), 3, 6, 600);
+  await click(id);
+  pg.querySelector(".plus").classList.add("ok");
+  pg.querySelector(".plus").innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#141312" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  await sleep(1000); alive(id);
+  const mine = document.querySelector("#gMine .card");
+  await move(id, mine, 0, -20, 800);
+  document.querySelectorAll(".card").forEach((x) => x.classList.toggle("hover", x === mine));
+  await sleep(500); alive(id);
+  await move(id, mine.querySelector(".share"), 3, 6, 600);
+  await click(id);
+  mine.querySelector(".share").classList.add("press");
+  $("#toast").classList.add("on");
+  await sleep(2600); alive(id);
+}
+
+async function play(from = 0) {
+  const id = ++run;
+  reset();
+  try {
+    if (from > 0) { $("#msg").textContent = "watch kubernetes"; $("#link").classList.add("on"); $("#panel").className = "panel ghost live"; $("#open").className = "open gone"; }
+    if (from > 1) { $("#keep").className = "keep on done"; }
+    const scenes = [scene0, scene1, scene2];
+    for (let s = from; s < 3; s++) await scenes[s](id);
+    await sleep(800);
+    if (id === run) play(0);
+  } catch (e) { if (e !== "stop") throw e; }
+}
+document.querySelectorAll(".dots [data-s]").forEach((b) => (b.onclick = () => play(+b.dataset.s)));
+$("#replay").onclick = () => play(0);
+play(0);
+</script>
+</body>
+</html>

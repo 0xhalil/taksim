@@ -1,0 +1,102 @@
+{
+  "author": "taksim",
+  "version": 1,
+  "origin": "builtin",
+  "createdAt": 1790848800000,
+  "uses": 0,
+  "learned": [],
+  "id": "disk-usage",
+  "name": "Disk doluluğu",
+  "summary": "Bağlı disklerin doluluk oranları; dolmak üzere olanlar kırmızı görünür.",
+  "when": [
+    "disk doldu mu",
+    "disk alanı ne kadar kaldı",
+    "df -h göster",
+    "no space left on device hatası",
+    "check disk space",
+    "hangi bölüm dolu"
+  ],
+  "keywords": [
+    "disk",
+    "df",
+    "storage",
+    "depolama",
+    "space",
+    "alan",
+    "volume",
+    "mount"
+  ],
+  "requires": {
+    "bin": [
+      "df"
+    ]
+  },
+  "params": {},
+  "instructions": "Panel shows `df -h` every 30s. Anything above ~90% is a problem; if the user asks what fills it, use `du -sh` on the biggest directories of that mount (read-only).",
+  "spec": {
+    "title": "Disk",
+    "sources": {
+      "df": {
+        "brick": "command",
+        "run": [
+          "df",
+          "-h"
+        ],
+        "parse": "columns",
+        "every_s": 30,
+        "where": {
+          "Filesystem": {
+            "match": "^/dev/"
+          }
+        }
+      }
+    },
+    "views": [
+      {
+        "id": "df",
+        "brick": "table",
+        "source": "df",
+        "title": "Diskler",
+        "columns": [
+          "Filesystem",
+          "Size",
+          "Used",
+          "Avail",
+          "Capacity",
+          "Mounted on"
+        ]
+      }
+    ]
+  },
+  "preview": {
+    "at": 1790848800000,
+    "data": {
+      "df": [
+        {
+          "Filesystem": "/dev/disk3s1s1",
+          "Size": "460Gi",
+          "Used": "12Gi",
+          "Avail": "20Gi",
+          "Capacity": "38%",
+          "Mounted on": "/"
+        },
+        {
+          "Filesystem": "/dev/disk3s5",
+          "Size": "460Gi",
+          "Used": "412Gi",
+          "Avail": "20Gi",
+          "Capacity": "96%",
+          "Mounted on": "/System/Volumes/Data"
+        }
+      ]
+    }
+  },
+  "reference": {
+    "product": "duf",
+    "url": "https://github.com/muesli/duf",
+    "borrowed": [
+      "yalnızca gerçek diskler",
+      "doluluk yüzdesi"
+    ]
+  }
+}

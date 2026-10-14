@@ -1,0 +1,66 @@
+# taksim website
+
+One self-contained page, `index.html`: no build step, no framework, no external requests.
+It plays a short taksim session on its own (an orchestrator gets a job, builds its team,
+the agents talk, a group keeps its notes, the IDE docks, a tool builds itself and raises
+an alarm) and offers the download.
+
+## Look at it
+
+Open `site/index.html` in a browser. To see the static final state, turn on
+"Reduce motion" in macOS (System Settings > Accessibility > Display).
+
+## Keep it true to the app
+
+The canvas on the page copies the native app, measure for measure:
+
+| On the page | Comes from |
+| --- | --- |
+| node title bar, status ring, arrows, link labels | `native/Sources/Taksim/GraphDraw.swift` |
+| colours (IntelliJ Dark / Light) | `native/Sources/Taksim/Theme.swift` |
+| chat and composer | `native/Sources/Taksim/Chat/` |
+| panel, stat / table / timeline / log bricks | `native/Sources/Taksim/PanelChrome.swift`, `Bricks/` |
+| docked IDE | `native/Sources/Taksim/IDE/IDEView.swift`, `IDEDock.swift` |
+| CLI logos | `native/Sources/Taksim/Logos.swift` |
+
+When the app's look changes, change the page with it. The logos are copied by a script:
+
+```bash
+npm run site:logos
+```
+
+To compare against the real thing, render the app's canvas without a server
+(the design notes in `docs/design-language.md` list every snapshot option):
+
+```bash
+TAKSIM_SNAPSHOT_CANVAS=canvas.json TAKSIM_SNAPSHOT=/tmp/canvas.png TAKSIM_SNAPSHOT_DARK=1 native/build/Taksim.app/Contents/MacOS/Taksim
+```
+
+## Languages
+
+English by default, Simplified Chinese from the 中文 switch (or a Chinese browser).
+Story text goes through `t()`; add its translation to the `ZH` table. The app's own labels
+(Chat, Agent, panel bricks, code) stay in English, as the app draws them.
+
+## Links
+
+- GitHub: `https://github.com/0xhalil/taksim`
+- Download for Mac: `https://github.com/0xhalil/taksim/releases/latest/download/Taksim.dmg`,
+  which always resolves to the newest release, so every release must attach a file named `Taksim.dmg`.
+
+Both start working once the repository and its first release exist.
+
+## Publish
+
+The site lives at https://taksim.dev, served by nginx on our own server.
+`.github/workflows/site.yml` sends `index.html` there over SSH on every push to `main` that
+touches it, then fetches the live page to check it.
+
+The deploy key can do one thing: on the server its `authorized_keys` entry is
+`restrict,command="…/deploy.sh"`, a script that reads the page from stdin, checks it is the
+taksim page and swaps it in atomically. The repository holds the secrets `DEPLOY_KEY`,
+`DEPLOY_HOST`, `DEPLOY_USER` and `DEPLOY_KNOWN_HOSTS`.
+
+## Drafts
+
+`drafts/` holds earlier design explorations. They are not published.
