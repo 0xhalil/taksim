@@ -494,6 +494,7 @@ test('turn review reverses individual hunks and files, persists decisions, and p
     assert.equal(readFileSync(join(dir, 'a.txt'), 'utf8'), updated + 'user edit\n');
     assert.equal(g('diff', '--cached'), index, 'review leaves staged work untouched');
     assert.ok(Object.keys(agent.chatReviews).length);
+    getCanvas(c.id).flush();
     const saved = JSON.parse(readFileSync(join(home, 'canvases', c.id, 'canvas.json'), 'utf8'));
     assert.deepEqual(saved.agents.find((v) => v.id === a.id).chatReviews, agent.chatReviews);
     assert.equal((await api('GET', `${path}?from=${from}&to=${to}`)).data.files.find((v) => v.path === 'a.txt').status, 'kept');

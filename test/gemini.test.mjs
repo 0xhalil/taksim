@@ -11,6 +11,7 @@ const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
 process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
+process.env.TAKSIM_GEMINI_BIN = process.execPath; // any file that exists: the tests must not need a real Gemini CLI
 
 const { startServer } = await import("../src/server.mjs");
 const { default: gemini, INTRO } = await import("../src/backends/gemini.mjs");

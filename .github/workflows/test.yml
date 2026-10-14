@@ -18,9 +18,14 @@ jobs:
       - run: npm test
 
   app:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          swift --version
       - uses: actions/setup-node@v4
         with:
           node-version: 22
