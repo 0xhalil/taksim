@@ -76,6 +76,32 @@ jobs:
       - name: Swift tests
         working-directory: native
         run: swift test
+      - name: Import the Developer ID certificate
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          NOTARY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"; pw=$(uuidgen)
+          security create-keychain -p "$pw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pw" "$keychain"
+          printf '%s' "$CERT_P12" | base64 -D > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ {print $2; exit}')
+          [ -n "$identity" ] || { echo "no Developer ID Application certificate in the p12" >&2; exit 1; }
+          printf '%s\n' "$NOTARY_P8" > "$RUNNER_TEMP/notary.p8"; chmod 600 "$RUNNER_TEMP/notary.p8"
+          {
+            echo "TAKSIM_SIGN_IDENTITY=$identity"
+            echo "TAKSIM_NOTARY_KEY=$RUNNER_TEMP/notary.p8"
+            echo "TAKSIM_NOTARY_KEY_ID=$NOTARY_KEY_ID"
+            echo "TAKSIM_NOTARY_ISSUER=$NOTARY_ISSUER"
+          } >> "$GITHUB_ENV"
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -16,8 +16,8 @@ brew install --cask 0xhalil/taksim/taksim
 ```
 
 Or download the latest `Taksim-<version>.zip` from [Releases](https://github.com/0xhalil/taksim/releases),
-unzip it and move `Taksim.app` to Applications. Releases are not notarized yet: the first time, right-click the app
-and choose **Open**. The app updates itself from then on.
+unzip it and move `Taksim.app` to Applications. Releases are signed with a Developer ID and notarized by Apple, so it opens
+like any other app. The app updates itself from then on.
 
 You need macOS 15 or later on Apple silicon, and at least one agent CLI installed and signed in
 ([Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex),

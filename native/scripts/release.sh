@@ -5,6 +5,9 @@
 # into it, zips it, writes the zip's SHA-256 beside it, and creates release v0.3.0 with both files.
 # The releases repository is TAKSIM_RELEASE_REPO (default 0xhalil/taksim, the source repository itself); it must be public.
 # Without --publish it only builds the files under native/build/release/ (to try them first).
+# Signing: with TAKSIM_SIGN_IDENTITY (a Developer ID Application certificate, its SHA-1 hash) the app gets the hardened
+# runtime; with TAKSIM_NOTARY_KEY (an App Store Connect API key .p8), TAKSIM_NOTARY_KEY_ID and TAKSIM_NOTARY_ISSUER it is
+# also notarized and stapled. Without them the app is signed ad-hoc and only runs on this Mac.
 set -e
 cd "$(dirname "$0")/../.."
 VERSION="$1"; NOTES="${2:-}"; PUBLISH=""
@@ -28,7 +31,39 @@ cp -R node_modules/node-pty/prebuilds/darwin-* "$ENGINE/node_modules/node-pty/pr
 cp -R node_modules/monaco-editor/package.json node_modules/monaco-editor/min "$ENGINE/node_modules/monaco-editor/"
 cp "$(command -v node)" "$ENGINE/runtime/node"
 find "$ENGINE" -name '*.test.mjs' -delete
-codesign --force --deep --sign - "$APP" >/dev/null
+
+if [ -n "$TAKSIM_SIGN_IDENTITY" ]; then
+  # Developer ID: hardened runtime and a secure timestamp. Every Mach-O inside goes first (the bundled Node and
+  # node-pty's helpers need the JIT entitlements), the app itself last; --deep would sign them all alike.
+  SIGN="codesign --force --options runtime --timestamp --sign $TAKSIM_SIGN_IDENTITY"
+  find "$ENGINE" -type f | while IFS= read -r f; do
+    if file -b "$f" | grep -q '^Mach-O'; then $SIGN --entitlements native/scripts/engine.entitlements "$f"; fi
+  done
+  $SIGN "$APP" >/dev/null
+  codesign --verify --deep --strict "$APP"
+  echo "signed with Developer ID"
+else
+  # a local try-out: ad-hoc, which only runs on this Mac
+  codesign --force --deep --sign - "$APP" >/dev/null
+fi
+
+if [ -n "$TAKSIM_SIGN_IDENTITY" ] && [ -n "$TAKSIM_NOTARY_KEY" ]; then
+  # Apple's notary service looks the app over (minutes); the ticket is then stapled so it opens offline too
+  NOTARIZE=$(mktemp -d)/notarize.zip
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARIZE"
+  RESULT=$(xcrun notarytool submit "$NOTARIZE" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" \
+    --issuer "$TAKSIM_NOTARY_ISSUER" --wait --timeout 40m --output-format json) || true
+  STATUS=$(printf '%s' "$RESULT" | node -pe 'try { JSON.parse(require("fs").readFileSync(0, "utf8")).status } catch { "unreadable" }')
+  if [ "$STATUS" != "Accepted" ]; then
+    echo "notarization: $STATUS" >&2; printf '%s\n' "$RESULT" >&2
+    ID=$(printf '%s' "$RESULT" | node -pe 'try { JSON.parse(require("fs").readFileSync(0, "utf8")).id } catch { "" }')
+    [ -n "$ID" ] && xcrun notarytool log "$ID" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" --issuer "$TAKSIM_NOTARY_ISSUER" >&2
+    exit 1
+  fi
+  xcrun stapler staple "$APP"
+  spctl -a -t exec -vv "$APP"
+  echo "notarized and stapled"
+fi
 
 OUT=native/build/release
 rm -rf "$OUT"; mkdir -p "$OUT"
