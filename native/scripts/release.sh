@@ -2,7 +2,8 @@
 # Publishes a version of the app to GitHub Releases, where installed apps find it (Updater.swift):
 #   native/scripts/release.sh 0.3.0 ["what changed"]
 # builds the app with that version, packs the engine (bin, src, ui, its runtime modules) and this Mac's Node
-# into it, zips it, writes the zip's SHA-256 beside it, and creates release v0.3.0 with both files.
+# into it, zips it and wraps it in a disk image (Taksim-0.3.0-arm64.dmg), writes their SHA-256 beside them, and
+# creates release v0.3.0 with the four files.
 # The releases repository is TAKSIM_RELEASE_REPO (default 0xhalil/taksim, the source repository itself); it must be public.
 # Without --publish it only builds the files under native/build/release/ (to try them first).
 # Signing: with TAKSIM_SIGN_IDENTITY (a Developer ID Application certificate, its SHA-1 hash) the app gets the hardened
@@ -47,19 +48,25 @@ else
   codesign --force --deep --sign - "$APP" >/dev/null
 fi
 
-if [ -n "$TAKSIM_SIGN_IDENTITY" ] && [ -n "$TAKSIM_NOTARY_KEY" ]; then
-  # Apple's notary service looks the app over (minutes); the ticket is then stapled so it opens offline too
-  NOTARIZE=$(mktemp -d)/notarize.zip
-  ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARIZE"
-  RESULT=$(xcrun notarytool submit "$NOTARIZE" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" \
+# Apple's notary service looks a file over (minutes) and says Accepted or why not
+notarize() {
+  RESULT=$(xcrun notarytool submit "$1" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" \
     --issuer "$TAKSIM_NOTARY_ISSUER" --wait --timeout 40m --output-format json) || true
   STATUS=$(printf '%s' "$RESULT" | node -pe 'try { JSON.parse(require("fs").readFileSync(0, "utf8")).status } catch { "unreadable" }')
   if [ "$STATUS" != "Accepted" ]; then
-    echo "notarization: $STATUS" >&2; printf '%s\n' "$RESULT" >&2
+    echo "notarization of $1: $STATUS" >&2; printf '%s\n' "$RESULT" >&2
     ID=$(printf '%s' "$RESULT" | node -pe 'try { JSON.parse(require("fs").readFileSync(0, "utf8")).id } catch { "" }')
     [ -n "$ID" ] && xcrun notarytool log "$ID" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" --issuer "$TAKSIM_NOTARY_ISSUER" >&2
     exit 1
   fi
+}
+NOTARIZING=""; [ -n "$TAKSIM_SIGN_IDENTITY" ] && [ -n "$TAKSIM_NOTARY_KEY" ] && NOTARIZING=1
+
+if [ -n "$NOTARIZING" ]; then
+  # the ticket is stapled to the app so it opens offline too
+  NZ=$(mktemp -d)/notarize.zip
+  ditto -c -k --sequesterRsrc --keepParent "$APP" "$NZ"
+  notarize "$NZ"
   xcrun stapler staple "$APP"
   spctl -a -t exec -vv "$APP"
   echo "notarized and stapled"
@@ -72,8 +79,23 @@ ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 shasum -a 256 "$ZIP" | awk '{print $1}' > "$ZIP.sha256"
 echo "$ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(cat "$ZIP.sha256")"
 
+# the disk image people expect to drag from: the app and a link to Applications, signed and notarized like the app
+# (the zip stays: the app updates itself from it and the Homebrew cask installs it)
+DMG="$OUT/Taksim-$VERSION-arm64.dmg"
+DMGSRC=$(mktemp -d)
+ditto "$APP" "$DMGSRC/Taksim.app"; ln -s /Applications "$DMGSRC/Applications"
+hdiutil create -quiet -volname taksim -srcfolder "$DMGSRC" -fs HFS+ -format UDZO "$DMG"
+[ -n "$TAKSIM_SIGN_IDENTITY" ] && codesign --force --timestamp --sign "$TAKSIM_SIGN_IDENTITY" "$DMG"
+if [ -n "$NOTARIZING" ]; then
+  notarize "$DMG"
+  xcrun stapler staple "$DMG"
+  spctl -a -t open --context context:primary-signature -vv "$DMG"
+fi
+shasum -a 256 "$DMG" | awk '{print $1}' > "$DMG.sha256"
+echo "$DMG ($(du -h "$DMG" | cut -f1)), sha256 $(cat "$DMG.sha256")"
+
 [ -n "$PUBLISH" ] || { echo "built; add --publish to release it on $REPO"; exit 0; }
-gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" --repo "$REPO" --title "taksim $VERSION" --notes "${NOTES:-taksim $VERSION}"
+gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256" --repo "$REPO" --title "taksim $VERSION" --notes "${NOTES:-taksim $VERSION}"
 echo "published v$VERSION on $REPO"
 
 # Homebrew: the cask in the tap (TAKSIM_TAP, default 0xhalil/homebrew-taksim) points at this release

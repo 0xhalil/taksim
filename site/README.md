@@ -1,7 +1,9 @@
 # taksim website
 
-One self-contained page, `index.html`: no build step, no framework, no external requests.
-It plays a short taksim session on its own (an orchestrator gets a job, builds its team,
+Self-contained pages: no build step, no framework. `index.html` plays the session and makes no outside requests;
+`download/index.html` is the download page (disk image, Homebrew, GitHub) and asks GitHub's public API once for the latest
+version, size and date; without it the button goes to the releases page.
+The main page plays a short taksim session on its own (an orchestrator gets a job, builds its team,
 the agents talk, a group keeps its notes, the IDE docks, a tool builds itself and raises
 an alarm) and offers the download.
 
@@ -53,13 +55,14 @@ Both start working once the repository and its first release exist.
 ## Publish
 
 The site lives at https://taksim.dev, served by nginx on our own server.
-`.github/workflows/site.yml` sends `index.html` there over SSH on every push to `main` that
-touches it, then fetches the live page to check it.
+`.github/workflows/site.yml` sends the pages (`index.html`, `download/`) there over SSH on every push to `main` that
+touches `site/`, then fetches both pages to check them. `README.md`, `scripts/` and `drafts/` are not sent.
 
 The deploy key can do one thing: on the server its `authorized_keys` entry is
-`restrict,command="…/deploy.sh"`, a script that reads the page from stdin, checks it is the
-taksim page and swaps it in atomically. The repository holds the secrets `DEPLOY_KEY`,
-`DEPLOY_HOST`, `DEPLOY_USER` and `DEPLOY_KNOWN_HOSTS`.
+`restrict,command="…/deploy.sh"`, a script that reads a tar of the site from stdin, refuses anything but plain
+html/css/js/image/json/text files (no links, no hidden files, no `..`, 20 MB at most), checks that `index.html` is the
+taksim page and swaps the pages in. The repository holds the secrets `DEPLOY_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` and
+`DEPLOY_KNOWN_HOSTS`.
 
 ## Drafts
 
