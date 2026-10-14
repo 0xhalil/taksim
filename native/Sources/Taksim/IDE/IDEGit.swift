@@ -57,6 +57,11 @@ struct IDECommit: View {
             Image(systemName: "arrow.triangle.branch").font(.system(size: 11)).foregroundStyle(JB.muted)
             Text(model.git?.branch ?? "").font(.system(size: 11.5, weight: .medium)).foregroundStyle(JB.text).lineLimit(1).truncationMode(.head)
             Spacer(minLength: 4)
+            Button { Task { await model.review() } } label: {
+                if model.reviewing { ProgressView().controlSize(.mini).frame(width: 20, height: 20) }
+                else { Image(systemName: "ladybug").font(.system(size: 10.5)).foregroundStyle(files.isEmpty ? JB.muted2 : JB.accent) }
+            }
+            .buttonStyle(CloseButtonStyle(size: 20)).disabled(model.reviewing || files.isEmpty).help(L("Have the model review the changes"))
             Button { Task { await model.refreshGit() } } label: { Image(systemName: "arrow.clockwise").font(.system(size: 10.5)) }
                 .buttonStyle(CloseButtonStyle(size: 20)).help(L("Refresh"))
             if !isSnapshot {

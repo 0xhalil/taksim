@@ -24,7 +24,17 @@ struct IDEEditor: View {
             // ⌘L (Cursor's "add to chat"): the picked lines go to this agent's chat as a chip
             .background {
                 Button("") { addToChat() }.keyboardShortcut("l", modifiers: .command).opacity(0).allowsHitTesting(false)
+                // ⌘K (Cursor's inline edit): the picked lines, or the caret's line, to be rewritten from a sentence
+                Button("") { if let r = marks.region() { model.startInline(path: path, from: r.from, to: r.to) } }
+                    .keyboardShortcut("k", modifiers: .command).opacity(0).allowsHitTesting(false)
             }
+            .overlay(alignment: .top) {
+                if let e = model.inline, e.path == path {
+                    InlineEditBar(model: model, edit: e).padding(.top, 8).padding(.horizontal, 14)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.85), value: model.inline?.id)
     }
 
     private func addToChat() {
@@ -102,6 +112,16 @@ final class EditorMarks: TextViewCoordinator {
         let picked = text.substring(with: full)
         let to = from + max(0, picked.trimmingCharacters(in: .newlines).components(separatedBy: "\n").count - 1)
         return (from, to, picked)
+    }
+
+    /// the lines ⌘K works on: the picked ones, else the line the caret is on
+    func region() -> (from: Int, to: Int)? {
+        if let s = selection() { return (s.from, s.to) }
+        guard let tv = controller?.textView, tv.window?.firstResponder === tv else { return nil }
+        let loc = min(tv.selectedRange().location, tv.string.utf16.count)
+        guard loc != NSNotFound else { return nil }
+        let line = (tv.string as NSString).substring(to: loc).components(separatedBy: "\n").count
+        return (line, line)
     }
 
     private func drawNotes() {

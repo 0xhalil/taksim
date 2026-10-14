@@ -37,6 +37,7 @@ struct IDEView: View {
             if model.goingToFile { GoToFile(model: model).padding(.top, 40).transition(.opacity.combined(with: .move(edge: .top))) }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: model.goingToFile)
+        .task { await model.refreshRules() }
         .task { if !model.gitLoaded { await model.refreshGit() } } // the stripe can offer Commit from the first moment
     }
 
@@ -91,6 +92,17 @@ struct IDESideStrip: View {
                 button(.commit, symbol: "arrow.triangle.branch", help: "Commit", badge: model.git?.files.count)
             }
             Spacer()
+            // the project's rules for its models (.taksimrules, .cursorrules, .cursor/rules): one click opens them
+            Button { model.openRules() } label: {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "list.bullet.rectangle").font(.system(size: 13)).frame(width: 28, height: 26)
+                    if !model.rules.isEmpty {
+                        Circle().fill(JB.accent).frame(width: 6, height: 6).offset(x: -2, y: 3)
+                    }
+                }
+                .foregroundStyle(model.rules.isEmpty ? JB.muted2 : JB.muted)
+            }
+            .buttonStyle(Press()).help(L("Rules"))
         }
         .padding(.vertical, 6)
         .frame(width: 34)
@@ -125,6 +137,8 @@ struct IDETree: View {
                 Image(systemName: "folder.fill").font(.system(size: 11)).foregroundStyle(JB.accent)
                 Text(model.rootName).font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.ink).lineLimit(1)
                 Spacer()
+                Button { model.startGoToFile(asking: true) } label: { Image(systemName: "sparkles").font(.system(size: 11)) }
+                    .buttonStyle(CloseButtonStyle(size: 20)).help(L("Ask the project"))
                 Button { model.startGoToFile() } label: { Image(systemName: "magnifyingglass").font(.system(size: 11)) }
                     .buttonStyle(CloseButtonStyle(size: 20)).help(L("Go to file (⌘P)"))
             }
@@ -308,6 +322,11 @@ struct IDENotes: View {
                 Text(n.text).font(.system(size: 12)).foregroundStyle(JB.text).lineLimit(1).truncationMode(.tail).help(n.text)
                 Spacer(minLength: 0)
                 if hover {
+                    // ✦ hands the note to the model as an instruction to fix those lines (⌘K, already answered)
+                    Button { model.startInline(path: n.path, from: n.line, to: n.endLine ?? n.line, instruction: n.text, run: true) } label: {
+                        Image(systemName: "sparkles").font(.system(size: 9.5)).foregroundStyle(JB.accent)
+                    }
+                    .buttonStyle(CloseButtonStyle(size: 16)).help(L("Fix with the model"))
                     Button { model.clear(n) } label: { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
                         .buttonStyle(CloseButtonStyle(size: 16)).help(L("Dismiss note"))
                 }
@@ -355,18 +374,36 @@ struct GoToFile: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        let hits = FuzzyPath.rank(query, model.allFiles ?? [], limit: 12)
+        let ask = model.asking
+        let hits = ask ? [] : FuzzyPath.rank(query, model.allFiles ?? [], limit: 12)
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(JB.muted)
+                Image(systemName: ask ? "sparkles" : "magnifyingglass").foregroundStyle(ask ? JB.accent : JB.muted)
                 TextField("", text: $query).textFieldStyle(.plain).font(.system(size: 14)).focused($focused)
-                    .onSubmit { if hits.indices.contains(picked) { go(hits[picked]) } }
+                    .onSubmit {
+                        if ask { Task { await model.ask(query) } } else if hits.indices.contains(picked) { go(hits[picked]) }
+                    }
                     .onKeyPress(.downArrow) { picked = min(picked + 1, max(0, hits.count - 1)); return .handled }
                     .onKeyPress(.upArrow) { picked = max(picked - 1, 0); return .handled }
+                    .onKeyPress(.tab) { toggleAsk(); return .handled }
                     .onExitCommand { model.goingToFile = false }
-                if model.allFiles == nil { ProgressView().controlSize(.small) }
+                if model.allFiles == nil && !ask || model.answering { ProgressView().controlSize(.small) }
+                // ⇥: from finding a file by its name to asking the project a question (Cursor's codebase search)
+                Button { toggleAsk() } label: {
+                    Image(systemName: "sparkles").font(.system(size: 11)).foregroundStyle(ask ? JB.accentInk : JB.muted)
+                        .frame(width: 24, height: 22).background(RoundedRectangle(cornerRadius: 5).fill(ask ? JB.accent : JB.tint))
+                }
+                .buttonStyle(Press()).help(L("Ask the project  ⇥"))
             }
             .padding(.horizontal, 12).frame(height: 40)
+            if ask, let a = model.answer {
+                Rectangle().fill(JB.line).frame(height: 1)
+                if !a.answer.isEmpty {
+                    Text(a.answer).font(.system(size: 12)).foregroundStyle(JB.text).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                }
+                VStack(spacing: 0) { ForEach(a.hits) { askHit($0) } }.padding(.bottom, a.hits.isEmpty ? 0 : 4)
+            }
             if !hits.isEmpty { Rectangle().fill(JB.line).frame(height: 1) }
             VStack(spacing: 0) {
                 ForEach(Array(hits.enumerated()), id: \.element) { i, p in
@@ -394,5 +431,27 @@ struct GoToFile: View {
     private func go(_ path: String) {
         model.goingToFile = false
         model.open(path)
+    }
+
+    private func toggleAsk() {
+        model.asking.toggle()
+        model.answer = nil
+        picked = 0
+    }
+
+    private func askHit(_ h: IDEAskHit) -> some View {
+        Hovering { hover in
+            HStack(spacing: 8) {
+                FileIcon(path: h.path)
+                Text((h.path as NSString).lastPathComponent).font(.system(size: 12.5, weight: .medium)).foregroundStyle(JB.ink)
+                Text(":\(h.line)").font(.system(size: 11.5, design: .monospaced)).foregroundStyle(JB.muted)
+                Text(h.why ?? "").font(.system(size: 11.5)).foregroundStyle(JB.muted2).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).frame(height: 26)
+            .background(hover ? JB.sel : .clear)
+            .contentShape(Rectangle())
+            .onTapGesture { model.go(to: h) }
+        }
     }
 }

@@ -55,6 +55,17 @@ final class IDEModel {
     /// the file whose "Fark" view is over the editor
     var diff: IDEDiff?
 
+    /// ⌘K: the rewrite being asked for, run, or shown for accepting
+    var inline: IDEInlineEdit?
+    /// ⌘P in its "ask the project" form, and the answer it got
+    var asking = false
+    var answering = false
+    var answer: IDEAnswer?
+    /// a model is reading the uncommitted changes (the commit window's bug button)
+    var reviewing = false
+    /// the project's rule files
+    var rules: [IDERule] = []
+
     @ObservationIgnored private var saves: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var tabSync: Task<Void, Never>?
     @ObservationIgnored private var seenReveal: Double = 0
@@ -369,9 +380,109 @@ final class IDEModel {
 
     // ---------- go to file ----------
 
-    func startGoToFile() {
+    func startGoToFile(asking ask: Bool = false) {
         goingToFile = true
+        asking = ask
         if allFiles == nil { let c = client; Task { allFiles = (try? await c.files()) ?? [] } }
+    }
+
+    // ---------- ⌘K: change these lines ----------
+
+    /// opens the box on lines `from…to` of the file. With an instruction (a note's text, "fix this") it runs at once.
+    func startInline(path: String, from: Int, to: Int, instruction: String = "", run: Bool = false) {
+        guard buffers[path]?.kind == .text else { return }
+        inlineTask?.cancel()
+        inline = IDEInlineEdit(path: path, from: from, to: max(from, to), instruction: instruction, phase: .asking)
+        if run { submitInline() }
+    }
+
+    func submitInline() {
+        guard var e = inline, case .asking = e.phase, let b = buffers[e.path] else { return }
+        let instruction = e.instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instruction.isEmpty else { return }
+        e.phase = .running
+        inline = e
+        let c = client
+        inlineTask = Task { [weak self] in
+            do {
+                if b.dirty { await self?.save(e.path) } // the engine reads the file from disk
+                let r = try await c.edit(e.path, from: e.from, to: e.to, instruction: instruction)
+                guard !Task.isCancelled, self?.inline?.id == e.id else { return }
+                self?.inline?.phase = .proposal(original: r.original, replacement: r.replacement,
+                                                rows: LineDiff.rows(old: r.original, new: r.replacement))
+            } catch {
+                guard !Task.isCancelled, self?.inline?.id == e.id else { return }
+                self?.inline?.phase = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// the proposal goes into the buffer (and saves itself like any edit); stale ones are dropped
+    func acceptInline() {
+        guard let e = inline, case let .proposal(original, replacement, _) = e.phase else { return }
+        inline = nil
+        guard let text = buffers[e.path]?.text,
+              let next = IDESplice.apply(text, from: e.from, to: e.to, original: original, replacement: replacement) else {
+            say(L("The lines changed meanwhile"), bad: true); return
+        }
+        edit(e.path, next)
+    }
+
+    func rejectInline() {
+        inlineTask?.cancel()
+        inline = nil
+    }
+
+    @ObservationIgnored private var inlineTask: Task<Void, Never>?
+
+    // ---------- ask the project ----------
+
+    func ask(_ question: String) async {
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !answering else { return }
+        answering = true
+        answer = nil
+        defer { answering = false }
+        do { answer = try await client.ask(q) } catch { say(error.localizedDescription, bad: true) }
+    }
+
+    func go(to hit: IDEAskHit) {
+        goingToFile = false
+        open(hit.path)
+        reveal = IDEReveal(path: hit.path, line: hit.line, endLine: hit.endLine ?? hit.line, at: Date().timeIntervalSince1970 * 1000)
+    }
+
+    // ---------- review the changes ----------
+
+    /// a model reads the uncommitted changes and marks what looks wrong as notes on their lines
+    func review() async {
+        guard !reviewing else { return }
+        reviewing = true
+        defer { reviewing = false }
+        do {
+            let found = try await client.review()
+            let ids = Set(found.map(\.id))
+            notes = notes.filter { !ids.contains($0.id) } + found
+            say(found.isEmpty ? L("No problems found") : L("%d notes", found.count), bad: false)
+            if let first = found.first { show(first) }
+        } catch {
+            say(error.localizedDescription, bad: true)
+        }
+    }
+
+    // ---------- rules ----------
+
+    func refreshRules() async { rules = (try? await client.rules()) ?? rules }
+
+    /// opens the project's rules file (made when there is none)
+    func openRules() {
+        let c = client
+        Task {
+            guard let path = try? await c.rulesFile() else { return }
+            closeDiff()
+            open(path)
+            await refreshRules()
+        }
     }
 }
 
@@ -389,6 +500,22 @@ struct IDEDiff: Equatable {
     var oldLabel: String
     var newLabel: String
     var rows: [DiffRow]
+}
+
+/// the ⌘K box: which lines, what was asked, and where it is
+struct IDEInlineEdit: Equatable, Identifiable {
+    enum Phase: Equatable {
+        case asking
+        case running
+        case proposal(original: String, replacement: String, rows: [DiffRow])
+        case failed(String)
+    }
+    let id = UUID()
+    var path: String
+    var from: Int
+    var to: Int
+    var instruction: String
+    var phase: Phase
 }
 
 /// what just happened in the IDE, said for a few seconds

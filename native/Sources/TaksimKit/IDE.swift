@@ -95,6 +95,47 @@ public struct IDEGitCommit: Decodable, Equatable, Sendable {
     public var subject: String
 }
 
+/// ⌘K's answer: the lines as they were and as the model would have them
+public struct IDEEditResult: Decodable, Equatable, Sendable {
+    public var path: String
+    public var from: Int
+    public var to: Int
+    public var original: String
+    public var replacement: String
+}
+
+public struct IDEAskHit: Decodable, Equatable, Identifiable, Sendable {
+    public var path: String
+    public var line: Int
+    public var endLine: Int?
+    public var why: String?
+    public var id: String { "\(path):\(line)" }
+}
+
+public struct IDEAnswer: Decodable, Equatable, Sendable {
+    public var answer: String
+    public var hits: [IDEAskHit]
+}
+
+public struct IDERule: Decodable, Equatable, Identifiable, Sendable {
+    public var path: String
+    public var name: String
+    public var always: Bool
+    public var id: String { path }
+}
+
+/// Puts a ⌘K rewrite into a file's text: lines `from…to` (1-based) become `replacement`. Nil when those lines are no
+/// longer what the model was shown (the person kept typing, or the agent changed the file): a stale answer is dropped,
+/// never forced in.
+public enum IDESplice {
+    public static func apply(_ text: String, from: Int, to: Int, original: String, replacement: String) -> String? {
+        var lines = text.components(separatedBy: "\n")
+        guard from >= 1, to >= from, to <= lines.count, lines[(from - 1)..<to].joined(separator: "\n") == original else { return nil }
+        lines.replaceSubrange((from - 1)..<to, with: replacement.isEmpty ? [] : replacement.components(separatedBy: "\n"))
+        return lines.joined(separator: "\n")
+    }
+}
+
 /// the server's IDE API for one agent
 public struct IDEClient: Sendable {
     public let api: APIClient
@@ -182,6 +223,36 @@ public struct IDEClient: Sendable {
     public func commitMessage(_ files: [String]) async throws -> String {
         struct R: Decodable { var message: String }
         return try await api.post("\(base)/commit-message", ["files": files], as: R.self).message
+    }
+
+    // ---------- the model's features ----------
+
+    /// ⌘K: the chosen lines (1-based, inclusive) rewritten from an instruction; nothing is written
+    public func edit(_ path: String, from: Int, to: Int, instruction: String) async throws -> IDEEditResult {
+        try await api.post("\(base)/edit", ["path": path, "from": from, "to": to, "instruction": instruction], as: IDEEditResult.self)
+    }
+
+    /// "where in the project is …": a short answer and the places that matter
+    public func ask(_ question: String) async throws -> IDEAnswer {
+        try await api.post("\(base)/ask", ["question": question], as: IDEAnswer.self)
+    }
+
+    /// what a model finds wrong in the uncommitted changes; the engine sets them as notes and returns them
+    public func review(_ files: [String] = []) async throws -> [IDENote] {
+        struct R: Decodable { var notes: [IDENote] }
+        return try await api.post("\(base)/review", files.isEmpty ? [:] : ["files": files], as: R.self).notes
+    }
+
+    /// the project's rule files (.taksimrules, .cursorrules, .cursor/rules/*)
+    public func rules() async throws -> [IDERule] {
+        struct R: Decodable { var rules: [IDERule] }
+        return try await api.get("\(base)/rules", as: R.self).rules
+    }
+
+    /// the rules file to open; the engine makes `.taksimrules` when the project has none
+    public func rulesFile() async throws -> String {
+        struct R: Decodable { var path: String }
+        return try await api.post("\(base)/rules", [:], as: R.self).path
     }
 
     public func clearNote(_ id: String) async throws {

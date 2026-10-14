@@ -176,6 +176,7 @@ final class IDEHost: NSView {
             guard let self else { return e }
             if e.keyCode == 53 {
                 if self.ide.goingToFile { return e } // the go-to-file box answers for its own ⎋
+                if self.ide.inline != nil { self.ide.rejectInline(); return nil }
                 if self.ide.diff != nil { self.ide.closeDiff(); return nil }
                 return e
             }

@@ -8,6 +8,6 @@ enum Tr {
     static let dict: [String: String] = [:]
 
     static func string(for en: String) -> String? {
-        dict[en] ?? Tr.batchA[en] ?? Tr.batchB[en] ?? Tr.batchC[en] ?? Tr.batchD[en]
+        dict[en] ?? Tr.batchA[en] ?? Tr.batchB[en] ?? Tr.batchC[en] ?? Tr.batchD[en] ?? Tr.batchE[en]
     }
 }

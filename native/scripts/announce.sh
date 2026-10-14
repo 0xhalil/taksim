@@ -3,10 +3,10 @@
 #   native/scripts/announce.sh "New: canvases sync" [--tr "Yeni: tuvaller eşitleniyor"] [--important]
 #                              [--url https://…] [--until 2026-12-31] [--below 0.4.0] [--min 0.3.0]
 #   native/scripts/announce.sh --remove <id>
-# Appends to announcements.json in the releases repository (TAKSIM_RELEASE_REPO, default 0xhalil/taksim-releases).
+# Appends to announcements.json in the root of the releases repository (TAKSIM_RELEASE_REPO, default 0xhalil/taksim).
 # Apps look every few hours and on launch; each message shows once per app.
 set -e
-REPO="${TAKSIM_RELEASE_REPO:-0xhalil/taksim-releases}"
+REPO="${TAKSIM_RELEASE_REPO:-0xhalil/taksim}"
 exec node --input-type=module - "$REPO" "$@" <<'JS'
 import { execFileSync } from "node:child_process";
 const [repo, ...args] = process.argv.slice(2);

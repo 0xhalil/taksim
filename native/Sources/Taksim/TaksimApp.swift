@@ -364,6 +364,29 @@ final class AppModel {
                         try? await Task.sleep(for: .seconds(1))
                     }
                 }
+                // TAKSIM_SNAPSHOT_IDEAI=agentId:inline|ask|review[:path]: the model features as their keys would leave them
+                // (inline runs ⌘K on lines 1-2 of the path, ask asks the palette, review runs the commit window's bug button)
+                if let v = env["TAKSIM_SNAPSHOT_IDEAI"] {
+                    let parts = v.split(separator: ":").map(String.init)
+                    if parts.count > 1, let h = graph.ides[parts[0]] {
+                        let path = parts.count > 2 ? parts[2] : (h.ide.active ?? "")
+                        switch parts[1] {
+                        case "inline":
+                            h.ide.open(path)
+                            for _ in 0..<40 where h.ide.buffers[path] == nil { try? await Task.sleep(for: .milliseconds(50)) }
+                            h.ide.startInline(path: path, from: 1, to: 2, instruction: "make it clearer", run: true)
+                            try? await Task.sleep(for: .seconds(2))
+                        case "ask":
+                            h.ide.startGoToFile(asking: true)
+                            await h.ide.ask("where is compute defined?")
+                        case "review":
+                            h.ide.panel = .commit; h.ide.showLeft = true
+                            await h.ide.refreshGit()
+                            await h.ide.review()
+                        default: break
+                        }
+                    }
+                }
                 // TAKSIM_SNAPSHOT_IDETURN=agentId[:path]: a turn's own change (both sides read from its trees),
                 // as a click on the chat's changed-file row does
                 if let v = env["TAKSIM_SNAPSHOT_IDETURN"] {
