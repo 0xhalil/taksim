@@ -57,6 +57,7 @@ jobs:
         run: |
           if [ "$EVENT" = push ]; then
             VERSION="${TAG#v}"; PUBLISH=true
+            git fetch --force --tags origin "refs/tags/$TAG:refs/tags/$TAG" # checkout leaves the tag without its message
             NOTES=$(git tag -l --format='%(contents)' "$TAG")
           else
             VERSION="$INPUT_VERSION"; PUBLISH="$INPUT_PUBLISH"; NOTES="$INPUT_NOTES"
