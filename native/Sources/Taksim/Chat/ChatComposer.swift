@@ -42,7 +42,6 @@ struct ChatComposer: View {
                 modeMenu
                 permissionMenu
                 modelMenu
-                if editorWidth >= 380 { effortMenu }
                 Spacer(minLength: 4)
                 if model.sending > 0 { Image(systemName: "ellipsis").foregroundStyle(JB.accent).help(L("Sending")) }
                 if queued > model.queue.count { Text(L("%d pending", queued - model.queue.count)).font(.system(size: 11)).foregroundStyle(JB.muted).lineLimit(1) }
@@ -368,6 +367,7 @@ struct ChatComposer: View {
             .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize().font(.system(size: 11.5))
             .disabled(running || queued > 0 || model.settingMode || model.sending > 0)
             .help(mode == "plan" ? L("Plan · doesn't change files · ⇧⇥") : mode == "ask" ? L("Ask · read-only · ⇧⇥") : L("Agent · applies changes · ⇧⇥"))
+            .chipHover()
         }
     }
 
@@ -394,6 +394,7 @@ struct ChatComposer: View {
                 .foregroundStyle(current == "bypassPermissions" ? JB.err : JB.ink)
                 .disabled(running || queued > 0 || model.settingMode || model.sending > 0)
                 .help(L("Permissions: %@", Self.permissionHint(current)))
+                .chipHover()
             }
         }
     }
@@ -429,9 +430,19 @@ struct ChatComposer: View {
                         ForEach(store.models.filter { $0.owned_by == provider }.map(\.id), id: \.self) { m in modelChoice(m) }
                     }
                 }
-            } label: { Text(modelLabel) } // the menu draws its own chevron, after the name
+                // how much it thinks: the model's own levels, under the models (not a button of its own)
+                let levels = store.models.first { $0.id == agent?.model }?.efforts ?? []
+                if !levels.isEmpty {
+                    Divider()
+                    Section(L("Thinking")) {
+                        effortChoice(nil, name: L("Default"))
+                        ForEach(levels, id: \.self) { l in effortChoice(l, name: AgentSheet.effortName(l)) }
+                    }
+                }
+            } label: { Text(modelLabel + (agent?.effort.map { " · " + AgentSheet.effortName($0) } ?? "")) } // the menu draws its own chevron, after the name
             .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize().font(.system(size: 11.5)).foregroundStyle(JB.muted)
             .help(L("Model: %@", agent?.model ?? "")).disabled(running || queued > 0 || model.sending > 0 || model.settingMode)
+            .chipHover()
         }
     }
 
@@ -442,19 +453,9 @@ struct ChatComposer: View {
         }
     }
 
-    @ViewBuilder private var effortMenu: some View {
-        let levels = store.models.first { $0.id == agent?.model }?.efforts ?? []
-        if !levels.isEmpty, !isSnapshot {
-            Menu {
-                Button { store.setEffort(agentId, nil) } label: { if agent?.effort == nil { Label(L("Default"), systemImage: "checkmark") } else { Text(L("Default")) } }
-                ForEach(levels, id: \.self) { l in
-                    Button { store.setEffort(agentId, l) } label: {
-                        if agent?.effort == l { Label(AgentSheet.effortName(l), systemImage: "checkmark") } else { Text(AgentSheet.effortName(l)) }
-                    }
-                }
-            } label: { Label(agent?.effort.map(AgentSheet.effortName) ?? L("Default"), systemImage: "brain") }
-            .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize().font(.system(size: 11.5)).foregroundStyle(JB.muted)
-            .help(L("Thinking"))
+    private func effortChoice(_ level: String?, name: String) -> some View {
+        Button { store.setEffort(agentId, level) } label: {
+            if agent?.effort == level { Label(name, systemImage: "checkmark") } else { Text(name) }
         }
     }
 
