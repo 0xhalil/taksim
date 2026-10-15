@@ -612,7 +612,7 @@ footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4
     var S = function (ms) { return sleep(ms, my); }, T = function (ms, fn) { return tween(ms, fn, my); };
     cta.classList.remove('glow');
     build();
-    if (!instant) markPlay();
+    if (!instant) markLoop();
     // a message typed into an agent's own composer and sent
     async function send(id, text) {
       var f = q(id, '.field'), go = q(id, '.go');
@@ -836,9 +836,9 @@ footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4
   // The logo in the corner plays the opening now and then: lines come out of the transparent air around it,
   // run through it as its stripes (each corner turning the same way round), draw themselves back out, and the
   // star pops in last. Times are in ms; `pass` is one line's whole run at one steady speed.
-  var MARK = { pass: 1100, stagger: 150, band: 60, tail: 500, star: 1250, starTime: 380, reach: 1500 };
+  var MARK = { pass: 1100, stagger: 150, band: 60, tail: 500, star: 1250, starTime: 380, reach: 1500, rest: 1400, gap: 3000 };
   function markPlay() {
-    var host = $('.mark svg'); if (!host || still || !host.animate) return;
+    var host = $('.mark svg'); if (!host || still || !host.animate) return null;
     var W = 130, L = 400, D = 170, G = 34, C = 500 - D, far = 500 - MARK.reach;
     var sil = 'M500 ' + (500 - L) + ' L' + (500 + W) + ' ' + (500 - L + W) + ' V' + (500 - W) + ' H' + (500 + L - W) + ' L' + (500 + L) + ' 500 L' + (500 + L - W) + ' ' + (500 + W) +
       ' H' + (500 + W) + ' V' + (500 + L - W) + ' L500 ' + (500 + L) + ' L' + (500 - W) + ' ' + (500 + L - W) + ' V' + (500 + W) + ' H' + (500 - L + W) + ' L' + (500 - L) + ' 500 L' + (500 - L + W) + ' ' + (500 - W) +
@@ -877,6 +877,21 @@ footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4
       r.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: MARK.pass, delay: i * MARK.stagger, easing: 'linear', fill: 'forwards' });
     });
     st.animate([{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: MARK.starTime, delay: MARK.star, easing: 'cubic-bezier(.3,1.4,.5,1)', fill: 'backwards' });
+    return host.getAnimations({ subtree: true });
+  }
+  // The opening plays, the mark rests a moment, then the same animation runs backwards until it is gone; three
+  // seconds later it forms again as the first time. A new start (the replay button) takes the loop over.
+  var markRun = 0;
+  async function markLoop() {
+    var id = ++markRun, wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    while (id === markRun) {
+      if (document.hidden) { await wait(500); continue; }
+      var anims = markPlay(); if (!anims || !anims.length) return;
+      var end = Math.max.apply(null, anims.map(function (a) { return a.effect.getComputedTiming().endTime; }));
+      await wait(end + MARK.rest); if (id !== markRun) return;
+      anims.forEach(function (a) { a.pause(); a.playbackRate = -1; a.currentTime = end; a.play(); });
+      await wait(end + MARK.gap);
+    }
   }
 
   $('#replay').addEventListener('click', function () { start(false); });
@@ -884,8 +899,6 @@ footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4
   requestAnimationFrame(frame);
   texts();
   start(still);
-  // the mark plays again every 2 s (the opening runs about 1.7 s), but not while the tab is out of sight
-  setInterval(function () { if (!document.hidden) markPlay(); }, 2000);
 })();
 </script>
 
