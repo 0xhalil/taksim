@@ -168,11 +168,10 @@ export function toolHints(suggestions, { delegate = false } = {}) {
     const p = Object.keys(tool.params || {});
     return `- ${tool.id} "${tool.name}": ${tool.summary}${p.length ? ` (params: ${p.join(", ")})` : ""}`;
   });
-  const weak = (suggestions[0]?.score ?? 99) < 5
-    ? " Fits are weak: if none truly fits the need, design a new tool instead of forcing one."
-    : "";
   const how = delegate
     ? "The user asked for another agent to do this: create it with create_agent and pass the fitting tool as its `tool` (with tool_params), so the panel opens next to the new agent. Don't open it on yourself."
-    : `If one fits, open it with use_tool instead of building a panel from scratch (if you hand the work to a new agent, pass it as create_agent's \`tool\` instead); find_tools searches for more. Ignore this if none fits.${weak}`;
+    : "They were picked by shared words, so judge them yourself, without asking the user: if one really serves what was asked, open it now with use_tool and work from it "
+      + "(if you hand the work to a new agent, pass it as create_agent's `tool` instead). If none does but a live panel would clearly help (something to watch, check again "
+      + "or compare), build one: design_tool, then list_bricks and panel_open, and save_tool once it works. Otherwise ignore this note and just answer.";
   return `\n\n[taksim: saved tools that look relevant to this message:\n${lines.join("\n")}\n${how}]`;
 }

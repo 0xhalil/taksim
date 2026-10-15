@@ -342,18 +342,26 @@ test("asked to make an agent for a job, the tool is meant for the new agent, not
   assert.match(r.text, /pass the fitting tool as its `tool`/);
 });
 
-test("a request that fits a tool offers it to the page; someone else's tool still asks before it runs", async () => {
+test("in chat the agent judges the tools itself; a prompt typed into its terminal offers a fitting one to the page", async () => {
   const c = await newCanvas();
   const a = await addAgent(c.id, { name: "a", model: "fake-echo" });
   const canvas = getCanvas(c.id);
   const seen = [];
   canvas.bus.subs.add((ev) => { if (ev.type === "tool_suggested") seen.push(ev.data); });
-  await say(c.id, a.id, "docker container'larını izle");
+  const said = await say(c.id, a.id, "docker container'larını izle");
+  assert.match(said.text, /docker-containers[\s\S]*judge them yourself[\s\S]*use_tool[\s\S]*design_tool/);
+  assert.equal(seen.length, 0, "the agent opens it if it fits; no ghost beside it");
+
+  const agent = canvas.agents.get(a.id);
+  agent.hinted.clear();
+  await agent.suggestFromTerminal("docker container'larını izle");
   assert.equal(seen[0]?.id, a.id);
   assert.equal(seen[0].tool.id, "docker-containers");
   assert.ok(seen[0].tool.preview, "the page draws it from its preview");
-  await say(c.id, a.id, "docker'a tekrar bak");
+  await agent.suggestFromTerminal("docker'a tekrar bak");
   assert.equal(seen.length, 1, "offered once");
+  await agent.suggestFromTerminal("login sayfasındaki bugı düzelt");
+  assert.equal(seen.length, 1);
 
   const theirs = { id: "theirs", name: "Theirs", author: "mehmet", spec: { sources: { r: { brick: "command", run: ["uptime"], parse: "lines" } }, views: [{ brick: "log", source: "r" }] } };
   await api("POST", "/v1/market/tools", { tool: theirs });
@@ -449,4 +457,18 @@ test("the shared market is a GitHub repository: read by anyone, shared under the
     globalThis.fetch = realFetch;
     await api("PUT", "/v1/market/repo", { repo: "" });
   }
+});
+
+test("the judge: a model's verdict decides, a tool it didn't see can't be picked, words stand in without a model", async () => {
+  const { parseJudgement, judge } = await import("../src/toolbox/route.mjs");
+  const { candidates } = await import("../src/toolbox/match.mjs");
+  assert.deepEqual(parseJudgement('{"use": "k8s-pods", "build": null}', ["k8s-pods"]), { use: "k8s-pods", build: null });
+  assert.deepEqual(parseJudgement('```json\n{"use": "nope", "build": "watch redis memory"}\n```', ["k8s-pods"]), { use: null, build: "watch redis memory" });
+  assert.deepEqual(parseJudgement('{"use": null, "build": null}', []), { use: null, build: null });
+  assert.equal(parseJudgement("no idea", []), null);
+  const tools = listTools();
+  assert.equal(candidates("bu fonksiyondaki bugı bul", tools).length, 0, "a coding request names no tools");
+  assert.ok(candidates("pod'lar neden restart oluyor", tools).some((x) => x.tool.id === "k8s-pods"));
+  assert.equal((await judge("kubernetes pod'larını izle", tools)).use?.id, "k8s-pods");
+  assert.equal((await judge("merhaba", tools)).use, null);
 });

@@ -26,7 +26,8 @@ import { appendTranscript, readTranscript, workspaceDir } from "./store.mjs";
 import { Panel } from "../panels/panel.mjs";
 import { Ide } from "../ide/ide.mjs";
 import { listTools, card } from "../toolbox/store.mjs";
-import { suggest } from "../toolbox/match.mjs";
+import { candidates } from "../toolbox/match.mjs";
+import { judge } from "../toolbox/route.mjs";
 import { toolHints, delegates } from "../toolbox/mcp.mjs";
 import { projectRules } from "../ide/rules.mjs";
 
@@ -36,10 +37,11 @@ export const PERSISTED = ["id", "name", "role", "system", "chatOrigin", "forkCon
 // The node's "helpers" switch: the agent leads and hands work to helper agents on the cheapest model that fits.
 // the tools switch on the node (on unless the user turned it off): what the agent is told
 const TOOL_HELP = [
-  "Tool help is on: reuse tools before building. Before you build a panel or a recurring check, call find_tools.",
-  "If a saved tool fits, open it with use_tool. If only a market tool fits (shared by other taksim users), add it with add_tool, then",
-  "open it with use_tool; its commands still wait for the user's approval. If nothing fits, build the panel from bricks, and once it",
-  "works and the need will come back, save it with save_tool so it can be reused and shared.",
+  "Tool help is on: you decide, for each request, whether a tool helps. Before you build a panel or a recurring check, call find_tools.",
+  "If a saved tool really serves the request, open it with use_tool without asking. If only a market tool fits (shared by other taksim",
+  "users), add it with add_tool, then open it with use_tool; its commands still wait for the user's approval. If nothing fits and a live",
+  "panel would clearly help, build one from bricks on the spot; once it works and the need will come back, save it with save_tool so it",
+  "can be reused and shared. A tool that only shares words with the request doesn't fit, and most coding requests need none.",
 ];
 const NO_TOOL_HELP = "Tool help is off: don't look up, add or suggest saved tools unless the user asks for one.";
 
@@ -703,40 +705,41 @@ export class Agent {
     return header + item.text + (item.kind === "reply" || item.plan || item.quiet ? "" : this.toolNote(item.text, item.kind));
   }
 
-  // Saved tools that fit a request, named along with it so the agent reaches for them instead of building
-  // from scratch. Each is named once per agent; the one already open as its panel isn't named.
+  // Saved tools that may fit a request, named along with it. The agent is the judge: it opens one that really
+  // serves the request (use_tool), builds one when a live panel would help and none fits, or ignores the note.
+  // Each is named once per agent; the one already open as its panel isn't named.
   toolNote(text, kind = "user") {
     this.lastAsk = String(text || "").slice(0, 400);
     this.asks = [...(this.asks || []), this.lastAsk].slice(-4);
     if (this.toolHelp === false) return ""; // the user turned tool help off for this agent
     try {
       const open = this.panel?.tool?.id;
-      const found = suggest(text, listTools()).filter(({ tool }) => tool.id !== open && !this.hinted.has(tool.id));
+      const found = candidates(text, listTools()).filter(({ tool }) => tool.id !== open && !this.hinted.has(tool.id));
       for (const { tool } of found) this.hinted.add(tool.id);
-      const delegate = delegates(text);
-      // asked to make another agent for it: the tool goes to that agent, so it isn't offered here
-      if (kind === "user" && !delegate) this.offerTool(found[0]?.tool);
-      return toolHints(found, { delegate });
+      return toolHints(found, { delegate: delegates(text) });
     } catch { return ""; }
   }
 
-  // The person's request fits a saved tool and nothing is docked yet: the page shows the tool as a faint
-  // panel next to the node, opened with one press.
+  // The judge thinks a saved tool serves the request and nothing is docked yet: the page shows the tool as a
+  // faint panel next to the node, opened with one press.
   offerTool(tool) {
     if (!tool || this.panel?.spec) return;
     this.canvas.bus.emit("tool_suggested", { id: this.id, tool: card(tool, { preview: true }) });
   }
 
   // A prompt typed straight into the terminal: the agent can't be told any more, but the person can be shown.
+  // A model judges whether a tool sharing words with it really fits, in the background; a later prompt wins.
   suggestFromTerminal(text) {
     this.lastAsk = String(text || "").slice(0, 400);
     this.asks = [...(this.asks || []), this.lastAsk].slice(-4);
-    if (this.toolHelp === false) return;
-    try {
-      if (delegates(text)) return; // the tool belongs to the agent it will create
-      const top = suggest(text, listTools()).find(({ tool }) => tool.id !== this.panel?.tool?.id && !this.hinted.has(tool.id));
-      if (top) { this.hinted.add(top.tool.id); this.offerTool(top.tool); }
-    } catch { /* suggestions are best-effort */ }
+    if (this.toolHelp === false || delegates(text)) return; // a tool for a new agent belongs to that agent
+    const turn = this.judged = (this.judged || 0) + 1;
+    const tools = listTools().filter((t) => t.id !== this.panel?.tool?.id && !this.hinted.has(t.id));
+    return judge(text, tools, { model: this.model, env: this.env }).then(({ use }) => {
+      if (!use || turn !== this.judged || this.hinted.has(use.id)) return;
+      this.hinted.add(use.id);
+      this.offerTool(use);
+    }).catch(() => { /* suggestions are best-effort */ });
   }
 
   // Its own cwd, else the canvas project dir, else the canvas workspace. Stable, since CLIs keep

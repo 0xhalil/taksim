@@ -27,10 +27,10 @@ const changed = (id) => { for (const c of allCanvases()) c.bus.emit("toolbox_cha
 
 // Triggers by a model, in the background: the tool is saved at once with words from its spec, and gets
 // the model's version a little later.
-function retrigger(id) {
+function retrigger(id, agent) {
   const t = getTool(id);
   if (!t) return;
-  generateTriggers(t).then((g) => {
+  generateTriggers(t, { agent }).then((g) => {
     const now = getTool(id);
     if (!now) return;
     editTool(id, { summary: now.summary || g.summary, when: g.when, keywords: g.keywords, ...(g.reference && !now.reference ? { reference: g.reference } : {}) });
@@ -67,7 +67,7 @@ export async function toolboxRoutes(req, res, path) {
     editTool(t.id, { summary: g.summary, when: g.when, keywords: g.keywords });
     agent.panel.tool = { id: t.id, name: t.name, params: {} };
     agent.panel.changed();
-    retrigger(t.id);
+    retrigger(t.id, agent);
     changed(t.id);
     return sendJson(res, 200, card(getTool(t.id)));
   }

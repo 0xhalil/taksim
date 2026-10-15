@@ -161,3 +161,11 @@ export function suggest(query, tools, { max = 3, min = HINT_SCORE } = {}) {
   const r = rank(query, tools).filter((x) => x.score >= min && (x.phrase || (x.subject >= 1 && x.hits >= 2)));
   return r.filter((x) => x.score >= r[0]?.score * 0.5).slice(0, max);
 }
+
+// The tools a model is asked to judge for a message: the same rule as suggest with a lower bar, since a model
+// (the agent itself, or the judge) decides whether one really fits. One shared word is never enough ("queued
+// msg" isn't about the PR queue), so a plain request isn't followed by a list of unrelated tools.
+export const CANDIDATE_SCORE = 2.5;
+export function candidates(query, tools, { max = 4 } = {}) {
+  return suggest(query, tools, { max, min: CANDIDATE_SCORE });
+}
