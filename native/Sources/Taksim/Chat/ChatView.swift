@@ -238,6 +238,7 @@ struct ChatView: View {
             UserMessage(entry: e, who: e.from == "user" ? nil : store.agents[e.from]?.name ?? e.from,
                         checkpoint: model.checkpoint(after: i), model: model, store: store, running: running)
         } else if e.from == model.agent {
+            HoverRow { hover in
             VStack(alignment: .leading, spacing: 10) {
                 // stopping it yourself isn't a failure
                 let stopped = e.kind == "error" && e.text == "stopped"
@@ -256,7 +257,7 @@ struct ChatView: View {
                 }
                 HStack(spacing: 8) {
                     if let usage = e.usage, (usage.input ?? 0) + (usage.output ?? 0) > 0 {
-                        Text(L("%d tokens", (usage.input ?? 0) + (usage.output ?? 0))).font(.system(size: 10)).foregroundStyle(JB.muted2)
+                        Text(countText((usage.input ?? 0) + (usage.output ?? 0), one: "1 token", other: "%d tokens")).font(.system(size: 10)).foregroundStyle(JB.muted2)
                             .help(L("Input: %d · Output: %d", usage.input ?? 0, usage.output ?? 0))
                     }
                     Spacer()
@@ -270,7 +271,11 @@ struct ChatView: View {
                     }
                     MessageCopy(text: e.text ?? "")
                 }
+                // as in Cursor: what can be done with an answer shows while the pointer is on it (a failed one keeps its retry)
+                .opacity(hover || e.kind == "error" ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hover)
                 if let ch = e.changes, !ch.isEmpty { ChangesCard(entry: e, model: model, store: store) }
+            }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contextMenu {
@@ -279,6 +284,13 @@ struct ChatView: View {
             }
         }
     }
+}
+
+/// a row that knows whether the pointer is on it
+private struct HoverRow<Content: View>: View {
+    @State private var hover = false
+    let content: (Bool) -> Content
+    var body: some View { content(hover).contentShape(Rectangle()).onHover { hover = $0 } }
 }
 
 private func copyChatText(_ text: String) {
@@ -322,9 +334,10 @@ private struct UserMessage: View {
                 ChatText(t)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, 13).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8).fill(JB.panel.opacity(0.55)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(JB.panel.opacity(0.55)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(JB.line.opacity(0.7)))
         .overlay(alignment: .topTrailing) {
             // Cursor's checkpoint: the folder as it was before this message
             if hover, let checkpoint, !running {
@@ -367,7 +380,7 @@ private struct ChangesCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "doc.on.doc").font(.system(size: 11)).foregroundStyle(JB.muted)
-Text(L("%d files", ch.count)).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(JB.ink).lineLimit(1).fixedSize()
+Text(countText(ch.count, one: "1 file", other: "%d files")).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(JB.ink).lineLimit(1).fixedSize()
                 let add = ch.compactMap(\.added).reduce(0, +), rem = ch.compactMap(\.removed).reduce(0, +)
                 Text("+\(add)").foregroundStyle(JB.ok).font(.system(size: 11.5, design: .monospaced))
                 Text("−\(rem)").foregroundStyle(JB.err).font(.system(size: 11.5, design: .monospaced))

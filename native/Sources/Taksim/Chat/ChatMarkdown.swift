@@ -6,7 +6,7 @@ import TaksimKit
 struct ChatMarkdown: View {
     let text: String
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(Self.blocks(text).enumerated()), id: \.offset) { _, block in
                 switch block {
                 case .text(let t): Self.inline(t)
@@ -27,7 +27,7 @@ struct ChatMarkdown: View {
                 case .rule: Rectangle().fill(JB.line).frame(height: 1).padding(.vertical, 4)
                 }
             }
-        }.lineSpacing(3).frame(maxWidth: .infinity, alignment: .leading)
+        }.lineSpacing(4).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     enum Block: Equatable {
@@ -105,7 +105,7 @@ struct ChatMarkdown: View {
             return value.count >= 3 && value.allSatisfy { $0 == "-" }
         }
     }
-    static func inline(_ text: String, size: CGFloat = 12.5, weight: NSFont.Weight = .regular) -> some View {
+    static func inline(_ text: String, size: CGFloat = 13, weight: NSFont.Weight = .regular) -> some View {
         ChatText(markdown: text, size: size, weight: weight)
     }
 }
@@ -141,7 +141,6 @@ private struct CodeBlock: View {
             HStack {
                 Text(language.isEmpty ? L("code") : language).font(.system(size: 10.5)).foregroundStyle(JB.muted)
                 Spacer()
-                Text(L("%d lines", lines.count)).font(.system(size: 10)).foregroundStyle(JB.muted2)
                 Button {
                     NSPasteboard.general.clearContents(); NSPasteboard.general.setString(code, forType: .string)
                     copied = true
@@ -150,7 +149,7 @@ private struct CodeBlock: View {
                     Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 10.5)).foregroundStyle(copied ? JB.ok : JB.muted)
                         .contentTransition(.symbolEffect(.replace))
                 }.buttonStyle(Tap()).help(L("Copy code")).accessibilityLabel(L("Copy code"))
-            }.padding(.horizontal, 10).frame(height: 26)
+            }.padding(.horizontal, 12).frame(height: 28)
             Rectangle().fill(JB.line).frame(height: 1)
             if isSnapshot { content }
             else { ScrollView(.horizontal) { content }.scrollIndicators(.hidden) }
@@ -161,16 +160,13 @@ private struct CodeBlock: View {
                 }.buttonStyle(Tap())
             }
         }
-        .background(RoundedRectangle(cornerRadius: 7).fill(JB.panel))
-        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(JB.line))
+        .background(RoundedRectangle(cornerRadius: 8).fill(JB.panel))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JB.line))
         .animation(reduceMotion || isSnapshot ? nil : .spring(response: 0.35, dampingFraction: 0.9), value: expanded)
     }
+    // code without line numbers, as Cursor's chat shows it: the lines are what is read
     private var content: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // both columns are the same kind of view, so a number stays on its line however long the code is
-            ChatText(visible.indices.map { String($0 + 1) }.joined(separator: "\n"), size: 12, monospaced: true, color: ChatText.faint, alignment: .right, wraps: false, selectable: false)
-                .accessibilityHidden(true)
-            ChatText(visible.joined(separator: "\n"), size: 12, monospaced: true, wraps: false)
-        }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+        ChatText(visible.joined(separator: "\n"), size: 12, monospaced: true, wraps: false)
+            .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity, alignment: .leading)
     }
 }

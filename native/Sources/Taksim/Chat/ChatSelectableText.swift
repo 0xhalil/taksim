@@ -13,12 +13,12 @@ struct ChatText: View {
     @Environment(\.colorScheme) private var scheme
 
     /// prose with **bold**, *italic*, `code`, ~~strike~~ and links
-    init(markdown text: String, size: CGFloat = 12.5, weight: NSFont.Weight = .regular) {
+    init(markdown text: String, size: CGFloat = 13, weight: NSFont.Weight = .regular) {
         string = Self.attributed(markdown: text, size: size, weight: weight)
     }
 
     /// text as it is: a message the person wrote, code, a path
-    init(_ text: String, size: CGFloat = 12.5, monospaced: Bool = false, color: NSColor = ChatText.ink, alignment: NSTextAlignment = .left,
+    init(_ text: String, size: CGFloat = 13, monospaced: Bool = false, color: NSColor = ChatText.ink, alignment: NSTextAlignment = .left,
          wraps: Bool = true, selectable: Bool = true) {
         let font = monospaced ? NSFont.monospacedSystemFont(ofSize: size, weight: .regular) : NSFont.systemFont(ofSize: size)
         string = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: Self.paragraph(alignment)])
@@ -41,7 +41,7 @@ struct ChatText: View {
 
     static func paragraph(_ alignment: NSTextAlignment = .left) -> NSParagraphStyle {
         let p = NSMutableParagraphStyle()
-        p.lineSpacing = 3
+        p.lineSpacing = 4
         p.alignment = alignment
         return p
     }

@@ -10,7 +10,7 @@ lives in the Node engine. Braun/Apple restraint and PyCharm colours apply throug
 | Queued messages | A small queue above the input: edit in place, remove, drag by the handle to reorder. Attachments are kept. A running turn and messages between agents can't be changed. |
 | Search in a chat | Magnifier, field, count and two arrows. Searches text, attachment paths and changed files; the timeline isn't filtered, it scrolls to the match. Works over the last 500 entries. |
 | Reuse an old message | Right click › Reuse: the request and its attachments go into the current draft; history and files stay. |
-| Copy | An icon next to an answer, right click on any message; code blocks keep their own copy button. |
+| Copy | An icon under an answer while the pointer is on it (a failed answer keeps its retry showing), right click on any message; code blocks keep their own copy button. |
 | Export | ⋯ › Export as Markdown. The history is fetched again (up to 100,000 entries) with attachments, selected code and changed files. |
 | Context | The `@` list: files, folders, selected code (⌘L) and past chats, picked with ↑/↓ and Enter/Tab. A stale file search can't overwrite newer text. |
 | Reading while it streams | Scrolling up stops following; ↓ returns to the latest answer. |
@@ -27,12 +27,12 @@ lives in the Node engine. Braun/Apple restraint and PyCharm colours apply throug
 | What a card is | The title stays neutral. An orchestrator's people switch is lit (the accent) or faint; a read-only agent shows a small faint lock before its folder. Coloured capsules and word badges were tried and rejected. |
 | Cursor's layout | The input like Cursor's: text on top; mode and model (and thinking level) bottom left; attach and the one action bottom right. Only copy sits under an answer; "branch from here" is in the right-click menu. |
 | Editable plan | `propose_plan` offers a versioned Markdown document: edit in place, save to or open from the project, apply a chosen version once, revise a finished or failed plan. Stale versions are refused. |
-| Clarifying questions | `ask_user` asks one to three questions with optional choices; the user can write their own answer. The agent waits in a real tool call. |
+| Clarifying questions | `ask_user` asks one to three questions with numbered choices (click one) and a line for an answer of one's own; Continue (⏎) when each has an answer. Plan mode's questions and the permission asks (Manual and Accept edits) come through the same card. The agent waits in a real tool call. |
 | Live tasks | Codex `todo_list`, Claude `TaskCreate/TaskUpdate` and `TodoWrite`, opencode `todowrite/todoread`, Gemini `write_todos`, Copilot task events and taksim's `update_todos` feed one list: done / active / pending / cancelled, steps and a real count. Unfinished steps are never marked done because the turn ended. |
-| Real tool activity | Every CLI's tool events become one `id/label/detail/status` shape: the active command on one line, details expandable, results kept with the answer. |
+| Real tool activity | Every CLI's tool events become one `id/label/detail/status` shape, drawn as Cursor's plain muted lines (no card): the active step on one line, a chevron on hover opens the details, results kept with the answer. |
 | Past chats as context | The chat icon in `@`: another agent's last 30 entries, resolved by the engine at send time and frozen into the message. No new task is sent to that agent. |
 | Local commands | `/side`, `/new`, `/files`, `/export`, `/agent`, `/ask`, `/plan`. |
-| Markdown | Headings, lists, task boxes, quotes, tables, rules; nested and unclosed code fences; line numbers, horizontal scroll and folding after 24 lines. |
+| Markdown | Headings, lists, task boxes, quotes, tables, rules; nested and unclosed code fences; no line numbers (as in Cursor's chat), horizontal scroll and folding after 24 lines. |
 | Attachments | Click a chip to preview: path, selected source, image; open the file in the editor. |
 | Change review | Review, or a file row in an answer, opens the turn's fixed diff: keep, undo and redo per file or hunk, persistent review marks, and a fix request sent with the hunk as reference. Undo stops with 409 on a file edited since; the Git index is untouched. |
 | Persistent draft | Text and attachment references survive; a failed send gives the draft back. |

@@ -280,7 +280,12 @@ import TaksimKit
             let planRep = NSBitmapImageRep(cgImage: try #require(plan.cgImage))
             try #require(planRep.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: "\(folder)/plan-\(dark ? "dark" : "light").png"))
             model.entries = []; model.plan = nil
-            model.question = ChatQuestion(id: "question", questions: [.init(id: "q1", title: "Plan nerede saklansın?", options: ["Proje klasöründe", "Yerel arşivde"])])
+            model.question = ChatQuestion(id: "question", questions: [.init(id: "q1", title: "Plan nerede saklansın?", options: ["Proje klasöründe", "Yerel arşivde"]), .init(id: "q2", title: "Hangi testler çalışsın?", options: ["Hepsi", "Yalnızca sohbet", "Hiçbiri"])])
+            let wide = ImageRenderer(content: ChatView(model: model, store: store)
+                .environment(\.isSnapshot, true).environment(\.colorScheme, dark ? .dark : .light).frame(width: 480, height: 420))
+            wide.scale = 2
+            let wideRep = NSBitmapImageRep(cgImage: try #require(wide.cgImage))
+            try #require(wideRep.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: "\(folder)/question-\(dark ? "dark" : "light").png"))
             let narrow = ImageRenderer(content: ChatView(model: model, store: store)
                 .environment(\.isSnapshot, true).environment(\.colorScheme, dark ? .dark : .light).frame(width: 280, height: 360))
             narrow.scale = 2

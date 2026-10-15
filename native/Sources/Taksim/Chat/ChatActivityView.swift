@@ -1,58 +1,63 @@
 import SwiftUI
 import TaksimKit
 
-/// Actual tool execution, collapsed to one line until the person asks for detail.
+/// "1 file", "2 files": the singular where it is one
+func countText(_ n: Int, one: String, other: String) -> String { n == 1 ? L(one) : L(other, n) }
+
+/// Actual tool execution as Cursor shows it: plain muted lines, no card. The verb is a little brighter than what it
+/// worked on; a chevron after the words opens the details.
 struct ChatActivityView: View {
     let activities: [ChatActivity]
     @State private var expanded = false
+    @State private var hover = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isSnapshot) private var isSnapshot
 
     private var failed: Int { activities.filter { $0.status == "error" }.count }
     private var active: ChatActivity? { activities.last { $0.status == "running" } }
+    private var summary: String {
+        failed > 0 ? "\(countText(activities.count, one: "1 operation", other: "%d operations")) · \(countText(failed, one: "1 error", other: "%d errors"))"
+                   : countText(activities.count, one: "1 operation", other: "%d operations")
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Button { expanded.toggle() } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: active == nil ? (failed > 0 ? "exclamationmark.triangle" : "checkmark.circle") : "gearshape")
-                        .foregroundStyle(active == nil ? (failed > 0 ? JB.err : JB.muted) : JB.accent)
-                    Text(active?.label ?? (failed > 0 ? L("%d operations · %d errors", activities.count, failed) : L("%d operations", activities.count))).lineLimit(1)
-                    if let active, !active.detail.isEmpty { Text(active.detail).font(.system(size: 10.5, design: .monospaced)).lineLimit(1).truncationMode(.middle).foregroundStyle(JB.muted2) }
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold))
-                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                HStack(spacing: 5) {
+                    if let active {
+                        Text(active.label).foregroundStyle(JB.muted)
+                        if !active.detail.isEmpty { Text(active.detail).foregroundStyle(JB.muted2).lineLimit(1).truncationMode(.middle) }
+                    } else {
+                        if failed > 0 { Image(systemName: "exclamationmark.triangle").foregroundStyle(JB.err).font(.system(size: 11)) }
+                        Text(summary).foregroundStyle(JB.muted).lineLimit(1)
+                    }
+                    Image(systemName: "chevron.right").font(.system(size: 8.5, weight: .semibold)).foregroundStyle(JB.muted2)
+                        .rotationEffect(.degrees(expanded ? 90 : 0)).opacity(hover || expanded ? 1 : 0)
+                    Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(Tap()).help(L("Activity details"))
+            .onHover { hover = $0 }
             if expanded {
                 ForEach(activities) { activity in
-                    HStack(alignment: .top, spacing: 7) {
-                        Image(systemName: symbol(activity.status)).foregroundStyle(color(activity.status)).frame(width: 14)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(activity.label).fontWeight(.medium)
-                            if !activity.detail.isEmpty {
-                                Text(activity.detail).font(.system(size: 10.5, design: .monospaced)).textSelection(.enabled)
-                                    .foregroundStyle(JB.muted).lineLimit(8)
-                            }
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            if activity.status == "error" { Image(systemName: "exclamationmark.triangle").foregroundStyle(JB.err).font(.system(size: 10.5)) }
+                            Text(activity.label).foregroundStyle(JB.muted)
+                            if activity.status == "running" { Image(systemName: "ellipsis").foregroundStyle(JB.muted2) }
                         }
-                        Spacer(minLength: 0)
+                        if !activity.detail.isEmpty {
+                            Text(activity.detail).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
+                                .foregroundStyle(JB.muted2).lineLimit(8)
+                                .padding(.leading, 2)
+                        }
                     }
-                    .padding(.vertical, 2)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .font(.system(size: 11)).foregroundStyle(JB.muted)
-        .padding(8).background(RoundedRectangle(cornerRadius: 7).fill(JB.panel.opacity(0.5)))
+        .font(.system(size: 13)).foregroundStyle(JB.muted)
         .animation(reduceMotion || isSnapshot ? nil : .spring(response: 0.35, dampingFraction: 0.86), value: expanded)
-    }
-
-    private func symbol(_ status: String) -> String {
-        switch status { case "done": "checkmark"; case "error": "exclamationmark.triangle"; case "cancelled": "stop"; default: "ellipsis" }
-    }
-    private func color(_ status: String) -> Color {
-        switch status { case "done": JB.ok; case "error": JB.err; default: JB.muted }
     }
 }
 
