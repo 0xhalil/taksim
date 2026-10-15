@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var launcher: ServerLauncher?
     weak var store: CanvasStore?
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        EditorResources.load()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // built as a SwiftPM executable: make it a regular app with a Dock icon and menu bar
         NSApp.setActivationPolicy(.regular)

@@ -173,3 +173,22 @@ final class EditorMarks: TextViewCoordinator {
         return NSRange(location: start, length: end - start)
     }
 }
+
+/// CodeEditLanguages finds its tree-sitter queries through SwiftPM's `Bundle.module`, which looks only beside
+/// Taksim.app (where codesign allows nothing) or in the .build folder it was built in, and traps when neither is
+/// there. build-app.sh ships the bundle in Contents/Resources; for the one moment `Bundle.module` is made, the
+/// main bundle answers from there.
+enum EditorResources {
+    static func load() {
+        guard let res = Bundle.main.resourceURL,
+              FileManager.default.fileExists(atPath: res.appendingPathComponent("CodeEditLanguages_CodeEditLanguages.bundle").path),
+              let m = class_getInstanceMethod(Bundle.self, #selector(getter: Bundle.bundleURL)) else { return }
+        let main = Bundle.main, sel = #selector(getter: Bundle.bundleURL), original = method_getImplementation(m)
+        typealias Getter = @convention(c) (AnyObject, Selector) -> NSURL
+        let call = unsafeBitCast(original, to: Getter.self)
+        let block: @convention(block) (AnyObject) -> NSURL = { obj in obj === main ? res as NSURL : call(obj, sel) }
+        method_setImplementation(m, imp_implementationWithBlock(block))
+        _ = CodeLanguage.swift.queryURL
+        method_setImplementation(m, original)
+    }
+}
