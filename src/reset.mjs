@@ -10,6 +10,7 @@ import { listAccounts, removeAccount, stopAllLogins } from "./accounts.mjs";
 import { listConnections, disconnect } from "./connectors.mjs";
 import { clearUsage } from "./usage.mjs";
 import { clearLibrary } from "./toolbox/store.mjs";
+import { resetComputerAccess } from "./computer/access.mjs";
 
 export async function resetAll() {
   const done = { canvases: 0, accounts: 0, connections: 0 };
@@ -20,5 +21,7 @@ export async function resetAll() {
   clearUsage();
   clearLibrary();
   rmSync(join(HOME, "plans"), { recursive: true, force: true });
+  rmSync(join(HOME, "computer.json"), { force: true }); // which agents may use the computer
+  resetComputerAccess();
   return { ok: true, ...done };
 }

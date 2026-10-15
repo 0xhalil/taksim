@@ -15,6 +15,8 @@ public final class CanvasStore {
     public private(set) var agents: [String: Agent] = [:]
     public private(set) var order: [String] = []        // agent ids in the order they came
     public private(set) var groups: [String: Group] = [:]
+    /// agent id -> its computer control (only agents that have it or ask for it)
+    public private(set) var computer: [String: ComputerControl] = [:]
     /// per agent: the latest "show this" of its IDE (ide_open), and the files that changed on disk since
     public var ideReveals: [String: IDEReveal] = [:]
     public var ideDiskChanges: [String: IDEDiskChange] = [:]
@@ -192,6 +194,7 @@ public final class CanvasStore {
         order = c.agents.map(\.id)
         groups = Dictionary(uniqueKeysWithValues: (c.groups ?? []).map { ($0.id, $0) })
         links = c.links ?? []
+        computer = c.computer ?? [:]
         streaming = [:]
         ghosts = [:]
         // panel data stays keyed by agent: a canvas shown again shows its last data until the stream refreshes it
@@ -251,6 +254,7 @@ public final class CanvasStore {
         struct Reveal: Decodable { var path: String; var line: Int?; var endLine: Int?; var at: Double? }
     }
     struct IdeFilesPayload: Decodable { var id: String; var paths: [String]? }
+    struct ComputerPayload: Decodable { var id: String; var computer: ComputerControl? }
 
     public func apply(_ ev: ServerEvent) {
         let d = JSONDecoder()
@@ -283,6 +287,7 @@ public final class CanvasStore {
             agents[p.id] = nil
             ghosts[p.id] = nil
             feeds.remove(p.id)
+            computer[p.id] = nil
             order.removeAll { $0 == p.id }
             links.removeAll { $0.from == p.id || $0.to == p.id }
         case "link_created":
@@ -320,6 +325,8 @@ public final class CanvasStore {
             if let r = p.reveal {
                 ideReveals[p.id] = IDEReveal(path: r.path, line: r.line ?? 1, endLine: r.endLine ?? r.line ?? 1, at: r.at ?? Date().timeIntervalSince1970 * 1000)
             }
+        case "computer":
+            if let p = decode(ComputerPayload.self) { computer[p.id] = p.computer }
         case "ide_files":
             guard let p = decode(IdeFilesPayload.self), let paths = p.paths, !paths.isEmpty else { return }
             ideDiskChanges[p.id] = IDEDiskChange(paths: paths, stamp: (ideDiskChanges[p.id]?.stamp ?? 0) + 1)
@@ -608,6 +615,13 @@ public final class CanvasStore {
     public func setToolHelp(_ id: String, _ on: Bool) {
         agents[id]?.toolHelp = on ? nil : false
         run { let _: JSONValue = try await self.api.patch(self.agentPath(id), ["toolHelp": on]) }
+    }
+
+    /// computer control: allows it (answering the agent's ask) or takes it back; shown at once, the server
+    /// confirms with a computer event
+    public func setComputer(_ id: String, _ allow: Bool) {
+        computer[id] = allow ? ComputerControl(state: "on", missing: computer[id]?.missing, at: computer[id]?.at) : nil
+        run { let _: JSONValue = try await self.api.post(self.agentPath(id, "/computer"), ["allow": allow]) }
     }
 
     /// the node's helpers switch: shown at once, the server confirms with agent_updated

@@ -95,6 +95,11 @@ Rules:
   - The title bar: the provider's logo tile, the name (vertically centred on the bar), the title buttons
     (helpers switch, IDE, terminal). Buttons lighten under the pointer and dip in for a moment when pressed; a card
     under the pointer shows its edge.
+  - Computer control's display key sits left of the fold button, and only while it matters. While an agent asks
+    for the screen, it breathes with the waiting outline and one click allows it. While the agent has the screen,
+    it is lit blue and flashes on each action; a click takes the screen back. It is yellow while macOS still
+    refuses Screen Recording or Accessibility, and a click opens that System Settings pane. The node's menu has the
+    same switch ("Computer control").
   - Body padding 10 px; the folder icon sits centred under the logo tile.
   - A card opens at 300×150, a terminal at 760×440; the smallest card is 220×80, the smallest terminal 480×280.
     Sizes snap to a 10 px grid.

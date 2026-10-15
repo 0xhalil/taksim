@@ -32,6 +32,7 @@ enum AppIcon {
     static let toolHelpOff = AppSymbol(name: "wand.and.stars.inverse")
     static let gauge = AppSymbol(name: "gauge.with.dots.needle.67percent")
     static let helpersOn = AppSymbol(name: "person.2.fill")
+    static let computer = AppSymbol(name: "display")
     static let note = AppSymbol(name: "book.closed")
     static let noteFilled = AppSymbol(name: "book.closed.fill")
     static let left = AppSymbol(name: "chevron.left")

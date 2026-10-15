@@ -135,6 +135,7 @@ private struct GraphRepresentable: NSViewRepresentable {
                 guard let self, let a = self.store.agents[id] else { return }
                 self.store.setToolHelp(id, !a.toolsOn)
             }
+            a.computerKey = { [weak self] id in self?.computerKey(id) }
             a.toggleHelpers = { [weak self] id in
                 guard let self, let on = self.store.agents[id]?.delegate else { self?.store.setHelpers(id, true); return }
                 self.store.setHelpers(id, !on)
@@ -152,6 +153,24 @@ private struct GraphRepresentable: NSViewRepresentable {
             a.removePanel = { [weak self] id in self?.removePanel(id) }
             a.keepPanel = { [weak self] id in self?.keepPanel(id) }
             return a
+        }
+
+        /// the display key on a node: allows an agent that asks (macOS asks for its part then), opens the
+        /// System Settings pane macOS still refuses, or takes the computer back
+        func computerKey(_ id: String) {
+            let c = store.computer[id]
+            if let missing = c?.missing?.first {
+                MacPermissions.request()
+                MacPermissions.openSettings(for: missing)
+                if c?.isAsking == true { store.setComputer(id, true) }
+                return
+            }
+            if c == nil || c?.isAsking == true {
+                MacPermissions.request()
+                store.setComputer(id, true)
+            } else {
+                store.setComputer(id, false)
+            }
         }
 
         // ---------- panels ----------
@@ -292,6 +311,14 @@ private struct GraphRepresentable: NSViewRepresentable {
                 tools.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: nil)
                 tools.toolTip = L("Reuses saved and market tools and saves its own")
                 m.addItem(tools)
+                // computer control: also on the title while the agent asks for it or has it
+                let control = store.computer[id]
+                let computer = MenuItem(title: L("Computer control")) { [weak self] in
+                    if control?.state == "on" { self?.store.setComputer(id, false) } else { self?.computerKey(id) }
+                }
+                computer.state = control?.state == "on" ? .on : control?.isAsking == true ? .mixed : .off
+                computer.image = NSImage(systemSymbolName: "display", accessibilityDescription: nil)
+                m.addItem(computer)
                 item(L("Rename")) { [weak self, weak view] in
                     guard let self, let view, let a = self.store.agents[id] else { return }
                     let r = view.rectOf(a)

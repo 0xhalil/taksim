@@ -5,6 +5,7 @@
 set -e
 cd "$(dirname "$0")/.."
 swift build -c release --product Taksim
+swift build -c release --product taksim-computer
 # CodeEditLanguages looks for its tree-sitter queries one "Resources" deeper than `swift build` puts them
 # (Xcode's bundle layout); a link inside the bundle makes both layouts work, or the editor shows no colors
 LANGS="$(swift build -c release --show-bin-path)/CodeEditLanguages_CodeEditLanguages.bundle/Resources"
@@ -13,6 +14,11 @@ APP=build/Taksim.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$(swift build -c release --show-bin-path)/Taksim" "$APP/Contents/MacOS/Taksim"
+# computer control's hands and eyes (src/computer/): inside the app, so macOS grants them as taksim
+cp "$(swift build -c release --show-bin-path)/taksim-computer" "$APP/Contents/MacOS/taksim-computer"
+# the editor's tree-sitter queries: Bundle.module only looks beside the app or in this .build, so the app points
+# it here at launch (EditorResources); without it, opening a file in the IDE traps on any other Mac
+cp -R "$(swift build -c release --show-bin-path)/CodeEditLanguages_CodeEditLanguages.bundle" "$APP/Contents/Resources/"
 # the icon (drawn by scripts/make-icon.swift)
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -43,5 +49,6 @@ VERSION="${TAKSIM_VERSION:-0.1}"
 # when it was built and from which commit: the app offers ↻ Güncelle once native/ on disk is newer
 /usr/libexec/PlistBuddy -c "Add :TaksimBuiltAt real $(date +%s)" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :TaksimCommit string $(git rev-parse --short HEAD 2>/dev/null || echo -)$(git diff --quiet HEAD -- . 2>/dev/null || echo +)" "$APP/Contents/Info.plist"
+codesign --force --sign - "$APP/Contents/MacOS/taksim-computer" >/dev/null
 codesign --force --sign - "$APP" >/dev/null
 echo "$APP"

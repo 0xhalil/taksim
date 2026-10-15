@@ -22,6 +22,7 @@ final class GraphView: NSView {
         var openIDE: (String) -> Void = { _ in }
         var toggleHelpers: (String) -> Void = { _ in }
         var toggleToolHelp: (String) -> Void = { _ in }
+        var computerKey: (String) -> Void = { _ in }
         var openGroupNote: (String, CGRect) -> Void = { _, _ in }
     }
     enum MenuTarget { case agent(String), group(String), canvas }
@@ -50,6 +51,7 @@ final class GraphView: NSView {
     var hoverHelpers: String?
     var hoverFold: String?
     var hoverToolHelp: String?
+    var hoverComputer: String?
     var hoverTerm: String?
     /// a title button just pressed: it dips for a moment so the press is felt (agent id, which button, when)
     var pressedButton: (id: String, kind: String, at: CFTimeInterval)?
@@ -124,6 +126,7 @@ final class GraphView: NSView {
             h.combine(a.status); h.combine(a.queued); h.combine(a.waitingOn); h.combine(a.workingWith); h.combine(a.blockedBy); h.combine(a.terminal); h.combine(a.backend)
             h.combine(a.folder?.name); h.combine(a.folder?.branch); h.combine(a.accountName); h.combine(a.model); h.combine(a.delegate); h.combine(a.toolHelp); h.combine(a.effort)
             h.combine(a.jobRole); h.combine(a.sandbox); h.combine(a.chatMode) // what its badge says
+            h.combine(store?.computer[a.id])
             if let u = a.usageKey.flatMap({ store?.usage(for: $0) }), u.level != .calm { h.combine(u.limited); h.combine(u.peak?.used) }
             h.combine(a.panel?.spec != nil); h.combine(a.panel?.ui.collapsed); h.combine(a.panel?.ui.size)
             if !a.isTerminalOpen && !hasTranscript(a) { h.combine(a.lastText); h.combine(a.lastError); h.combine(a.role) }
@@ -151,7 +154,7 @@ final class GraphView: NSView {
 
     /// folded, it narrows to its logo, name, status dot and title buttons
     func collapsedWidth(_ a: Agent) -> CGFloat {
-        let buttons = CGFloat((hasIDE(a) ? 3 : 2) + (Self.titleSwitches ? 1 : 0))
+        let buttons = CGFloat((hasIDE(a) ? 3 : 2) + (Self.titleSwitches ? 1 : 0) + (computerOf(a) != nil ? 1 : 0))
         let full = nameEnd(a) + 22 + buttons * (Self.btn + 4) + 6
         return min(expandedSize(a).width, max(150, full.rounded()))
     }
@@ -229,6 +232,15 @@ final class GraphView: NSView {
     func inToolHelpButton(_ a: Agent, _ p: CGPoint) -> Bool {
         guard Self.titleSwitches else { return false }
         let r = rectOf(a), bx = toolHelpX(a)
+        return p.x >= bx && p.x <= bx + Self.btn && p.y >= r.minY && p.y <= r.minY + Self.th
+    }
+    /// computer control's key, left of the fold button: there only while the agent asks for the screen (it
+    /// breathes; one click allows) or has it (lit; a click takes it back; yellow while macOS still refuses)
+    func computerOf(_ a: Agent) -> ComputerControl? { store?.computer[a.id] }
+    func computerX(_ a: Agent) -> CGFloat { foldX(a) - Self.btn - 4 }
+    func inComputerButton(_ a: Agent, _ p: CGPoint) -> Bool {
+        guard computerOf(a) != nil else { return false }
+        let r = rectOf(a), bx = computerX(a)
         return p.x >= bx && p.x <= bx + Self.btn && p.y >= r.minY && p.y <= r.minY + Self.th
     }
     func inHelpersButton(_ a: Agent, _ p: CGPoint) -> Bool {
@@ -394,6 +406,7 @@ final class GraphView: NSView {
             if inFoldButton(a, p) { press(a.id, "fold"); actions.toggleCollapsed(a.id); return }
             if inHelpersButton(a, p) { press(a.id, "helpers"); actions.toggleHelpers(a.id); return }
             if inToolHelpButton(a, p) { press(a.id, "tools"); actions.toggleToolHelp(a.id); return }
+            if inComputerButton(a, p) { press(a.id, "computer"); actions.computerKey(a.id); return }
             if let c = cornerAt(a, p) {
                 drag = .resize(id: a.id, corner: c, start: p, rect: rectOf(a))
                 return
@@ -639,7 +652,7 @@ final class GraphView: NSView {
         if let hit = superview.flatMap({ hitTest(convert(sp, to: $0)) }), hit !== self { return nil }
         let p = toGraph(sp)
         if let a = agentAt(p) {
-            if inTitleButton(a, p) || inIDEButton(a, p) || inFoldButton(a, p) || inHelpersButton(a, p) || inToolHelpButton(a, p) { return .pointingHand }
+            if inTitleButton(a, p) || inIDEButton(a, p) || inFoldButton(a, p) || inHelpersButton(a, p) || inToolHelpButton(a, p) || inComputerButton(a, p) { return .pointingHand }
             if let c = cornerAt(a, p) { return c == .se || c == .nw ? .frameResize(position: .bottomRight, directions: .all) : .frameResize(position: .bottomLeft, directions: .all) }
             return .arrow
         }
@@ -665,8 +678,8 @@ final class GraphView: NSView {
         guard let c = cursor(at: sp, flags: e.modifierFlags) else {
             // a terminal or a panel is under the pointer: it sets its own cursor
             shownCursor = nil
-            if hoverId != nil || hoverIDE != nil || hoverTerm != nil || hoverHelpers != nil || hoverFold != nil {
-                hoverId = nil; hoverIDE = nil; hoverTerm = nil; hoverHelpers = nil; hoverFold = nil; needsDisplay = true
+            if hoverId != nil || hoverIDE != nil || hoverTerm != nil || hoverHelpers != nil || hoverFold != nil || hoverComputer != nil {
+                hoverId = nil; hoverIDE = nil; hoverTerm = nil; hoverHelpers = nil; hoverFold = nil; hoverComputer = nil; needsDisplay = true
             }
             return
         }
@@ -698,6 +711,13 @@ final class GraphView: NSView {
             if let t = tools { toolTip = store?.agents[t]?.toolsOn == true ? L("Tool suggestions on") : L("Tool suggestions off") }
             else if helpers == nil { toolTip = nil }
         }
+        let computer = a.flatMap { inComputerButton($0, p) ? $0.id : nil }
+        if computer != hoverComputer {
+            hoverComputer = computer; needsDisplay = true
+            if let c = computer.flatMap({ store?.computer[$0] }) {
+                toolTip = c.needsMac ? L("Allow in System Settings") : c.isAsking ? L("Allow computer control") : L("Controls the computer")
+            } else if helpers == nil && tools == nil && fold == nil { toolTip = nil }
+        }
         let link = a == nil ? linkAt(p) : nil
         if link != hoverLink { hoverLink = link; needsDisplay = true }
         let note = a == nil ? groupNoteAt(p)?.id : nil
@@ -705,8 +725,8 @@ final class GraphView: NSView {
     }
 
     override func mouseExited(with e: NSEvent) {
-        if hoverId != nil || hoverTerm != nil || hoverIDE != nil || hoverHelpers != nil || hoverFold != nil {
-            hoverId = nil; hoverTerm = nil; hoverIDE = nil; hoverHelpers = nil; hoverFold = nil; needsDisplay = true
+        if hoverId != nil || hoverTerm != nil || hoverIDE != nil || hoverHelpers != nil || hoverFold != nil || hoverComputer != nil {
+            hoverId = nil; hoverTerm = nil; hoverIDE = nil; hoverHelpers = nil; hoverFold = nil; hoverComputer = nil; needsDisplay = true
         }
     }
 

@@ -17,5 +17,9 @@ extension Tr {
         "Cancel  ⎋": "Vazgeç  ⎋",
         "Hide": "Gizle",
         "No change": "Değişiklik yok",
+        "Computer control": "Bilgisayar kontrolü",
+        "Allow computer control": "Bilgisayar kontrolüne izin ver",
+        "Controls the computer": "Bilgisayarı kontrol ediyor",
+        "Allow in System Settings": "Sistem Ayarları'nda izin ver",
     ]
 }

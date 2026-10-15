@@ -42,6 +42,7 @@ if [ -n "$TAKSIM_SIGN_IDENTITY" ]; then
   find "$ENGINE" -type f | while IFS= read -r f; do
     if file -b "$f" | grep -q '^Mach-O'; then $SIGN --entitlements native/scripts/engine.entitlements "$f"; fi
   done
+  $SIGN "$APP/Contents/MacOS/taksim-computer" # computer control's helper: no entitlements, macOS grants it as the app
   $SIGN "$APP" >/dev/null
   codesign --verify --deep --strict "$APP"
   echo "signed with Developer ID"

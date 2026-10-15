@@ -23,7 +23,20 @@ public struct Canvas: Codable, Identifiable, Sendable {
     public var agents: [Agent]
     public var links: [Link]?
     public var groups: [Group]?
+    /// agent id -> its computer control, for the agents that have it or ask for it
+    public var computer: [String: ComputerControl]?
     public var seq: Int?
+}
+
+/// An agent's computer control (src/computer/access.mjs): "asking" while it waits for the person's click, "on"
+/// once allowed; `missing` names what macOS still refuses ("screen", "accessibility"); `at` is its last action.
+public struct ComputerControl: Codable, Hashable, Sendable {
+    public var state: String
+    public var missing: [String]?
+    public var at: Double?
+    public init(state: String, missing: [String]? = nil, at: Double? = nil) { self.state = state; self.missing = missing; self.at = at }
+    public var isAsking: Bool { state == "asking" }
+    public var needsMac: Bool { !(missing ?? []).isEmpty }
 }
 
 /// An agent (agent.view() in src/canvas/agent.mjs).

@@ -12,6 +12,7 @@ import { PANEL_TOOLS, callPanelTool } from "../panels/tools.mjs";
 import { IDE_TOOLS, callIdeTool } from "../ide/tools.mjs";
 import { TOOLBOX_TOOLS, callToolboxTool, openTool, delegates, splits } from "../toolbox/mcp.mjs";
 import { BROWSER_TOOLS, callBrowserTool } from "../browser/tools.mjs";
+import { computerTools, callComputerTool } from "../computer/tools.mjs";
 import { jevReady, pick } from "../jev.mjs";
 
 const PROTOCOL = "2025-06-18";
@@ -344,7 +345,7 @@ async function callTool(self, name, args = {}) {
       note: args.task ? "It is working on the task; its answer will arrive as a new message to you." : "Use ask_agent or tell_agent to give it work." }));
   }
 
-  const panel = await callBrowserTool(self, name, args) || await callPanelTool(self, name, args) || await callIdeTool(self, name, args) || await callToolboxTool(self, name, args);
+  const panel = await callBrowserTool(self, name, args) || await callComputerTool(self, name, args) || await callPanelTool(self, name, args) || await callIdeTool(self, name, args) || await callToolboxTool(self, name, args);
   if (panel) return panel;
   throw new Error(`unknown tool ${name}`);
 }
@@ -362,12 +363,13 @@ async function dispatch(self, msg) {
           + "something the user would watch: services, clusters, logs, builds, findings. "
           + `create_agent accepts "account" to choose which of the user's accounts the new agent uses`
           + (listAccounts().length ? ` (accounts: ${listAccounts().map((a) => `${a.name} [${a.backend}]`).join(", ")}).` : " (none set up yet).")
+          + (computerTools(self).length ? " The computer_ tools see and drive the user's Mac (other apps, the desktop); the first one asks the user to allow it. Use them when the work is outside a browser page and your shell." : "")
           + (jevReady() ? " decide asks Jev, a fast decision model, to pick among options you name (a model tier for a part, an agent for a task, how risky a change is): use it when a quick judgment helps." : "") });
     }
     if (method === "ping") return ok({});
     // Claude Code defers MCP tools behind a search, so an agent sees only their names and rarely reaches for
     // its panel or IDE on its own; these few are always loaded with their descriptions.
-    if (method === "tools/list") return ok({ tools: [...TOOLS, ...(jevReady() ? [JEV_TOOL] : []), ...TOOLBOX_TOOLS, ...PANEL_TOOLS, ...IDE_TOOLS, ...BROWSER_TOOLS].filter((t) => t.name === "update_todos" ? !readOnly(self) : t.name === "propose_plan" ? modeOf(self) === "plan" : !readOnly(self) || !["add_tool", "save_tool", "update_context"].includes(t.name)).map((t) => ({ ...t, _meta: { "anthropic/alwaysLoad": true } })) });
+    if (method === "tools/list") return ok({ tools: [...TOOLS, ...(jevReady() ? [JEV_TOOL] : []), ...TOOLBOX_TOOLS, ...PANEL_TOOLS, ...IDE_TOOLS, ...BROWSER_TOOLS, ...computerTools(self)].filter((t) => t.name === "update_todos" ? !readOnly(self) : t.name === "propose_plan" ? modeOf(self) === "plan" : !readOnly(self) || !["add_tool", "save_tool", "update_context"].includes(t.name)).map((t) => ({ ...t, _meta: { "anthropic/alwaysLoad": true } })) });
     if (method === "tools/call") {
       try { return ok(await callTool(self, params?.name, params?.arguments)); }
       catch (e) { return ok(toolError(e.message)); }

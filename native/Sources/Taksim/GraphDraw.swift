@@ -406,8 +406,20 @@ extension GraphView {
         titleButton(ctx, x: fx, y: by, fill: Pal.tint.withAlphaComponent(0.06), hover: hoverFold == a.id, depth: pressDepth(a.id, "fold")) { r in
             AppIcon.draw(a.isCollapsed ? AppIcon.down : AppIcon.minimize, in: ctx, rect: r.insetBy(dx: (r.width - 14) / 2, dy: (r.height - 14) / 2), color: Pal.ink)
         }
+        // computer control's key: breathes while the agent asks for the screen, lit while it has it, yellow while
+        // macOS still refuses taksim; a short flash on each action
+        let computer = computerOf(a)
+        if let c = computer {
+            let cx = fx - Self.btn - 4
+            let tint = c.needsMac ? Pal.warn : Pal.accent
+            let flash = c.at.map { max(0, 1 - CGFloat(Date().timeIntervalSince1970 * 1000 - $0) / 600) } ?? 0
+            let glow = c.isAsking ? 0.12 + 0.3 * pulseAlpha : 0.22 + 0.25 * flash
+            titleButton(ctx, x: cx, y: by, fill: tint.withAlphaComponent(glow), hover: hoverComputer == a.id, depth: pressDepth(a.id, "computer")) { r in
+                AppIcon.draw(AppIcon.computer, in: ctx, rect: r.insetBy(dx: (r.width - 15) / 2, dy: (r.height - 15) / 2), color: tint)
+            }
+        }
         // tool help is in the node's menu unless the title shows it
-        let tx = Self.titleSwitches ? fx - Self.btn - 4 : fx, tools = a.toolsOn
+        let tx = Self.titleSwitches || computer != nil ? fx - Self.btn - 4 : fx, tools = a.toolsOn
         if Self.titleSwitches {
             ctx.setFillColor((tools ? Pal.accent.withAlphaComponent(0.22) : hoverToolHelp == a.id ? Pal.tint : Pal.tint.withAlphaComponent(0.06)).cgColor)
             ctx.addPath(CGPath(roundedRect: CGRect(x: tx, y: by, width: Self.btn, height: 18), cornerWidth: 5, cornerHeight: 5, transform: nil)); ctx.fillPath()
@@ -420,7 +432,7 @@ extension GraphView {
             ctx.saveGState()
             ctx.setAlpha(status == "running" ? 0.55 + 0.45 * pulseAlpha : 1)
             ctx.setFillColor(c.cgColor)
-            ctx.fillEllipse(in: CGRect(x: fx - 15, y: -th / 2 - 4, width: 8, height: 8))
+            ctx.fillEllipse(in: CGRect(x: tx - 15, y: -th / 2 - 4, width: 8, height: 8))
             ctx.restoreGState()
         }
         if let q = a.queued, q > 0 {

@@ -39,6 +39,67 @@ ones, alert/confirm/prompt/leave-page dialogs, and tabs a page opens (they becom
 | opencode | Verified with a real run (`opencode-go/claude-haiku-5-5`, 2026-10-14): same task, screenshot seen and described; image results depend on the chosen model reading images |
 | Gemini, Copilot, local | Same MCP tools; not yet checked with a real run (no signed-in CLI on the test machine) |
 
+## Computer control
+
+All connections get the same `computer_*` tools over taksim's MCP server (`src/computer/`), carried out by
+`taksim-computer` (`native/Sources/TaksimComputer`), a small helper inside Taksim.app. The first call an agent makes
+asks the person: the agent waits while a display key breathes on its node's title, and one click allows it. On that
+click the app asks macOS for Screen Recording and Accessibility. The allowance stays with that agent until the key
+or the node's menu turns it off. While macOS still refuses one of them, the key turns yellow and opens that System
+Settings pane, and the tool's answer says what is missing. Ask and Plan agents only look: they get screenshot,
+windows and read, and nothing that clicks or types.
+
+| What | taksim tool | Anthropic `computer_toolset_20260801` | OpenAI `computer` | Gemini desktop |
+|---|---|---|---|---|
+| See the screen, any monitor | `computer_screenshot` (`display`) | screenshot | screenshot | take_screenshot |
+| Zoom | `computer_screenshot` `region` | zoom | — | — |
+| Wait | `computer_screenshot` `wait_s` | wait | wait | wait |
+| Pointer position | in every screenshot's text | cursor_position | — | — |
+| Click: left, right, middle, double, triple, with modifiers | `computer_click` | the click actions | click, double_click | the click actions |
+| Press or release a button | `computer_click` `press` | left_mouse_down/up | — | mouse_down/up |
+| Move, hover | `computer_move` | mouse_move | move | move |
+| Drag | `computer_drag` | left_click_drag | drag | drag_and_drop |
+| Scroll | `computer_scroll` | scroll | scroll | scroll |
+| Type text (any layout) | `computer_type` | type | type | type |
+| Keys and shortcuts, repeat, hold | `computer_key` (`repeat`, `hold_s`) | key, hold_key | keypress | press_key, hotkey, key_down/up |
+| Windows, apps, monitors | `computer_windows` | — | — | — |
+| An app's controls as text, with refs to click | `computer_read` (Accessibility tree) | — | — | — |
+| Open an app, a file, a URL | `computer_open` | — | — | — |
+
+Agents work in the pixels of their last screenshot, which is at most 1280 pixels wide. The engine maps those pixels
+to screen points, on secondary monitors too.
+
+| Connection | Built into the CLI | In taksim |
+|---|---|---|
+| Claude | Claude Code's own `computer-use` MCP server (macOS, research preview, Pro/Max, turned on in `/mcp`) | The shared tools. The CLI's own server is reachable in the agent's terminal (`/mcp`), and its approvals happen there. Not tried with a real run. |
+| Copilot | `/computer on` (public preview since 2026-10-01) | The shared tools. `/computer` is reachable in the agent's terminal. Not tried with a real run. |
+| Codex | Computer use is a plugin of the Codex desktop app. The CLI's docs don't mention it (not verified). | The shared tools. Not tried with a real run. |
+| Gemini, opencode | None | The shared tools are the only way. Not tried with a real run. |
+| Local models | — | Need a model that calls tools and reads images. Not tried. |
+
+How it was verified:
+
+- `test/computer.test.mjs` (with a stand-in helper) covers the ask, the allow, a decline, a timeout, persistence,
+  coordinate mapping on several monitors, zoom, refs from reading, Ask/Plan limits and macOS refusals. A protocol
+  check of the real helper runs when it is built.
+- `ComputerControlTests` covers the store.
+- On a demo engine, a fake-delegate agent asked, waited, was allowed and listed this Mac's real windows. Its
+  screenshot, click and read came back with the Screen Recording and Accessibility explanation. Snapshots of the key
+  were taken in both themes.
+
+Still unchecked:
+
+- A real screenshot or click with macOS permissions granted to Taksim.app. That needs the person to allow it.
+- A real CLI and model using these tools.
+
+Limits:
+
+- macOS grants the permissions to the app that started the engine. An engine started from a terminal
+  (`npm start`) uses that terminal's permissions.
+- An ad-hoc signed dev build changes its signature on every build, so macOS may ask again after a rebuild.
+- Holding a modifier alone across several calls (key_down/key_up) isn't offered. `computer_key` `hold_s` and
+  `computer_click` `modifiers` cover holding inside one call.
+
 ## Shared change review
 
 Codex, Claude, opencode, Gemini, Copilot and local models use the same core checkpoint review. It doesn't depend on a
@@ -55,9 +116,15 @@ fix request still needs checking per model.
 - Widen the inventory of provider features: question/permission flows, plan tools, steering a turn, session branches,
   context meters, sub-agents, image input and provider-specific settings. Judge each against official sources and a
   real connection; parity across these isn't there yet.
-- Computer use (screen and input beyond the browser), hosted by the native app.
+- Computer control: try it with a real run per CLI, and with permissions granted. Consider showing the agent's
+  pointer on screen while it acts, and a global stop key.
 
 ## Official sources
+
+- [Claude Code computer use](https://code.claude.com/docs/en/computer-use), [Anthropic computer use tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool)
+- [OpenAI computer use](https://developers.openai.com/api/docs/guides/tools-computer-use), [Codex app computer use](https://learn.chatgpt.com/docs/computer-use.md)
+- [Gemini computer use](https://ai.google.dev/gemini-api/docs/computer-use), [Gemini CLI tools](https://geminicli.com/docs/reference/tools/)
+- [Copilot computer use](https://docs.github.com/copilot/concepts/agents/computer-use), [opencode tools](https://opencode.ai/docs/tools/)
 
 - [opencode CLI events, installed 1.18.32](https://github.com/anomalyco/opencode/blob/v1.18.32/packages/opencode/src/cli/cmd/run.ts)
 - [opencode todo tool](https://github.com/anomalyco/opencode/blob/v1.18.32/packages/opencode/src/tool/todo.ts)

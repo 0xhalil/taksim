@@ -1,6 +1,7 @@
 // Canvas model and registry: agents, links, limits, the per-directory write lock and persistence.
 
 import { closeTab } from "../browser/browser.mjs";
+import { computerView, forgetComputer } from "../computer/access.mjs";
 import { randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -53,7 +54,7 @@ export class Canvas {
 
   view() {
     return { ...this.toJSON(), agents: [...this.agents.values()].map((a) => a.view()),
-      groups: this.groups.map((g) => this.groupView(g)), seq: this.bus.seq };
+      groups: this.groups.map((g) => this.groupView(g)), computer: computerView(this), seq: this.bus.seq };
   }
 
   save() {
@@ -227,6 +228,7 @@ export class Canvas {
     agent.closeTerminal();
     agent.closeShell();
     agent.rejectQueued(`${agent.name} was removed`);
+    forgetComputer(agent.id);
     this.agents.delete(agent.id);
     this.links = this.links.filter((l) => l.from !== agent.id && l.to !== agent.id);
     for (const a of this.agents.values()) if (a.parent === agent.id) a.parent = null;

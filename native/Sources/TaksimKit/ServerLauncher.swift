@@ -47,6 +47,9 @@ public final class ServerLauncher: @unchecked Sendable {
         }
         var env = ProcessInfo.processInfo.environment.merging(Self.loginShellEnv()) { _, new in new }
         env["TAKSIM_PORT"] = String(port)
+        // computer control's helper beside the app's own executable: the engine started from here uses that one
+        if let helper = Bundle.main.executableURL?.deletingLastPathComponent().appending(path: "taksim-computer"),
+           FileManager.default.isExecutableFile(atPath: helper.path) { env["TAKSIM_COMPUTER_HELPER"] = helper.path }
         // markers of a Claude Code session this app may have been started from (see src/config.mjs)
         for k in env.keys where k.hasPrefix("CLAUDECODE") || k.hasPrefix("CLAUDE_CODE_") || k == "ANTHROPIC_BASE_URL" { env[k] = nil }
         // a packaged app brings its own Node beside the engine; a checkout uses the one on PATH

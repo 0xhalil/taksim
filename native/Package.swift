@@ -13,6 +13,7 @@ let package = Package(
     products: [
         .library(name: "TaksimKit", targets: ["TaksimKit"]),
         .executable(name: "Taksim", targets: ["Taksim"]),
+        .executable(name: "taksim-computer", targets: ["TaksimComputer"]),
     ],
     dependencies: [
         // the terminal view (MIT); fed from the server's terminal WebSocket, it opens no PTY of its own
@@ -27,6 +28,8 @@ let package = Package(
         // the app: SwiftUI + AppKit
         .executableTarget(name: "Taksim", dependencies: ["TaksimKit", "SwiftTerm",
             .product(name: "CodeEditSourceEditor", package: "CodeEditSourceEditor")], swiftSettings: v5),
+        // the agents' hands and eyes on the Mac (computer_* tools): started by the engine, shipped inside the app
+        .executableTarget(name: "TaksimComputer", swiftSettings: v5),
         .testTarget(name: "TaksimUITests", dependencies: ["Taksim", "TaksimKit"], swiftSettings: v5),
         .testTarget(name: "TaksimKitTests", dependencies: ["TaksimKit"], resources: [.copy("Fixtures")], swiftSettings: v5),
     ]

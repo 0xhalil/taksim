@@ -12,6 +12,7 @@ import { langOf, T } from "../lang.mjs";
 import { panelRoutes } from "./panels.mjs";
 import { ideRoutes } from "./ide.mjs";
 import { toolboxRoutes } from "./toolbox.mjs";
+import { computerState, setComputer } from "../computer/access.mjs";
 
 // /v1/canvases/:id/groups[/:gid[/context|/history[/:version]]]
 async function groupRoutes(req, res, canvas, gid, action, version) {
@@ -68,7 +69,7 @@ export async function canvasRoutes(req, res, path) {
     canvas.lang = langOf(req);
     return groupRoutes(req, res, canvas, gm[2], gm[3], gm[4]);
   }
-  const m = path.match(/^\/v1\/canvases(?:\/([\w-]+))?(?:\/(events|agents))?(?:\/([\w-]+))?(?:\/(messages|queue|fork|activity|tasks|workflow|job|stop|transcript|terminal|shell|deliver|restore|review|diff|checkpoint|attachments))?$/);
+  const m = path.match(/^\/v1\/canvases(?:\/([\w-]+))?(?:\/(events|agents))?(?:\/([\w-]+))?(?:\/(messages|queue|fork|activity|tasks|workflow|job|stop|transcript|terminal|shell|deliver|restore|review|diff|checkpoint|attachments|computer))?$/);
   if (!m) return false;
   const [, canvasId, section, agentId, action] = m;
   const method = req.method;
@@ -130,6 +131,17 @@ export async function canvasRoutes(req, res, path) {
       if (body.action === "save") return sendJson(res, 201, agent.workflow.save(body));
       if (body.action === "publish") return sendJson(res, 201, { plan: agent.workflow.publish(body, true) });
       throw httpError(400, "unknown workflow action");
+    }
+    throw httpError(405, "method not allowed");
+  }
+
+  // computer control: the node's display key allows it (or answers the agent's ask), or takes it back
+  if (action === "computer") {
+    if (method === "GET") return sendJson(res, 200, { computer: computerState(agent) });
+    if (method === "POST" || method === "PUT") {
+      if (typeof body?.allow !== "boolean") throw httpError(400, "allow: true or false");
+      setComputer(agent, body.allow);
+      return sendJson(res, 200, { computer: computerState(agent) });
     }
     throw httpError(405, "method not allowed");
   }

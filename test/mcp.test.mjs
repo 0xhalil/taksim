@@ -15,6 +15,8 @@ process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
 
 const { startServer } = await import("../src/server.mjs");
 const { getCanvas } = await import("../src/canvas/canvas.mjs");
+const { helperPath } = await import("../src/computer/helper.mjs");
+const { COMPUTER_TOOLS } = await import("../src/computer/tools.mjs");
 
 let server, base;
 before(async () => {
@@ -60,7 +62,8 @@ test("MCP handshake and tool list", async () => {
   assert.deepEqual(list.result.tools.map((t) => t.name), ["update_todos", "ask_user", "list_agents", "ask_agent", "tell_agent", "get_context", "update_context", "remember", "plan_work", "create_agent",
     "design_tool", "find_tools", "add_tool", "use_tool", "save_tool", "list_bricks", "panel_open", "panel_patch", "panel_push", "panel_read", "panel_close", "ide_open", "ide_note", "ide_debug_state", "ide_close",
     "browser_navigate", "browser_snapshot", "browser_click", "browser_hover", "browser_drag", "browser_type", "browser_select", "browser_upload",
-    "browser_press", "browser_scroll", "browser_dialog", "browser_tabs", "browser_screenshot", "browser_back", "browser_eval"]);
+    "browser_press", "browser_scroll", "browser_dialog", "browser_tabs", "browser_screenshot", "browser_back", "browser_eval",
+    ...(helperPath() ? COMPUTER_TOOLS.map((t) => t.name) : [])]); // computer control where taksim-computer is built
   assert.equal((await rpc("not-a-token", { jsonrpc: "2.0", id: 1, method: "tools/list" })).status, 404);
 });
 
