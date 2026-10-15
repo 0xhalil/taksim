@@ -1,7 +1,7 @@
 // Accounts API: list, create, delete, check status, and run a CLI's login flow in a terminal.
 
 import { readJson, sendJson, httpError } from "../http.mjs";
-import { listAccounts, createAccount, removeAccount, renameAccount, accountStatus, startLogin, stopLogin, loginState, findAccount, carryOver, accountBackends, machineStatus, setApiKey }
+import { listAccounts, createAccount, removeAccount, renameAccount, accountStatus, startLogin, stopLogin, loginState, findAccount, carryOver, accountBackends, installBackend, machineStatus, setApiKey }
   from "../accounts.mjs";
 import { allCanvases } from "../canvas/canvas.mjs";
 import { accountEnv } from "../accounts.mjs";
@@ -83,6 +83,11 @@ export async function usageRoutes(req, res, path) {
 export async function accountRoutes(req, res, path) {
   const machine = path.match(/^\/v1\/accounts\/machine\/([\w-]+)$/);
   if (machine && req.method === "GET") return sendJson(res, 200, await machineStatus(machine[1]));
+  const install = path.match(/^\/v1\/accounts\/backends\/([\w-]+)\/install$/);
+  if (install) {
+    if (req.method !== "POST") throw httpError(405, "method not allowed");
+    return sendJson(res, 202, installBackend(install[1]));
+  }
   const m = path.match(/^\/v1\/accounts(?:\/([\w-]+))?(?:\/(status|login|carry-over|api-key))?$/);
   if (!m) return false;
   const [, id, action] = m;

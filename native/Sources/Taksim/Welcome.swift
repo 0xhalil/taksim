@@ -8,7 +8,7 @@ import TaksimKit
 /// The CLIs' sign-in state on this computer, and the login running in the welcome, if any.
 @MainActor @Observable
 final class AccountsModel {
-    struct Backend: Decodable, Identifiable { var name: String; var label: String; var installed: Bool?; var id: String { name } }
+    struct Backend: Decodable, Identifiable { var name: String; var label: String; var installed: Bool?; var installing: Bool?; var installError: String?; var id: String { name } }
     struct Account: Decodable, Identifiable {
         var id: String; var name: String; var backend: String; var dir: String?
         var status: Status?; var loggingIn: Bool?
@@ -24,6 +24,8 @@ final class AccountsModel {
     var login: Login?
     var justSignedIn: Set<String> = []
     var failed: Set<String> = []
+    /// the CLIs being installed now (a CLI that isn't on this computer is fetched before its sign-in starts)
+    var installing: Set<String> = []
     /// why the last try for a CLI failed, as the engine said it (a taken name, not installed…)
     var problem: [String: String] = [:]
     /// each login's plan usage, by account id or "machine:<cli>"
@@ -57,12 +59,41 @@ final class AccountsModel {
     func signIn(_ b: Backend) async {
         guard login == nil else { return }
         clear(b.name)
+        // not on this computer: it is installed first, then the sign-in goes on by itself
+        if backends.first(where: { $0.name == b.name })?.installed != true, !(await install(b.name)) { return }
         var account = accounts.first { $0.backend == b.name && $0.dir == nil }
         if account == nil {
             account = await attempt(b.name) { try await self.api.post("/v1/accounts", ["name": self.freeName(b.label), "backend": b.name, "machine": true], as: Account.self) }
         }
         guard let a = account else { return }
         await signIn(account: a.id, backend: b.name)
+    }
+
+    private struct InstallState: Decodable { var installing: Bool?; var installError: String? }
+
+    /// installs a CLI from its official package (the engine does the work) and waits until it is on this computer
+    func install(_ name: String) async -> Bool {
+        guard !installing.contains(name) else { return false }
+        installing.insert(name)
+        defer { installing.remove(name) }
+        clear(name)
+        guard await attempt(name, { try await self.api.post("/v1/accounts/backends/\(name)/install", as: InstallState.self) }) != nil else { return false }
+        let deadline = Date().addingTimeInterval(11 * 60)
+        while Date() < deadline {
+            try? await Task.sleep(for: .seconds(1))
+            guard let l = try? await api.get("/v1/accounts", as: List.self) else { continue }
+            backends = l.backends.sorted { (Self.order.firstIndex(of: $0.name) ?? 99) < (Self.order.firstIndex(of: $1.name) ?? 99) }
+            guard let b = backends.first(where: { $0.name == name }) else { return false }
+            if b.installed == true { await load(); return true }
+            if b.installing != true {
+                failed.insert(name)
+                problem[name] = b.installError ?? L("Could not install")
+                return false
+            }
+        }
+        failed.insert(name)
+        problem[name] = L("Could not install")
+        return false
     }
 
     /// a name nobody uses yet: "Claude Code", then "Claude Code 2", "Claude Code 3"…
@@ -76,6 +107,7 @@ final class AccountsModel {
     func add(backend: String, name: String) async {
         guard login == nil else { return }
         clear(backend)
+        if backends.first(where: { $0.name == backend })?.installed != true, !(await install(backend)) { return }
         guard let a = await attempt(backend, { try await self.api.post("/v1/accounts", ["name": name, "backend": backend], as: Account.self) }) else { return }
         accounts.append(a)
         await signIn(account: a.id, backend: backend, privately: backend == "gemini")
@@ -306,8 +338,15 @@ private struct CLITile: View {
                 if let st {
                     Text(st.email ?? st.plan ?? " ").font(.system(size: 11)).foregroundStyle(JB.muted).lineLimit(1).truncationMode(.middle)
                         .padding(.horizontal, 8)
+                } else if accounts.installing.contains(backend.name) {
+                    ProgressView().controlSize(.small).help(L("Installing"))
                 } else if !installed {
-                    Image(systemName: "arrow.down.circle").font(.system(size: 15)).foregroundStyle(JB.muted).help(L("not installed"))
+                    Button { Task { await accounts.signIn(backend) } } label: {
+                        Image(systemName: "arrow.down.circle.fill").font(.system(size: 17))
+                            .foregroundStyle(accounts.failed.contains(backend.name) ? JB.err : JB.accent)
+                    }
+                    .buttonStyle(Press()).disabled(accounts.login != nil)
+                    .help(accounts.problem[backend.name] ?? L("Install and sign in"))
                 } else if active {
                     ProgressView().controlSize(.small)
                 } else {

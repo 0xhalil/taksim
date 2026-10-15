@@ -19,6 +19,7 @@ import { CHAT_DIR, cfg, splitCmd } from "./config.mjs";
 import { BACKENDS } from "./backends/index.mjs";
 import { TAKSIM_SETTINGS as GEMINI_TAKSIM } from "./backends/gemini.mjs";
 import { saveToken, readTokenSync, dropToken } from "./connectors.mjs";
+import { startInstall, installState } from "./cli-install.mjs";
 
 // an account's API key (Gemini): kept in the keychain under this name, never in accounts.json
 const keyName = (a) => `account-${a.id}`;
@@ -176,7 +177,15 @@ export function listAccounts() {
 
 // The CLIs accounts can be made for, and whether each is installed here.
 export function accountBackends() {
-  return ACCOUNT_BACKENDS.map((name) => ({ name, label: KINDS[name].label, installed: installed(name) }));
+  return ACCOUNT_BACKENDS.map((name) => ({ name, label: KINDS[name].label, installed: installed(name), ...installState(name) }));
+}
+
+// Installs a CLI that isn't on this computer (see cli-install.mjs); the list above shows how it goes.
+export function installBackend(backend) {
+  if (typeof backend !== "string" || !Object.hasOwn(KINDS, backend)) throw err(400, `backend must be one of: ${ACCOUNT_BACKENDS.join(", ")}`);
+  const out = startInstall(backend, installed);
+  if (out.error) throw err(400, out.error);
+  return out;
 }
 
 // By id or (case-insensitive) name; agents and people refer to accounts by name.

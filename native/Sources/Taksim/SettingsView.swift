@@ -889,7 +889,14 @@ private struct CLIAccounts: View {
             HStack(spacing: 8) {
                 BackendTile(backend: backend.name, size: 18).saturation(installed ? 1 : 0)
                 Text(backend.label).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(installed ? JB.ink : JB.muted)
-                if !installed { Image(systemName: "arrow.down.circle").font(.system(size: 12)).foregroundStyle(JB.muted).help(L("not installed")) }
+                if m.installing.contains(backend.name) { ProgressView().controlSize(.mini) }
+                else if !installed {
+                    Button { Task { await m.signIn(backend) } } label: {
+                        Image(systemName: "arrow.down.circle.fill").font(.system(size: 13)).foregroundStyle(m.failed.contains(backend.name) ? JB.err : JB.accent)
+                    }
+                    .buttonStyle(Press()).disabled(m.login != nil)
+                    .help(m.problem[backend.name] ?? L("Install and sign in"))
+                }
                 Rectangle().fill(JB.line).frame(height: 1)
             }
             if installed {
