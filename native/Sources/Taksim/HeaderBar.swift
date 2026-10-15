@@ -105,21 +105,6 @@ struct HeaderBar: View {
                 .help(updater.failure ?? L("Install the new version and reopen"))
                 .transition(.scale.combined(with: .opacity))
                 .padding(.trailing, 6)
-            } else if model.engineStale || model.restartingEngine {
-                Button { model.restartEngine() } label: {
-                    HStack(spacing: 5) {
-                        if model.restartingEngine { ProgressView().controlSize(.mini) }
-                        else { Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold)) }
-                        Text(L("Engine")).font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundStyle(JB.accentInk)
-                    .padding(.horizontal, 9).frame(height: 24)
-                    .background(Capsule().fill(JB.accent))
-                }
-                .buttonStyle(Press())
-                .help(L("Engine is running older code: restart (open terminals close)"))
-                .transition(.scale.combined(with: .opacity))
-                .padding(.trailing, 6)
             }
             if let store = model.store { UsageHeader(store: store) }
             conn

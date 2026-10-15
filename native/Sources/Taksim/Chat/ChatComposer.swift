@@ -371,7 +371,7 @@ struct ChatComposer: View {
     }
 
     private var modelLabel: String {
-        let name = agent?.model ?? ""
+        let name = store.models.first { $0.id == agent?.model }?.display_name ?? agent?.model ?? ""
         let limit = editorWidth < 320 ? 9 : editorWidth < 460 ? 14 : 24
         return name.count > limit ? String(name.prefix(limit - 1)) + "…" : name
     }
@@ -399,7 +399,8 @@ struct ChatComposer: View {
 
     private func modelChoice(_ name: String) -> some View {
         Button { Task { do { try await store.updateAgent(agentId, ["model": name]) } catch { model.error = error.localizedDescription } } } label: {
-            if name == agent?.model { Label(name, systemImage: "checkmark") } else { Text(name) }
+            let shown = store.models.first { $0.id == name }?.display_name ?? name
+            if name == agent?.model { Label(shown, systemImage: "checkmark") } else { Text(shown) }
         }
     }
 

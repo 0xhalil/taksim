@@ -354,7 +354,6 @@ struct GeneralPane: View {
     @AppStorage("notify.sound") private var notifySound = true
     @AppStorage("dockBadge") private var dockBadge = true
     @State private var textSize = CanvasText.size
-    @State private var copied = false
     @Bindable private var lang = LangState.shared
     private var langBinding: Binding<Language> { Binding(get: { lang.current }, set: { lang.current = $0 }) }
 
@@ -401,19 +400,6 @@ struct GeneralPane: View {
                         Toggle("", isOn: $dockBadge).labelsHidden().toggleStyle(.switch).controlSize(.small)
                             .onChange(of: dockBadge) { _, on in if !on { NSApp.dockTile.badgeLabel = nil } }
                     }
-                }
-                SettingsGroup(title: L("Engine")) {
-                    SettingsRow(L("Status"), model.launcher == nil ? L("Started outside the app") : L("Started by the app")) {
-                        HStack(spacing: 6) { Dot(on: model.store?.connected == true); Text(model.store?.connected == true ? L("live") : L("connecting")) }
-                    }
-                    SettingsRow(L("Address"), model.base.absoluteString) {
-                        SettingsButton(title: copied ? L("Copied") : L("Copy")) {
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.base.absoluteString, forType: .string)
-                            copied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
-                        }
-                    }
-                    SettingsRow(L("Canvases"), L("Open on this engine")) { Text("\(model.store?.canvases.count ?? 0)").foregroundStyle(JB.muted) }
                 }
                 SettingsGroup(title: L("Reset")) {
                     SettingsRow(L("Start over"), L("Canvases, accounts, connections and tools go; the app opens as when first installed")) {
@@ -889,6 +875,11 @@ private struct CLIAccounts: View {
     @State private var savingKey = false
     @State private var draft = ""
     @FocusState private var focus: String?
+    /// CLIs whose own (unnamed) login is hidden from this list: the login itself stays on the computer
+    @AppStorage("hiddenLogins") private var hiddenLogins = ""
+    /// the row under the pointer: its remove button shows
+    @State private var hovered: String?
+    private var loginHidden: Bool { hiddenLogins.split(separator: ",").contains(Substring(backend.name)) }
 
     private var installed: Bool { backend.installed == true }
     private var list: [AccountsModel.Account] { m.accounts.filter { $0.backend == backend.name }.sorted { ($0.dir == nil ? 0 : 1, $0.name) < ($1.dir == nil ? 0 : 1, $1.name) } }
@@ -904,10 +895,16 @@ private struct CLIAccounts: View {
             if installed {
                 VStack(spacing: 0) {
                     // the CLI's own login, before anyone named it: listed as the account it is, once signed in
-                    if !list.contains(where: { $0.dir == nil }), let st = m.machine[backend.name], st.loggedIn == true {
+                    if !list.contains(where: { $0.dir == nil }), !loginHidden, let st = m.machine[backend.name], st.loggedIn == true {
                         let name = st.email ?? backend.label
                         row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"], loggingIn: false,
-                            signIn: { Task { await m.signIn(backend) } }, menu: nil)
+                            signIn: { Task { await m.signIn(backend) } },
+                            remove: hideLogin,
+                            menu: AnyView(Menu {
+                                Button(L("Hide"), role: .destructive, action: hideLogin)
+                            } label: {
+                                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.muted).frame(width: 24, height: 24)
+                            }.menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()))
                         divider
                     }
                     ForEach(list) { a in
@@ -919,6 +916,7 @@ private struct CLIAccounts: View {
                             status: st, usage: m.usage(of: a), loggingIn: m.login?.account == a.id,
                             signIn: { Task { await m.signIn(account: a.id, backend: backend.name, privately: own) } },
                             key: own ? { keyFor = a.id; keyDraft = ""; focus = "key" } : nil,
+                            remove: { remove(a) },
                             menu: AnyView(menu(a)))
                         if keyFor == a.id { keyRow(a) }
                         divider
@@ -940,6 +938,10 @@ private struct CLIAccounts: View {
         .onChange(of: startAdding) { _, now in if now { beginAdd() } }
     }
 
+    private func hideLogin() {
+        hiddenLogins = (hiddenLogins.split(separator: ",").map(String.init) + [backend.name]).joined(separator: ",")
+    }
+
     private var divider: some View { Rectangle().fill(JB.line).frame(height: 1).padding(.leading, 50) }
 
     private func initialAvatar(_ name: String) -> some View {
@@ -951,7 +953,7 @@ private struct CLIAccounts: View {
 
     /// avatar, name (double-click to rename), who is signed in; the one action needed; the rest under ⋯
     private func row(avatar: AnyView, name: String, id: String? = nil, status: AccountsModel.Status?, usage: Usage? = nil, loggingIn: Bool,
-                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, menu: AnyView?) -> some View {
+                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, remove: (() -> Void)? = nil, menu: AnyView?) -> some View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
@@ -984,9 +986,17 @@ private struct CLIAccounts: View {
                 }
                 .buttonStyle(Press()).disabled(m.login != nil)
             }
+            // one click on the row's own ✕ (it shows under the pointer); right click offers it too
+            if let remove, hovered == name, loggingIn == false {
+                Button(action: remove) { Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(JB.muted).frame(width: 24, height: 24) }
+                    .buttonStyle(Press()).help(L("Remove")).transition(.scale.combined(with: .opacity))
+            }
             if let menu { menu }
         }
         .padding(.horizontal, 12).frame(height: 52)
+        .contentShape(Rectangle())
+        .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { if inside { hovered = name } else if hovered == name { hovered = nil } } }
+        .contextMenu { if let remove { Button(L("Remove"), role: .destructive, action: remove) } }
     }
 
     /// the API key, pasted once; Enter checks it with Google and keeps it in the keychain
@@ -1077,6 +1087,7 @@ private struct CLIAccounts: View {
         let n = newName.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return }
         adding = false
+        hiddenLogins = hiddenLogins.split(separator: ",").map(String.init).filter { $0 != backend.name }.joined(separator: ",")
         Task { await m.add(backend: backend.name, name: n) }
     }
     private func commitRename(_ id: String) {

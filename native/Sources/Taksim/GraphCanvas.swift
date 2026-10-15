@@ -126,6 +126,7 @@ private struct GraphRepresentable: NSViewRepresentable {
             a.toggleCollapsed = { [weak self] id in
                 guard let self, let ag = self.store.agents[id] else { return }
                 self.store.setCollapsed(id, !ag.isCollapsed)
+                self.view?.layoutTerminals() // its chat or terminal hides with the fold, and comes back with the unfold
                 self.view?.needsDisplay = true
             }
             a.openGroupNote = { [weak self] gid, rect in self?.openGroupNote(gid, at: rect) }

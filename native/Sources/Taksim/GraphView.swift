@@ -48,6 +48,7 @@ final class GraphView: NSView {
     var hoverId: String?
     var hoverIDE: String?
     var hoverHelpers: String?
+    var hoverFold: String?
     var hoverToolHelp: String?
     var hoverTerm: String?
     /// a title button just pressed: it dips for a moment so the press is felt (agent id, which button, when)
@@ -119,7 +120,7 @@ final class GraphView: NSView {
         h.combine(showGrid)
         h.combine(Theme.current)
         for a in agents {
-            h.combine(a.id); h.combine(a.name); h.combine(a.pos); h.combine(a.size); h.combine(a.cardSize)
+            h.combine(a.id); h.combine(a.name); h.combine(a.pos); h.combine(a.size); h.combine(a.cardSize); h.combine(a.collapsed)
             h.combine(a.status); h.combine(a.queued); h.combine(a.waitingOn); h.combine(a.workingWith); h.combine(a.blockedBy); h.combine(a.terminal); h.combine(a.backend)
             h.combine(a.folder?.name); h.combine(a.folder?.branch); h.combine(a.accountName); h.combine(a.model); h.combine(a.delegate); h.combine(a.toolHelp); h.combine(a.effort)
             h.combine(a.jobRole); h.combine(a.sandbox); h.combine(a.chatMode) // what its badge says
@@ -205,15 +206,23 @@ final class GraphView: NSView {
     func hasIDE(_ a: Agent) -> Bool { a.folder?.branch != nil }
     func inIDEButton(_ a: Agent, _ p: CGPoint) -> Bool {
         guard hasIDE(a) else { return false }
-        let r = rectOf(a), bx = r.maxX - Self.btn * 2 - 4 - 6
+        let r = rectOf(a), bx = slotX(a, a.hasFolder ? 1 : 0)
         return p.x >= bx && p.x <= bx + Self.btn && p.y >= r.minY && p.y <= r.minY + Self.th
     }
 
     /// the helpers switch, left of the IDE button (or of the terminal one): on, the agent hands routine work to
     /// helper agents on the cheapest model that fits
-    func helpersX(_ a: Agent) -> CGFloat { rectOf(a).maxX - 6 - Self.btn - (hasIDE(a) ? Self.btn + 4 : 0) - Self.btn - 4 }
+    /// the title's buttons from the right: terminal (only with a folder), IDE (only in a git repo), helpers, fold
+    func slotX(_ a: Agent, _ i: Int) -> CGFloat { rectOf(a).maxX - 6 - Self.btn - CGFloat(i) * (Self.btn + 4) }
+    func helpersX(_ a: Agent) -> CGFloat { slotX(a, (a.hasFolder ? 1 : 0) + (hasIDE(a) ? 1 : 0)) }
     /// the tool help switch, left of the helpers one: on, the agent reuses saved and market tools and saves its own
-    func toolHelpX(_ a: Agent) -> CGFloat { helpersX(a) - Self.btn - 4 }
+    /// the fold button, left of the helpers switch: the node folds to its title bar, or opens again
+    func foldX(_ a: Agent) -> CGFloat { helpersX(a) - Self.btn - 4 }
+    func toolHelpX(_ a: Agent) -> CGFloat { foldX(a) - Self.btn - 4 }
+    func inFoldButton(_ a: Agent, _ p: CGPoint) -> Bool {
+        let r = rectOf(a), bx = foldX(a)
+        return p.x >= bx && p.x <= bx + Self.btn && p.y >= r.minY && p.y <= r.minY + Self.th
+    }
     /// The title keeps three squares: the terminal, the IDE, and the one switch that changes what the node is
     /// (it creates agents: lit when on, like any switch here). Tool help is in the node's menu (right click).
     static let titleSwitches = false
@@ -241,6 +250,7 @@ final class GraphView: NSView {
     }
 
     func inTitleButton(_ a: Agent, _ p: CGPoint) -> Bool {
+        guard a.hasFolder else { return false } // a plain terminal needs a folder to be in
         let r = rectOf(a), bx = r.maxX - Self.btn - 8
         return p.x >= bx && p.x <= bx + Self.btn + 4 && p.y >= r.minY && p.y <= r.minY + Self.th
     }
@@ -381,6 +391,7 @@ final class GraphView: NSView {
         if let a = agentAt(p) {
             if inTitleButton(a, p) { press(a.id, "term"); actions.toggleTerminal(a.id); return }
             if inIDEButton(a, p) { press(a.id, "ide"); actions.openIDE(a.id); return }
+            if inFoldButton(a, p) { press(a.id, "fold"); actions.toggleCollapsed(a.id); return }
             if inHelpersButton(a, p) { press(a.id, "helpers"); actions.toggleHelpers(a.id); return }
             if inToolHelpButton(a, p) { press(a.id, "tools"); actions.toggleToolHelp(a.id); return }
             if let c = cornerAt(a, p) {
@@ -524,16 +535,7 @@ final class GraphView: NSView {
                 actions.renameAgent(a.id, screenRect(CGRect(x: r.minX + 30, y: r.minY + 3, width: max(120, nameEnd(a) - 26), height: Self.th - 6)))
                 return
             }
-            // its title bar folds the node to that bar, or opens it again
-            if p.y < r.minY + Self.th {
-                actions.toggleCollapsed(a.id)
-                return
-            }
-            if !a.isTerminalOpen {
-                actions.toggleTerminal(a.id)
-                // working: the terminal opens when the turn ends; the node shows at once that it heard
-                if a.status == "running" { flashes[a.id] = CACurrentMediaTime(); kick() }
-            }
+            if p.y < r.minY + Self.th { return }
             return
         }
         if let g = groupTitleAt(p) {
@@ -637,7 +639,7 @@ final class GraphView: NSView {
         if let hit = superview.flatMap({ hitTest(convert(sp, to: $0)) }), hit !== self { return nil }
         let p = toGraph(sp)
         if let a = agentAt(p) {
-            if inTitleButton(a, p) || inIDEButton(a, p) || inHelpersButton(a, p) || inToolHelpButton(a, p) { return .pointingHand }
+            if inTitleButton(a, p) || inIDEButton(a, p) || inFoldButton(a, p) || inHelpersButton(a, p) || inToolHelpButton(a, p) { return .pointingHand }
             if let c = cornerAt(a, p) { return c == .se || c == .nw ? .frameResize(position: .bottomRight, directions: .all) : .frameResize(position: .bottomLeft, directions: .all) }
             return .arrow
         }
@@ -663,8 +665,8 @@ final class GraphView: NSView {
         guard let c = cursor(at: sp, flags: e.modifierFlags) else {
             // a terminal or a panel is under the pointer: it sets its own cursor
             shownCursor = nil
-            if hoverId != nil || hoverIDE != nil || hoverTerm != nil || hoverHelpers != nil {
-                hoverId = nil; hoverIDE = nil; hoverTerm = nil; hoverHelpers = nil; needsDisplay = true
+            if hoverId != nil || hoverIDE != nil || hoverTerm != nil || hoverHelpers != nil || hoverFold != nil {
+                hoverId = nil; hoverIDE = nil; hoverTerm = nil; hoverHelpers = nil; hoverFold = nil; needsDisplay = true
             }
             return
         }
@@ -679,6 +681,11 @@ final class GraphView: NSView {
             if let t = term { toolTip = store?.agents[t]?.isTerminalOpen == true ? L("Close terminal") : L("Open terminal") }
             else if ide != nil { toolTip = "IDE" }
             else { toolTip = nil }
+        }
+        let fold = a.flatMap { inFoldButton($0, p) ? $0.id : nil }
+        if fold != hoverFold {
+            hoverFold = fold; needsDisplay = true
+            toolTip = fold.map { store?.agents[$0]?.isCollapsed == true ? L("Open") : L("Fold") } ?? nil
         }
         let helpers = a.flatMap { inHelpersButton($0, p) ? $0.id : nil }
         if helpers != hoverHelpers {
@@ -698,8 +705,8 @@ final class GraphView: NSView {
     }
 
     override func mouseExited(with e: NSEvent) {
-        if hoverId != nil || hoverTerm != nil || hoverIDE != nil || hoverHelpers != nil {
-            hoverId = nil; hoverTerm = nil; hoverIDE = nil; hoverHelpers = nil; needsDisplay = true
+        if hoverId != nil || hoverTerm != nil || hoverIDE != nil || hoverHelpers != nil || hoverFold != nil {
+            hoverId = nil; hoverTerm = nil; hoverIDE = nil; hoverHelpers = nil; hoverFold = nil; needsDisplay = true
         }
     }
 

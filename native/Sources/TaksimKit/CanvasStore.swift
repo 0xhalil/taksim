@@ -392,13 +392,13 @@ public final class CanvasStore {
 
     public func deleteAgent(_ id: String) { run { try await self.api.delete(self.agentPath(id)) } }
 
-    /// opens the agent's terminal (its CLI's TUI) or closes it back into the card
+    /// opens a plain shell in the agent's folder, in its node, or closes it back into the chat
     /// `opened` runs once a terminal the call opened is in `agents`
     public func toggleTerminal(_ id: String, opened: @escaping () -> Void = {}) {
         guard let a = agents[id] else { return }
         run {
-            if a.isTerminalOpen { try await self.api.delete(self.agentPath(id, "/terminal")); return }
-            let v: Agent = try await self.api.post(self.agentPath(id, "/terminal"), as: Agent.self)
+            if a.isTerminalOpen { try await self.api.delete(self.agentPath(id, "/shell")); return }
+            let v: Agent = try await self.api.post(self.agentPath(id, "/shell"), as: Agent.self)
             self.agents[id] = v
             opened()
         }

@@ -27,7 +27,7 @@
 taksim is a native macOS app that runs the agent CLIs you are signed in to — **Claude Code, Codex, Gemini CLI,
 opencode and GitHub Copilot** — as cards on a canvas. You talk to any of them; they ask each other questions, hand
 off work, create helpers and build small live tools, and all of it happens where you can see it. No API keys: every
-agent runs on your own login, on your own machine, and the engine listens on `127.0.0.1` only.
+agent runs on your own login, on your own machine.
 
 ## Install
 

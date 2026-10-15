@@ -245,6 +245,7 @@ extension Tr {
         "e.g. only show errors": "ör. sadece hataları göster",
         "Couldn't read JSON": "JSON okunamadı",
         "Open": "Aç",
+        "Fold": "Küçült",
         "Not needed": "Gerek yok",
         "from the tool \"%@\"": "\"%@\" aracından",
         "%d s": "%d sn",

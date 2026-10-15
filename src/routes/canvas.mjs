@@ -68,7 +68,7 @@ export async function canvasRoutes(req, res, path) {
     canvas.lang = langOf(req);
     return groupRoutes(req, res, canvas, gm[2], gm[3], gm[4]);
   }
-  const m = path.match(/^\/v1\/canvases(?:\/([\w-]+))?(?:\/(events|agents))?(?:\/([\w-]+))?(?:\/(messages|queue|fork|activity|tasks|workflow|job|stop|transcript|terminal|deliver|restore|review|diff|checkpoint|attachments))?$/);
+  const m = path.match(/^\/v1\/canvases(?:\/([\w-]+))?(?:\/(events|agents))?(?:\/([\w-]+))?(?:\/(messages|queue|fork|activity|tasks|workflow|job|stop|transcript|terminal|shell|deliver|restore|review|diff|checkpoint|attachments))?$/);
   if (!m) return false;
   const [, canvasId, section, agentId, action] = m;
   const method = req.method;
@@ -214,6 +214,12 @@ export async function canvasRoutes(req, res, path) {
   if (action === "terminal") {
     if (method === "POST") { await agent.openTerminal(); return sendJson(res, 200, agent.view()); }
     if (method === "DELETE") { agent.closeTerminal(); return sendJson(res, 200, { ok: true }); }
+    throw httpError(405, "method not allowed");
+  }
+
+  if (action === "shell") {
+    if (method === "POST") { agent.openShell(); return sendJson(res, 200, agent.view()); }
+    if (method === "DELETE") { agent.closeShell(); return sendJson(res, 200, { ok: true }); }
     throw httpError(405, "method not allowed");
   }
 

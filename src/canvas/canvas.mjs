@@ -225,6 +225,7 @@ export class Canvas {
     agent.ide?.close();
     agent.stop();
     agent.closeTerminal();
+    agent.closeShell();
     agent.rejectQueued(`${agent.name} was removed`);
     this.agents.delete(agent.id);
     this.links = this.links.filter((l) => l.from !== agent.id && l.to !== agent.id);
@@ -497,7 +498,7 @@ export class Canvas {
   }
 
   close() {
-    for (const a of this.agents.values()) { a.panel?.close(); a.ide?.close(); a.stop(); a.closeTerminal(); a.rejectQueued("canvas closed"); }
+    for (const a of this.agents.values()) { a.panel?.close(); a.ide?.close(); a.stop(); a.closeTerminal(); a.closeShell(); a.rejectQueued("canvas closed"); }
     this.panelSubs.clear();
     this.flush();
     this.bus.close();

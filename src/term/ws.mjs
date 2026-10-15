@@ -16,7 +16,9 @@ export function handleUpgrade(req, socket, head) {
   const path = new URL(req.url, "http://x").pathname;
   // /term/ide/<canvas>/<agent>/<session>: a terminal, run, debug or exec session of an agent's IDE
   const ide = path.match(/^\/term\/ide\/([\w-]+)\/([\w-]+)\/([\w-]+)$/);
-  const m = ide ? [null, "ide", null] : path.match(/^\/term\/([\w-]+)\/([\w-]+)$/);
+  // /term/shell/<canvas>/<agent>: the plain shell of an agent's node
+  const shell = path.match(/^\/term\/shell\/([\w-]+)\/([\w-]+)$/);
+  const m = ide ? [null, "ide", null] : shell ? [null, "shell", null] : path.match(/^\/term\/([\w-]+)\/([\w-]+)$/);
   if (!m) return reject(socket, 404, "Not Found");
   if (cfg.allowRemote) return reject(socket, 403, "Forbidden");
   const hosts = ["127.0.0.1", "localhost", "[::1]"].map((h) => `${h}:${cfg.port}`);
@@ -24,7 +26,7 @@ export function handleUpgrade(req, socket, head) {
     return reject(socket, 403, "Forbidden");
   }
   // /term/account/<id>: an account's login flow; /term/<canvas>/<agent>: an agent's TUI
-  const terminal = ide ? getCanvas(ide[1])?.agents.get(ide[2])?.ide?.sessions.list.get(ide[3])?.term
+  const terminal = shell ? getCanvas(shell[1])?.agents.get(shell[2])?.shell : ide ? getCanvas(ide[1])?.agents.get(ide[2])?.ide?.sessions.list.get(ide[3])?.term
     : m[1] === "account" ? loginTerminal(m[2]) : getCanvas(m[1])?.agents.get(m[2])?.terminal;
   if (!terminal) return reject(socket, 409, "Conflict");
   wss.handleUpgrade(req, socket, head, (ws) => terminal.attach(ws));

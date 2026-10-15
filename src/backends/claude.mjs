@@ -1,6 +1,7 @@
 // Claude Code: `claude -p --output-format stream-json`.
 
 import { baseUrl, CHAT_DIR, splitCmd } from "../config.mjs";
+import { recordClaudeModel } from "./claude-names.mjs";
 
 // every tool of the taksim MCP server (a server-level rule, so new tools are covered too)
 const TOOLS = ["mcp__taksim"];
@@ -90,6 +91,7 @@ export default {
 
   parse(ev, st, onText) {
     if (ev.session_id) st.session = ev.session_id;
+    if (ev.type === "system" && ev.subtype === "init") recordClaudeModel(ev.model);
     if (ev.type === "rate_limit_event") st.limits = ev.rate_limit_info; // the plan's windows (src/usage.mjs)
     // how full the context is: what the latest request sent, measured by the API (sub-agents have their own)
     if (ev.type === "assistant" && !ev.parent_tool_use_id && ev.message?.usage) {
@@ -107,6 +109,7 @@ export default {
         input: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
         output: u.output_tokens || 0,
       };
+      for (const id of Object.keys(ev.modelUsage || {})) recordClaudeModel(id);
       const windows = Object.values(ev.modelUsage || {}).map((m) => m.contextWindow).filter((n) => n > 0);
       if (windows.length && st.context?.used) st.context.window = Math.max(...windows);
     }

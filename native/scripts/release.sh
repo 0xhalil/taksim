@@ -146,7 +146,9 @@ case "$NOTES" in *'[zh]'*) HIGHLIGHTS_ZH=$(printf '%s\n' "$NOTES" | sed '1,/^\[z
 } > "$BODY"
 if [ -z "$PUBLISH" ]; then echo; cat "$BODY"; echo; echo "built; add --publish to release it on $REPO"; exit 0; fi
 
-gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256" --repo "$REPO" --title "taksim $VERSION" --notes-file "$BODY"
+# the website's Download button points at releases/latest/download/Taksim.dmg: the same image under that exact name
+cp "$DMG" "$OUT/Taksim.dmg"
+gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256" "$OUT/Taksim.dmg" --repo "$REPO" --title "taksim $VERSION" --notes-file "$BODY"
 echo "published v$VERSION on $REPO"
 
 # Homebrew: the cask in the tap (TAKSIM_TAP, default 0xhalil/homebrew-taksim) points at this release
