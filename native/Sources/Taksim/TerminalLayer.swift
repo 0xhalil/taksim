@@ -338,6 +338,13 @@ final class AgentTranscript {
     let store: CanvasStore
     /// the plan docked beside the node, while it is open
     var plan: PlanBox?
+    var planCorner: PlanCorner?
+    /// the size the person gave the plan (kept for the next one), and while its corner is dragged
+    var planSize: CGSize? = {
+        let v = UserDefaults.standard.array(forKey: "taksim.planSize") as? [Double]
+        return v?.count == 2 ? CGSize(width: v![0], height: v![1]) : nil
+    }()
+    var planLive: CGSize?
 
     init(api: APIClient, store: CanvasStore, canvas: String, agent: String) {
         self.canvas = canvas
@@ -423,6 +430,7 @@ extension GraphView {
     /// the plan's dock beside a node, while it is open
     func planSize(_ a: Agent) -> CGSize? {
         guard let t = transcripts[a.id], t.model.planShown, t.model.plan != nil else { return nil }
+        if let s = t.planLive ?? t.planSize { return s }
         return CGSize(width: 440, height: max(420, size(a).height + Self.th))
     }
 
@@ -487,6 +495,20 @@ extension GraphView {
                 let dock = t.plan ?? {
                     let d = PlanBox(PlanDocument(model: t.model, store: store))
                     addSubview(d); t.plan = d
+                    let c = PlanCorner()
+                    c.current = { [weak self, weak t] in t?.planLive ?? t?.planSize ?? self?.planSize(a) ?? .zero }
+                    c.scale = { [weak self] in self?.scale ?? 1 }
+                    c.onResize = { [weak self, weak t] size, done in
+                        guard let t else { return }
+                        t.planLive = done ? nil : size
+                        if done {
+                            t.planSize = size
+                            UserDefaults.standard.set([Double(size.width.rounded()), Double(size.height.rounded())], forKey: "taksim.planSize")
+                        }
+                        self?.relayoutDocks()
+                        self?.layoutTranscripts(t.canvas)
+                    }
+                    d.addSubview(c); t.planCorner = c
                     return d
                 }()
                 let r = rectOf(a)
@@ -494,7 +516,9 @@ extension GraphView {
                 let size = planSize(a) ?? .zero
                 dock.isHidden = !terminalsShown || scale < Self.panelMinScale || a.isCollapsed
                 dock.place(screen: CGRect(x: (x + offset.x) * scale, y: (r.minY + offset.y) * scale, width: size.width * scale, height: size.height * scale), graphSize: size)
-            } else if let dock = t.plan { dock.removeFromSuperview(); t.plan = nil }
+                t.planCorner?.frame = CGRect(x: dock.bounds.width - 16, y: 0, width: 16, height: 16)
+                t.planCorner?.isHidden = dock.isHidden
+            } else if let dock = t.plan { dock.removeFromSuperview(); t.plan = nil; t.planCorner = nil }
         }
         for (id, t) in transcripts where !keep.contains(id) {
             if t.canvas == canvas { t.close(); transcripts[id] = nil } else { t.box.isHidden = true; t.plan?.isHidden = true }

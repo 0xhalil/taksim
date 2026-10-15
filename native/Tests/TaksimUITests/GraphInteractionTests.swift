@@ -14,6 +14,26 @@ final class GraphInteractionTests: XCTestCase {
         return view
     }
 
+    /// A folded node's width, its title and its size must not ask each other in a circle (the 2026-10-14 crash
+    /// reports, a dev build: shortTitle > nameEnd > collapsedWidth > size, until the stack ran out), and a node or
+    /// group saved with too few numbers in its geometry must draw, not trap.
+    @MainActor func testFoldedNodesSizeWithoutRecursingAndBadGeometryDoesNotTrap() throws {
+        let json = ##"{"id":"test","name":"Studio","agents":[{"id":"a","name":"A very long agent name that cannot fit in a folded node at all","backend":"claude","pos":[60,100],"collapsed":true},{"id":"b","name":"Short","backend":"codex","pos":[1],"cardSize":[220],"collapsed":true},{"id":"c","name":"","backend":"codex","pos":[],"size":[]}],"groups":[{"id":"g","name":"Short rect","rect":[1,2],"color":"#548af7"}]}"##
+        let store = CanvasStore(api: APIClient(base: URL(string: "http://127.0.0.1:1")!))
+        store.load(try JSONDecoder().decode(Canvas.self, from: Data(json.utf8)))
+        let view = GraphView(frame: CGRect(x: 0, y: 0, width: 900, height: 500))
+        view.store = store
+        for id in ["a", "b", "c"] {
+            let a = try XCTUnwrap(store.agents[id])
+            let w = view.size(a).width
+            XCTAssertTrue(w.isFinite && w > 0, "\(id) width \(w)")
+            XCTAssertLessThanOrEqual(w, view.expandedSize(a).width)
+            XCTAssertFalse(view.shortTitle(a).isEmpty && !a.name.isEmpty)
+            _ = view.rectOf(a); _ = view.pos(a)
+        }
+        XCTAssertEqual(view.groupRect(view.groups[0]), .zero)
+    }
+
     @MainActor func testReleaseOutsideKeepsPositionEvenWhenCardOverlapsGroup() throws {
         for zoom in [CGFloat(0.5), 1, 2] {
             let view = try graph()
