@@ -47,8 +47,8 @@ Story text goes through `t()`; add its translation to the `ZH` table. The app's 
 ## Links
 
 - GitHub: `https://github.com/0xhalil/taksim`
-- Download for Mac: `https://github.com/0xhalil/taksim/releases/latest/download/Taksim.dmg`,
-  which always resolves to the newest release, so every release must attach a file named `Taksim.dmg`.
+- Download for Mac: `/download/`, the page with the Download button (the newest disk image, read from GitHub's API),
+  the Homebrew command and the GitHub links. The home page's button goes there.
 
 Both start working once the repository and its first release exist.
 
