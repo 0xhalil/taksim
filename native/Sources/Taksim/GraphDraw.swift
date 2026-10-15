@@ -117,7 +117,7 @@ extension GraphView {
         return lo > 0 ? String(chars[0..<lo]).trimmingCharacters(in: .whitespaces) + "…" : ""
     }
 
-    func shortTitle(_ a: Agent) -> String { fitText(a.name, ctitle(), (a.isCollapsed ? expandedSize(a) : size(a)).width - Self.th - Self.btn * (hasIDE(a) ? 4 : 3) - 50) }
+    func shortTitle(_ a: Agent) -> String { fitText(a.name, ctitle(), (a.isCollapsed ? expandedSize(a) : size(a)).width - Self.th - Self.btn * (3 + (a.hasFolder ? 1 : 0) + (hasIDE(a) ? 1 : 0)) - 50) }
 
     /// lines of text within a width: the head of finished answers, cut with an ellipsis (graph.mjs wrap)
     /// a card's text in lines; measured once per text, width and font (cards redraw far more often than they change)
@@ -364,7 +364,7 @@ extension GraphView {
         var whyW: CGFloat = 0
         if let why = workingOn(a) {
             let nameW = textSize(title, ctitle()).width, f = cfont(11.5)
-            let room = w - th - nameW - Self.btn * ((hasIDE(a) ? 3 : 2) + (Self.titleSwitches ? 1 : 0)) - 64
+            let room = w - th - nameW - Self.btn * (2 + (a.hasFolder ? 1 : 0) + (hasIDE(a) ? 1 : 0) + (Self.titleSwitches ? 1 : 0)) - 64
             let s = fitText(why, f, room)
             if room > 40, !s.isEmpty {
                 drawText(s, f, Pal.muted, x: th + nameW + 8, y: midBaseline(f, -th / 2), middle: false)
@@ -383,26 +383,31 @@ extension GraphView {
 
         // the terminal button
         let bx = w - Self.btn - 6, by = -th + (th - 18) / 2
-        titleButton(ctx, x: bx, y: by, fill: a.isTerminalOpen ? NSColor(white: 0, alpha: 0x55 / 255) : Pal.tint, hover: hoverTerm == a.id,
+        if a.hasFolder { titleButton(ctx, x: bx, y: by, fill: a.isTerminalOpen ? NSColor(white: 0, alpha: 0x55 / 255) : Pal.tint, hover: hoverTerm == a.id,
                     depth: pressDepth(a.id, "term")) { r in
             AppIcon.draw(a.isTerminalOpen ? AppIcon.minimize : AppIcon.terminal, in: ctx, rect: r.insetBy(dx: (r.width - 15) / 2, dy: (r.height - 15) / 2), color: Pal.ink)
-        }
+        } }
         // the IDE button, on agents that work in a git repo (like the web's)
-        let lead = hasIDE(a) ? bx - Self.btn - 4 : bx
+        let lead = a.hasFolder ? bx - Self.btn - 4 : bx
         if hasIDE(a) {
             titleButton(ctx, x: lead, y: by, fill: Pal.tint.withAlphaComponent(0.06), hover: hoverIDE == a.id, depth: pressDepth(a.id, "ide")) { r in
                 AppIcon.draw(AppIcon.code, in: ctx, rect: r.insetBy(dx: (r.width - 14) / 2, dy: (r.height - 14) / 2), color: Pal.ink)
             }
         }
         // the switch that makes it an orchestrator: lit while it may create agents for parts of its work
-        let hx = lead - Self.btn - 4, helping = a.delegate == true
+        let hx = hasIDE(a) ? lead - Self.btn - 4 : lead, helping = a.delegate == true
         titleButton(ctx, x: hx, y: by, fill: helping ? Pal.accent.withAlphaComponent(0.22) : Pal.tint.withAlphaComponent(0.06),
                     hover: hoverHelpers == a.id, depth: pressDepth(a.id, "helpers")) { r in
             AppIcon.draw(helping ? AppIcon.helpersOn : AppIcon.helpers, in: ctx, rect: r.insetBy(dx: (r.width - 15) / 2, dy: (r.height - 15) / 2),
                          color: helping ? Pal.accent : Pal.ink)
         }
+        // the fold button: one tap folds the node to this bar, or opens it again
+        let fx = hx - Self.btn - 4
+        titleButton(ctx, x: fx, y: by, fill: Pal.tint.withAlphaComponent(0.06), hover: hoverFold == a.id, depth: pressDepth(a.id, "fold")) { r in
+            AppIcon.draw(a.isCollapsed ? AppIcon.down : AppIcon.minimize, in: ctx, rect: r.insetBy(dx: (r.width - 14) / 2, dy: (r.height - 14) / 2), color: Pal.ink)
+        }
         // tool help is in the node's menu unless the title shows it
-        let tx = Self.titleSwitches ? hx - Self.btn - 4 : hx, tools = a.toolsOn
+        let tx = Self.titleSwitches ? fx - Self.btn - 4 : fx, tools = a.toolsOn
         if Self.titleSwitches {
             ctx.setFillColor((tools ? Pal.accent.withAlphaComponent(0.22) : hoverToolHelp == a.id ? Pal.tint : Pal.tint.withAlphaComponent(0.06)).cgColor)
             ctx.addPath(CGPath(roundedRect: CGRect(x: tx, y: by, width: Self.btn, height: 18), cornerWidth: 5, cornerHeight: 5, transform: nil)); ctx.fillPath()
@@ -415,7 +420,7 @@ extension GraphView {
             ctx.saveGState()
             ctx.setAlpha(status == "running" ? 0.55 + 0.45 * pulseAlpha : 1)
             ctx.setFillColor(c.cgColor)
-            ctx.fillEllipse(in: CGRect(x: hx - 15, y: -th / 2 - 4, width: 8, height: 8))
+            ctx.fillEllipse(in: CGRect(x: fx - 15, y: -th / 2 - 4, width: 8, height: 8))
             ctx.restoreGState()
         }
         if let q = a.queued, q > 0 {

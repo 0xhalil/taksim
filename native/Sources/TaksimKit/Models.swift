@@ -71,6 +71,8 @@ public struct Agent: Codable, Identifiable, Equatable, Sendable {
     public var lastError: String?
     public var lastText: String?
     public var terminal: Bool?
+    /// a plain shell in its folder shows in the node (the title's terminal button); the CLI's own TUI isn't offered
+    public var shell: Bool?
     public var termReady: Bool?
     public var autoDeliver: Bool?
     public var folder: Folder?
@@ -92,7 +94,8 @@ public struct Agent: Codable, Identifiable, Equatable, Sendable {
         public var branch: String?
     }
 
-    public var isTerminalOpen: Bool { terminal ?? false }
+    public var isTerminalOpen: Bool { shell ?? false }
+    public var hasFolder: Bool { folder != nil }
     public var isCollapsed: Bool { collapsed ?? false }
 }
 

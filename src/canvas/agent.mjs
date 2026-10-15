@@ -102,6 +102,7 @@ export class Agent {
     this.lastError = null;
     this.lastText = readTranscript(canvas.id, this.id, 1)[0]?.text || "";
     this.terminal = null;     // Terminal while the TUI is open
+    this.shell = null;        // a plain shell in the agent's folder, while its node shows one
     this.seedHistory = !!data.seedHistory; // the CLI lost this agent's session: give the next one the recent transcript
     this.seenGroups = null;   // { groupId: version } the agent last saw (terminal sessions keep their launch prompt)
     this.pendingSession = null; // session id given to a fresh TUI; kept only once a turn happens in it
@@ -147,7 +148,7 @@ export class Agent {
       waitingOn: [...this.waitingOn], blockedBy: this.blockedBy || [], workingWith: this.orchestration?.working() || [],
       lastError: this.lastError, lastText: this.lastText.slice(0, 280),
       accountName: this.accountName, usageKey: this.usageKey, folder: this.folder,
-      terminal: !!this.terminal, termReady: this.terminal ? this.isTerminalReady() : null,
+      terminal: !!this.terminal, shell: !!this.shell, termReady: this.terminal ? this.isTerminalReady() : null,
       autoDeliver: !!pickBackend(this.model).backend.hooks, panel: this.panel?.spec ? this.panel.view() : null, ide: this.ide?.view() || null };
   }
 
@@ -285,6 +286,21 @@ export class Agent {
 
   closeTerminal() {
     this.terminal?.kill();
+  }
+
+  // A plain shell in the agent's folder (what the node's terminal button shows): not the CLI's TUI, so nothing
+  // here touches the agent's session or queue.
+  openShell() {
+    if (this.shell) return;
+    if (!this.cwd) throw Object.assign(new Error("the agent has no folder"), { status: 400 });
+    const shell = new Terminal({ file: process.env.SHELL || "/bin/zsh", args: [], env: {}, cwd: this.cwd,
+      onExit: () => { if (this.shell === shell) { this.shell = null; this.canvas.bus.emit("agent_updated", { agent: this.view() }); } } });
+    this.shell = shell;
+    this.canvas.bus.emit("agent_updated", { agent: this.view() });
+  }
+
+  closeShell() {
+    this.shell?.kill();
   }
 
   // the TUI took its model and effort as flags: close it and open it again on the same session

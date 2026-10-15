@@ -190,7 +190,7 @@ extension GraphView {
         for a in agents where a.isTerminalOpen {
             keep.insert(a.id)
             let t = terminals[a.id] ?? {
-                let t = AgentTerminal(base: store.api.base, canvas: canvas, agent: a.id)
+                let t = AgentTerminal(base: store.api.base, path: "/term/shell/\(canvas)/\(a.id)")
                 t.canvas = canvas
                 t.onGone = { [weak self] in self?.store?.refreshAgent(a.id) }
                 addSubview(t.box)
