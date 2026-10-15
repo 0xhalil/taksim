@@ -28,6 +28,8 @@ mkdir -p "$ENGINE/node_modules/node-pty" "$ENGINE/node_modules/monaco-editor"
 cp -R node_modules/node-pty/package.json node_modules/node-pty/lib "$ENGINE/node_modules/node-pty/"
 mkdir -p "$ENGINE/node_modules/node-pty/prebuilds"
 cp -R node_modules/node-pty/prebuilds/darwin-* "$ENGINE/node_modules/node-pty/prebuilds/"
+# node-pty's helper arrives without its exec bit; without it no terminal opens ("posix_spawnp failed")
+chmod 755 "$ENGINE"/node_modules/node-pty/prebuilds/darwin-*/spawn-helper
 [ -d node_modules/node-pty/build ] && cp -R node_modules/node-pty/build "$ENGINE/node_modules/node-pty/"
 cp -R node_modules/monaco-editor/package.json node_modules/monaco-editor/min "$ENGINE/node_modules/monaco-editor/"
 cp "$(command -v node)" "$ENGINE/runtime/node"
@@ -46,6 +48,20 @@ if [ -n "$TAKSIM_SIGN_IDENTITY" ]; then
 else
   # a local try-out: ad-hoc, which only runs on this Mac
   codesign --force --deep --sign - "$APP" >/dev/null
+fi
+
+# A smoke test of what ships: the bundled Node runs (with its JIT) and node-pty opens a terminal under the signed app's
+# own rules. A release that can't open a terminal is not published.
+if [ "$(uname -m)" = arm64 ]; then
+  (cd "$ENGINE" && runtime/node --input-type=module -e '
+    import pty from "node-pty";
+    new Function("return 1")();
+    const p = pty.spawn("/bin/echo", ["ok"], { cols: 80, rows: 24 });
+    let out = ""; p.onData((d) => out += d);
+    p.onExit(() => process.exit(out.includes("ok") ? 0 : 1));
+    setTimeout(() => process.exit(1), 10000);
+  ') || { echo "the packaged engine cannot open a terminal" >&2; exit 1; }
+  echo "smoke test: the bundled node and node-pty work"
 fi
 
 # Apple's notary service looks a file over (minutes) and says Accepted or why not
