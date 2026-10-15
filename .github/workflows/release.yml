@@ -1,5 +1,6 @@
 # Ships a version of the app: push a tag (git tag -a v0.2.0 -m "what changed" && git push origin v0.2.0).
-# Tests run first, then native/scripts/release.sh builds Taksim-<version>.zip, creates the GitHub release that
+# The tagged commit must already have a passing `test` run, then native/scripts/release.sh builds, signs and
+# notarizes Taksim-<version>.zip, creates the GitHub release that
 # installed apps look for (Updater.swift) and updates the Homebrew cask in 0xhalil/homebrew-taksim.
 # Run by hand ("Run workflow") it builds only and leaves the zip as a downloadable artifact, unless "publish" is ticked.
 name: release
@@ -22,6 +23,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release
@@ -30,7 +32,7 @@ concurrency:
 jobs:
   release:
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
         with:
@@ -57,6 +59,7 @@ jobs:
         run: |
           if [ "$EVENT" = push ]; then
             VERSION="${TAG#v}"; PUBLISH=true
+            git fetch --force --tags origin "refs/tags/$TAG:refs/tags/$TAG" # checkout leaves the tag without its message
             NOTES=$(git tag -l --format='%(contents)' "$TAG")
           else
             VERSION="$INPUT_VERSION"; PUBLISH="$INPUT_PUBLISH"; NOTES="$INPUT_NOTES"
@@ -70,11 +73,47 @@ jobs:
             echo "publish=$PUBLISH"
             echo "notes<<TAKSIM_NOTES_END"; echo "$NOTES"; echo "TAKSIM_NOTES_END"
           } >> "$GITHUB_OUTPUT"
-      - name: Engine tests
-        run: npm test
-      - name: Swift tests
-        working-directory: native
-        run: swift test
+      - name: The tests passed on this commit
+        if: steps.v.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          # the `test` workflow runs on every push to main; a tag pushed right behind it waits for it
+          for i in $(seq 1 60); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=20" \
+              --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
+            case " $runs " in *" success "*) echo "tests passed on $SHA"; exit 0 ;; esac
+            case " $runs " in *" pending "*) ;; *"  "*) [ "$i" -gt 6 ] && break ;; *) echo "tests did not pass on $SHA: $runs" >&2; exit 1 ;; esac
+            sleep 30
+          done
+          echo "no passing test run for $SHA" >&2; exit 1
+      - name: Import the Developer ID certificate
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          NOTARY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"; pw=$(uuidgen)
+          security create-keychain -p "$pw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pw" "$keychain"
+          printf '%s' "$CERT_P12" | base64 -D > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pw" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ {print $2; exit}')
+          [ -n "$identity" ] || { echo "no Developer ID Application certificate in the p12" >&2; exit 1; }
+          printf '%s\n' "$NOTARY_P8" > "$RUNNER_TEMP/notary.p8"; chmod 600 "$RUNNER_TEMP/notary.p8"
+          {
+            echo "TAKSIM_SIGN_IDENTITY=$identity"
+            echo "TAKSIM_NOTARY_KEY=$RUNNER_TEMP/notary.p8"
+            echo "TAKSIM_NOTARY_KEY_ID=$NOTARY_KEY_ID"
+            echo "TAKSIM_NOTARY_ISSUER=$NOTARY_ISSUER"
+          } >> "$GITHUB_ENV"
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}

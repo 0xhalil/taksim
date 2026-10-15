@@ -1,6 +1,6 @@
 # taksim: design language
 
-For anyone — person or agent — working on taksim's interface. Read this, then [CLAUDE.md](../CLAUDE.md).
+For anyone — person or agent — working on taksim's interface.
 
 ## 1. Main principle: like Braun and Apple
 

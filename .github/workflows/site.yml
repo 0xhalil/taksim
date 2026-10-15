@@ -1,11 +1,11 @@
-# Publishes the website (site/index.html) to taksim.dev whenever it changes on main.
+# Publishes the website (site/: index.html, download/) to taksim.dev whenever it changes on main.
 # The deploy key can only swap the page in; the server side is a forced command (see site/README.md).
 name: site
 
 on:
   push:
     branches: [main]
-    paths: ["site/index.html", ".github/workflows/site.yml"]
+    paths: ["site/**", ".github/workflows/site.yml"]
   workflow_dispatch:
 
 permissions:
@@ -32,6 +32,8 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" < site/index.html
+            "$DEPLOY_USER@$DEPLOY_HOST" < <(tar -c --exclude=README.md --exclude=scripts --exclude=drafts -C site .)
       - name: Check the live page
         run: curl -fsS --retry 3 --retry-delay 3 https://taksim.dev | grep -q '<title>taksim'
+      - name: Check the download page
+        run: curl -fsS --retry 3 --retry-delay 3 https://taksim.dev/download/ | grep -q '<title>Download taksim'

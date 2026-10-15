@@ -4,6 +4,26 @@
 
 <p align="center">A live canvas for coding agents, on the subscriptions you already have.</p>
 
+<p align="center">
+  <a href="https://github.com/0xhalil/taksim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/0xhalil/taksim?style=flat-square&color=3574F0"></a>
+  <a href="https://github.com/0xhalil/taksim/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/0xhalil/taksim/test.yml?branch=main&style=flat-square&label=tests"></a>
+  <a href="LICENSE"><img alt="License: PolyForm Shield" src="https://img.shields.io/badge/license-PolyForm%20Shield-3574F0?style=flat-square"></a>
+  <img alt="macOS 15+ on Apple silicon" src="https://img.shields.io/badge/macOS-15%2B%20%C2%B7%20Apple%20silicon-1E1F22?style=flat-square&logo=apple&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="https://taksim.dev">Website</a> ·
+  <a href="https://taksim.dev/download/">Download</a> ·
+  <a href="https://github.com/0xhalil/taksim/releases">Releases</a> ·
+  <a href="docs/">Docs</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
+  <a href="SECURITY.md">Security</a>
+</p>
+
+<p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
+
+---
+
 taksim is a native macOS app that runs the agent CLIs you are signed in to — **Claude Code, Codex, Gemini CLI,
 opencode and GitHub Copilot** — as cards on a canvas. You talk to any of them; they ask each other questions, hand
 off work, create helpers and build small live tools, and all of it happens where you can see it. No API keys: every
@@ -11,20 +31,35 @@ agent runs on your own login, on your own machine.
 
 ## Install
 
-```bash
-brew install --cask 0xhalil/taksim/taksim
-```
+| | |
+|---|---|
+| **Homebrew** | `brew install --cask 0xhalil/taksim/taksim` |
+| **Disk image** | `Taksim-<version>-arm64.dmg` from [Releases](https://github.com/0xhalil/taksim/releases/latest), drag to Applications |
+| **ZIP** | `Taksim-<version>.zip` from the same page |
 
-Or download the latest `Taksim-<version>.zip` from [Releases](https://github.com/0xhalil/taksim/releases),
-unzip it and move `Taksim.app` to Applications. Releases are not notarized yet: the first time, right-click the app
-and choose **Open**. The app updates itself from then on.
+Releases are signed with a Developer ID and notarized by Apple, so the app opens like any other. It updates itself from
+then on. Each file has a `.sha256` beside it.
 
-You need macOS 15 or later on Apple silicon, and at least one agent CLI installed and signed in
-([Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://github.com/openai/codex),
-[Gemini CLI](https://github.com/google-gemini/gemini-cli), [opencode](https://opencode.ai),
-[GitHub Copilot CLI](https://github.com/github/copilot-cli)). The welcome screen signs them in for you.
+You need **macOS 15 or later on Apple silicon** and at least one agent CLI (see [Supported CLIs](#supported-clis)).
 
-## What you get
+## Quick start
+
+1. **Open taksim.** The welcome screen signs your agent CLIs in for you.
+2. **Add an agent** (`+ Agent`) and talk to it in its card.
+3. **Turn on Create agents.** Give it a bigger job and it builds a team: the agents it creates appear next to it with
+   an arrow, and messages between agents run along dashed lines.
+4. **Open a card's terminal** whenever you want the real CLI: same session, slash commands and all.
+
+## Supported CLIs
+
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) · [Codex](https://github.com/openai/codex) ·
+[Gemini CLI](https://github.com/google-gemini/gemini-cli) · [opencode](https://opencode.ai) ·
+[GitHub Copilot CLI](https://github.com/github/copilot-cli)
+
+You use each one on your own login. Which of a provider's own features taksim covers, and what is still open, is
+tracked in [docs/provider-support.md](docs/provider-support.md).
+
+## Features
 
 - **The canvas.** Every agent is a card: its CLI's mark, its name, what it is doing. Drag, resize from any corner,
   double-click a title bar to fold a card to its bar. Agents an agent creates appear next to it with an arrow; messages
@@ -47,6 +82,33 @@ You need macOS 15 or later on Apple silicon, and at least one agent CLI installe
 - **Accounts.** Several logins of the same CLI side by side (work and personal), each with its own config folder, and
   the plan usage of every login in the header.
 
+
+## How it works
+
+```
+ taksim.app  ──  native macOS UI (Swift, SwiftUI, AppKit)
+     │  HTTP + SSE + WebSocket, 127.0.0.1 only
+     ▼
+   engine    ──  Node server: canvases, agents, panels, IDE, browser, accounts, MCP tools
+     │  spawns and talks to
+     ▼
+ claude · codex · gemini · opencode · copilot     (your own logins, on your own machine)
+```
+
+The app is the only interface; the engine is its server and also exposes your subscriptions as an OpenAI- and
+Anthropic-compatible API (see below). Agents reach each other and the canvas through taksim's MCP server.
+
+## Documentation
+
+| | |
+|---|---|
+| [Chat in the card](docs/chat.md) | modes, queue, checkpoints, per-turn diff and undo |
+| [Panels](docs/panels.md) | agents building their own tools from bricks |
+| [Provider support](docs/provider-support.md) | what each CLI can do and how much of it taksim covers |
+| [Design language](docs/design-language.md) | how the interface should look and behave |
+| [Releasing](docs/releasing.md) | how a version is signed, notarized and published |
+| [Does orchestration pay off?](eval/README.md) | measuring "create agents" against a single agent |
+
 ## Build from source
 
 ```bash
@@ -68,6 +130,9 @@ running on port 8787. Xcode command line tools with Swift 6 are needed for the a
 | `TAKSIM_FAKE=1 npm start` | an engine with deterministic test agents |
 
 ## The engine and its API
+
+<details>
+<summary>Endpoints, headers and environment variables</summary>
 
 The engine is a Node server; the app is its only interface. It also exposes your subscriptions as an
 OpenAI- and Anthropic-compatible API, where the model name picks the CLI:
@@ -96,6 +161,8 @@ tune it. `bypassPermissions` and `danger-full-access` are refused unless `TAKSIM
 | `TAKSIM_HOME` | `~/.taksim` (canvases, accounts, the browser profile) |
 | `TAKSIM_TIMEOUT_MS` | 30 minutes |
 | `TAKSIM_<CLI>_CONCURRENCY`, `TAKSIM_<CLI>_MODEL`, `TAKSIM_<CLI>_BIN` | per CLI |
+
+</details>
 
 ## Security
 

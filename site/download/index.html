@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Download taksim</title>
+<meta name="description" content="Download taksim for macOS: the disk image, Homebrew or GitHub. Signed and notarized, Apple silicon.">
+<meta name="theme-color" content="#1E1F22">
+<meta property="og:title" content="Download taksim">
+<meta property="og:description" content="taksim for macOS. Signed and notarized, Apple silicon.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1000 1000%22 style=%22color:%233574F0%22%3E%3Cmask id=%22m%22%3E%3Cpath d=%22M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z%22 fill=%22%23fff%22/%3E%3Cg fill=%22none%22 stroke=%22%23000%22 stroke-width=%2234%22%3E%3Cg transform=%22rotate%280 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%2890 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28180 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28270 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3C/g%3E%3C/mask%3E%3Crect width=%221000%22 height=%221000%22 fill=%22currentColor%22 mask=%22url%28%23m%29%22/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #1E1F22; --panel: #2B2D30; --panel2: #393B40; --line: #43454A; --ink: #DFE1E5; --text: #BCBEC4;
+  --muted: #868A91; --muted2: #6F737A; --accent: #3574F0; --accent-ink: #FFFFFF; --ok: #5FB865; --grid: #35373B;
+  --tint-lo: rgba(255, 255, 255, .06); --shadow: rgba(0, 0, 0, .35);
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.3, 1.35, .5, 1);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #FFFFFF; --panel: #F7F8FA; --panel2: #EBECF0; --line: #DFE1E5; --ink: #1E1F22; --text: #2B2D30;
+    --muted: #6C707E; --muted2: #A8ADBD; --ok: #208A3C; --grid: #DFE1E5;
+    --tint-lo: rgba(0, 0, 0, .05); --shadow: rgba(30, 31, 34, .14);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #FFFFFF; --panel: #F7F8FA; --panel2: #EBECF0; --line: #DFE1E5; --ink: #1E1F22; --text: #2B2D30;
+  --muted: #6C707E; --muted2: #A8ADBD; --ok: #208A3C; --grid: #DFE1E5;
+  --tint-lo: rgba(0, 0, 0, .05); --shadow: rgba(30, 31, 34, .14);
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.4 var(--ui); -webkit-font-smoothing: antialiased; min-height: 100svh; position: relative; overflow-x: hidden; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+#grid { position: fixed; inset: 0; background-image: radial-gradient(circle, var(--grid) 1.1px, transparent 1.4px); background-size: 40px 40px; -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, transparent 72%); mask-image: radial-gradient(ellipse at 50% 42%, #000 0%, transparent 72%); }
+
+header { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; z-index: 2; }
+.mark { display: flex; align-items: center; gap: 7px; font: 700 16px/1 var(--ui); letter-spacing: -.01em; text-decoration: none; height: 34px; }
+.mark svg { width: 22px; height: 22px; color: var(--accent); display: block; }
+.top { display: flex; align-items: center; gap: 6px; }
+#lang { height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: 500 13px/1 var(--ui); cursor: pointer; }
+#lang:hover, #gh:hover { background: var(--tint-lo); }
+#gh { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: var(--ink); }
+#gh svg { width: 18px; height: 18px; }
+
+main { position: relative; z-index: 1; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 72px 16px 48px; text-align: center; }
+.rise { opacity: 0; transform: translateY(14px); animation: rise .7s var(--spring) forwards; animation-delay: calc(var(--n, 0) * 70ms); }
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+.icon { width: 112px; height: 112px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; box-shadow: 0 18px 40px -14px var(--shadow); }
+.icon svg { width: 64px; height: 64px; color: var(--accent); display: block; }
+h1 { margin: 22px 0 0; font: 650 clamp(40px, 8vw, 64px)/1 var(--ui); letter-spacing: -.03em; }
+.ver { margin: 12px 0 0; height: 18px; font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.ver i { width: 3px; height: 3px; border-radius: 50%; background: var(--muted2); }
+.ver:empty { visibility: hidden; }
+
+#dl { margin-top: 28px; border: 0; border-radius: 10px; padding: 15px 26px; text-decoration: none; background: var(--accent); color: var(--accent-ink); font: 600 16px/1 var(--ui); display: inline-flex; align-items: center; gap: 9px; transition: transform .3s var(--spring); }
+#dl svg.i { width: 17px; height: 17px; stroke-width: 1.9; }
+#dl:hover { transform: translateY(-2px); }
+#dl:active { transform: scale(.98); }
+#dl.glow { animation: rise .7s var(--spring) 210ms forwards, glow 1.6s ease-out 1.1s 1; }
+@keyframes glow { 0% { box-shadow: 0 0 0 0 var(--accent); } 100% { box-shadow: 0 0 0 18px transparent; } }
+.req { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+
+.ways { margin-top: 40px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 640px; }
+.way { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 46px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); color: var(--ink); text-decoration: none; font: 500 13px/1 var(--ui); cursor: pointer; transition: border-color .2s, transform .3s var(--spring); }
+.way:hover { border-color: var(--muted2); transform: translateY(-1px); }
+.way svg.i { color: var(--muted); }
+button.way { text-align: left; max-width: 100%; }
+button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.way .swap { position: relative; width: 14px; height: 14px; flex: none; }
+.way .swap svg { position: absolute; inset: 0; transition: transform .3s var(--spring), opacity .2s; }
+.way .swap .ck { opacity: 0; transform: scale(.4); color: var(--ok); }
+.way.done .swap .cp { opacity: 0; transform: scale(.4); }
+.way.done .swap .ck { opacity: 1; transform: none; }
+.way.done { border-color: var(--ok); }
+
+.lid { margin: 26px 0 0; display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 12.5px; color: var(--muted); }
+.lid a { text-decoration: none; }
+.lid a:hover { color: var(--ink); }
+
+@media (max-width: 520px) { .icon { width: 96px; height: 96px; border-radius: 22px; } .icon svg { width: 54px; height: 54px; } .way { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; opacity: 1; transform: none; } #dl.glow { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="grid"></div>
+<header>
+  <a class="mark" href="/" aria-label="taksim"><svg viewBox="100 100 800 800" aria-hidden="true"><mask id="m1"><path d="M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z" fill="#fff"/><g fill="none" stroke="#000" stroke-width="34"><g transform="rotate(0 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(90 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(180 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(270 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g></g></mask><rect width="1000" height="1000" fill="currentColor" mask="url(#m1)"/></svg>taksim</a>
+  <div class="top">
+    <button id="lang" type="button">中文</button>
+    <a id="gh" href="https://github.com/0xhalil/taksim" aria-label="GitHub"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+  </div>
+</header>
+
+<main>
+  <div class="icon rise" style="--n:0"><svg viewBox="100 100 800 800" aria-hidden="true"><mask id="m2"><path d="M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z" fill="#fff"/><g fill="none" stroke="#000" stroke-width="34"><g transform="rotate(0 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(90 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(180 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g><g transform="rotate(270 500 500)"><path d="M500 40 V330 A170 170 0 0 1 330 500 H40"/><path d="M500 40 V330"/></g></g></mask><rect width="1000" height="1000" fill="currentColor" mask="url(#m2)"/></svg></div>
+  <h1 class="rise" style="--n:1">taksim</h1>
+  <p class="ver rise" id="ver" style="--n:2"></p>
+  <a id="dl" class="rise glow" style="--n:3" href="https://github.com/0xhalil/taksim/releases/latest">
+    <svg class="i" viewBox="0 0 16 16"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg><span data-t="Download for macOS">Download for macOS</span>
+  </a>
+  <p class="req rise" id="req" style="--n:4" data-t="Apple silicon · macOS 15+">Apple silicon · macOS 15+</p>
+
+  <div class="ways rise" style="--n:5">
+    <button id="brew" class="way" type="button" aria-label="Copy the Homebrew command">
+      <svg class="i" viewBox="0 0 16 16"><path d="m3 4.5 3.5 3.5L3 11.5M8.5 12H13"/></svg>
+      <code>brew install --cask 0xhalil/taksim/taksim</code>
+      <span class="swap"><svg class="i cp" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1.5"/></svg><svg class="i ck" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></svg></span>
+    </button>
+    <a class="way" href="https://github.com/0xhalil/taksim/releases"><svg class="i" viewBox="0 0 16 16" style="stroke:none;fill:currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span><svg class="i" viewBox="0 0 16 16"><path d="M5.5 3H13v7.5M13 3 3.5 12.5"/></svg></a>
+  </div>
+
+  <p class="lid rise" style="--n:6">
+    <a id="zip" href="https://github.com/0xhalil/taksim/releases/latest">ZIP</a>
+    <a id="sha" href="https://github.com/0xhalil/taksim/releases/latest">SHA-256</a>
+    <a id="notes" href="https://github.com/0xhalil/taksim/releases/latest" data-t="Release notes">Release notes</a>
+    <a href="https://github.com/0xhalil/taksim/releases" data-t="All versions">All versions</a>
+  </p>
+</main>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var ZH = { "Download for macOS": "下载 macOS 版", "Apple silicon · macOS 15+": "Apple 芯片 · macOS 15+", "macOS only": "仅支持 macOS",
+    "Release notes": "更新说明", "All versions": "所有版本", "Copy the Homebrew command": "复制 Homebrew 命令" };
+  var lang = 'en';
+  try { lang = localStorage.getItem('lang') || ''; } catch (e) { lang = ''; }
+  if (lang !== 'en' && lang !== 'zh') lang = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
+  var isMac = /Mac/i.test(navigator.platform || '') && !/iPhone|iPad/i.test(navigator.userAgent || '');
+  function t(s) { return lang === 'zh' && ZH[s] ? ZH[s] : s; }
+  var rel = null;
+  function texts() {
+    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+    [].forEach.call(document.querySelectorAll('[data-t]'), function (e) { e.textContent = t(e.dataset.t); });
+    $('#req').textContent = t(isMac ? 'Apple silicon · macOS 15+' : 'macOS only');
+    $('#lang').textContent = lang === 'zh' ? 'EN' : '中文';
+    $('#lang').setAttribute('aria-label', lang === 'zh' ? 'English' : '中文');
+    $('#brew').setAttribute('aria-label', t('Copy the Homebrew command'));
+    meta();
+  }
+  // the newest release, read from GitHub's public API; without it the button goes to the releases page
+  function meta() {
+    if (!rel) return;
+    var d = new Date(rel.published_at), when = isNaN(d) ? '' : d.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', year: 'numeric' });
+    var dmg = rel.dmg ? Math.round(rel.dmg.size / 1048576) + ' MB' : '';
+    var bits = [rel.tag_name.replace(/^v/, ''), dmg, when].filter(Boolean);
+    $('#ver').innerHTML = bits.map(function (b) { return '<span>' + b.replace(/[<&]/g, '') + '</span>'; }).join('<i></i>');
+  }
+  function find(assets, re) { for (var i = 0; i < assets.length; i++) if (re.test(assets[i].name)) return assets[i]; return null; }
+  fetch('https://api.github.com/repos/0xhalil/taksim/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (r) {
+      var a = r.assets || [], dmg = find(a, /\.dmg$/), zip = find(a, /\.zip$/);
+      var main = dmg || zip; if (!main) return;
+      $('#dl').href = main.browser_download_url;
+      if (zip) $('#zip').href = zip.browser_download_url;
+      var sum = find(a, new RegExp(main.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.sha256$'));
+      if (sum) $('#sha').href = sum.browser_download_url;
+      $('#notes').href = r.html_url;
+      rel = { tag_name: r.tag_name, published_at: r.published_at, dmg: main };
+      meta();
+    }).catch(function () {});
+  $('#lang').addEventListener('click', function () {
+    lang = lang === 'zh' ? 'en' : 'zh';
+    try { localStorage.setItem('lang', lang); } catch (e) {}
+    texts();
+  });
+  var CMD = 'brew install --cask 0xhalil/taksim/taksim', timer;
+  $('#brew').addEventListener('click', function () {
+    var b = this;
+    function done() { b.classList.add('done'); clearTimeout(timer); timer = setTimeout(function () { b.classList.remove('done'); }, 1600); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = CMD; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(CMD).then(done, fallback); else fallback();
+  });
+  texts();
+})();
+</script>
+</body>
+</html>
