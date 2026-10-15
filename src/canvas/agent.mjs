@@ -18,7 +18,7 @@ import { run } from "../runner.mjs";
 import { pickBackend } from "../backends/index.mjs";
 import { INTRO as GEMINI_INTRO } from "../backends/gemini.mjs";
 import { snapshot, changes } from "./checkpoint.mjs";
-import { cfg } from "../config.mjs";
+import { cfg, NODE_PERMISSIONS } from "../config.mjs";
 import { Terminal } from "../term/pty.mjs";
 import { findAccount, accountEnv, listAccounts, prepareForTerminal } from "../accounts.mjs";
 import { usageKey, refreshUsage, noteClaudeLimits } from "../usage.mjs";
@@ -32,7 +32,7 @@ import { toolHints, delegates } from "../toolbox/mcp.mjs";
 import { projectRules } from "../ide/rules.mjs";
 
 export const PERSISTED = ["id", "name", "role", "system", "chatOrigin", "forkContext", "chatMode", "chatPlan", "chatReviews", "job", "jobRole", "modeContextSince", "seedHistory", "model", "effort", "delegate", "toolHelp", "chat", "account", "sandbox", "cwd", "session",
-  "pos", "size", "cardSize", "collapsed", "context", "mcp", "parent", "depth", "createdBy", "createdAt", "panel", "autoApprove", "ide"];
+  "pos", "size", "cardSize", "collapsed", "context", "mcp", "parent", "depth", "createdBy", "createdAt", "panel", "autoApprove", "ide", "permission"];
 
 // The node's "helpers" switch: the agent leads and hands work to helper agents on the cheapest model that fits.
 // the tools switch on the node (on unless the user turned it off): what the agent is told
@@ -142,11 +142,17 @@ export class Agent {
 
   get backend() { return pickBackend(this.model).backend.name; }
 
+  /** how this node's turns ask for permission: what the person picked, else Claude judges (auto) */
+  permissionMode() {
+    const p = this.permission || "auto";
+    return NODE_PERMISSIONS().includes(p) ? p : "auto";
+  }
+
   toJSON() { return Object.fromEntries(PERSISTED.map((k) => [k, this[k] ?? null])); }
 
   view() {
     // how full the context is, as the CLI measured it on the last turn; a new session starts empty
-    return { ...this.toJSON(), context: this.session ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
+    return { ...this.toJSON(), permissions: this.backend === "claude" ? NODE_PERMISSIONS() : [], context: this.session ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
       waitingOn: [...this.waitingOn], blockedBy: this.blockedBy || [], workingWith: this.orchestration?.working() || [],
       lastError: this.lastError, lastText: this.lastText.slice(0, 280),
       accountName: this.accountName, usageKey: this.usageKey, folder: this.folder,
@@ -265,7 +271,7 @@ export class Agent {
     }
     const { file, args, env } = backend.interactive({
       model, cwd, session: this.session || this.pendingSession, newSession, system, mcpUrl: this.mcpUrl, hookUrl: this.hookUrl,
-      sandbox: this.sandbox, effort: this.effort || undefined, mcp: agentServers(this),
+      sandbox: this.sandbox, effort: this.effort || undefined, mcp: agentServers(this), permission: this.permission || undefined,
     });
     this.terminalOpenedAt = Date.now();
     this.termReady = false;
@@ -513,7 +519,7 @@ export class Agent {
       // CLIs that let us name sessions get a fresh id up front; the others report theirs.
       const newSession = !this.session && backend.ownSessionIds;
       const session = this.session || (newSession ? randomUUID() : undefined);
-      const opts = { cwd, sandbox: sandbox || undefined, session, newSession, mcpUrl, effort: this.effort || undefined, lang: canvas.lang, mcp: agentServers(this) };
+      const opts = { cwd, sandbox: sandbox || undefined, permission: this.permissionMode(), session, newSession, mcpUrl, effort: this.effort || undefined, lang: canvas.lang, mcp: agentServers(this) };
       let streamed = "";
       // group changes since the last turn, said in the message too: a resumed session may otherwise keep
       // to what it answered before joining (the system prompt alone doesn't override its own history)

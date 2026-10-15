@@ -7,7 +7,7 @@ import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { pickBackend, BACKENDS } from "../backends/index.mjs";
-import { SANDBOXES } from "../config.mjs";
+import { SANDBOXES, NODE_PERMISSIONS } from "../config.mjs";
 import { httpError, SSE_HEADERS } from "../http.mjs";
 import { findAccount } from "../accounts.mjs";
 import { EventBus } from "./events.mjs";
@@ -108,6 +108,7 @@ export class Canvas {
       ? parent.account : null;
     if (spec.chatMode && !["agent", "ask", "plan"].includes(spec.chatMode)) throw httpError(400, "invalid chat mode");
     if (spec.sandbox && !SANDBOXES().includes(spec.sandbox)) throw httpError(400, `sandbox must be one of: ${SANDBOXES().join(", ")}`);
+    if (spec.permission && !NODE_PERMISSIONS().includes(spec.permission)) throw httpError(400, `permission must be one of: ${NODE_PERMISSIONS().join(", ")}`);
     // agents created by agents start read-only unless the creator asks for editing access, and never get
     // more access than their creator has
     const sandbox = ["ask", "plan"].includes(spec.chatMode) || (parent && readOnly(parent)) ? "read-only" : spec.sandbox || (parent ? "read-only" : null);
@@ -125,6 +126,7 @@ export class Canvas {
       chatMode: sandbox === "read-only" ? (spec.chatMode === "plan" ? "plan" : "ask") : "agent",
       account: account?.id || inherited || null,
       sandbox: sandbox === "workspace-write" ? null : sandbox,
+      permission: spec.permission || null, // null: auto
       // a chosen directory, else the creator's (checkDir keeps agents out of system and credential dirs);
       // it works on whatever branch that folder has checked out
       cwd: spec.cwd ? checkDir(spec.cwd) : parent?.cwd || null,
@@ -160,6 +162,7 @@ export class Canvas {
     if (patch.sandbox !== undefined && patch.sandbox && !SANDBOXES().includes(patch.sandbox)) {
       throw httpError(400, `sandbox must be one of: ${SANDBOXES().join(", ")}`);
     }
+    if (patch.permission && !NODE_PERMISSIONS().includes(patch.permission)) throw httpError(400, `permission must be one of: ${NODE_PERMISSIONS().join(", ")}`);
     const nextCwd = patch.cwd !== undefined ? (patch.cwd ? checkDir(patch.cwd) : null) : agent.cwd;
     const nextModel = patch.model ?? agent.model;
     const picked = pickBackend(nextModel);
@@ -188,6 +191,7 @@ export class Canvas {
     const loginChanged = (agent.account && !prevAccount) || (prevAccount?.dir || null) !== (nextAccount?.dir || null);
     // an open TUI got model and effort as flags: it starts again with the new ones
     const restart = agent.terminal && (nextModel !== agent.model || nextEffort !== (agent.effort || null) || loginChanged
+      || (patch.permission !== undefined && (patch.permission === "auto" ? null : patch.permission || null) !== (agent.permission || null)) // its mode is a launch flag
       || (typeof patch.delegate === "boolean" && patch.delegate !== !!agent.delegate) // the helpers switch is in its launch prompt
       || (typeof patch.toolHelp === "boolean" && patch.toolHelp !== (agent.toolHelp !== false))); // so is tool help
     // sessions belong to one model's CLI and one account's config dir
@@ -195,6 +199,7 @@ export class Canvas {
     agent.model = nextModel;
     agent.effort = nextEffort;
     agent.account = nextAccount?.id || null;
+    if (patch.permission !== undefined) agent.permission = patch.permission && patch.permission !== "auto" ? patch.permission : null;
     if (patch.sandbox !== undefined) agent.sandbox = patch.sandbox && patch.sandbox !== "workspace-write" ? patch.sandbox : null;
     if (nextCwd !== agent.cwd) { agent.cwd = nextCwd; agent.session = null; agent.ide?.rewatch(); } // CLI sessions live per directory
     if (toPos(patch.pos)) agent.pos = toPos(patch.pos);

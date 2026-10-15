@@ -5,9 +5,10 @@ import { mkdirSync, writeFileSync, renameSync, existsSync, readFileSync } from '
 import { HOME } from './store.mjs';
 import { inside, recheck } from '../ide/fs.mjs';
 import { httpError } from '../http.mjs';
+import { T as langT } from '../lang.mjs';
 
 export class ChatWorkflow {
-  constructor(agent) { this.agent = agent; this.pending = null; }
+  constructor(agent) { this.agent = agent; this.pending = null; this.allowed = new Set(); this.approvals = Promise.resolve(); }
   emit() {
     const a = this.agent;
     a.canvas.bus.emit('chat_workflow', { id: a.id, plan: a.chatPlan || null, question: this.pending?.view || null });
@@ -102,9 +103,42 @@ export class ChatWorkflow {
       const abort = () => { this.pending = null; this.emit(); if (!a.current && a.status === 'waiting') a.setStatus('idle'); reject(new Error('question cancelled')); };
       signal.addEventListener('abort', abort, { once: true });
       this.pending = { view, resolve: (answers) => { signal.removeEventListener('abort', abort); resolve(answers); } };
-      if (!detached || !a.current) a.setStatus('waiting');
+      if (!detached || !a.current || detached.waiting) a.setStatus('waiting');
       this.emit();
     });
+  }
+  /**
+   * Claude Code's permission prompt (--permission-prompt-tool): one tool call it would ask about in a terminal.
+   * The person answers in the chat; the answer is the tool's result ({behavior: allow | deny}). Calls wait their
+   * turn (Claude can ask about several at once), a stopped turn refuses what was waiting, and anything but a
+   * clear yes is a no.
+   */
+  approve({ tool_name: tool, input } = {}) {
+    const a = this.agent;
+    const key = approvalKey(tool, input);
+    const deny = (message) => ({ behavior: 'deny', message });
+    if (typeof tool !== 'string' || !tool) return Promise.resolve(deny('no tool named'));
+    const turn = a.current?.ac.signal;
+    if (!turn || turn.aborted) return Promise.resolve(deny('the turn was stopped'));
+    const run = async () => {
+      if (turn.aborted) return deny('the turn was stopped');
+      if (this.allowed.has(key)) return { behavior: 'allow', updatedInput: input ?? {} };
+      const T = (en, tr) => langT(a.canvas.lang, en, tr);
+      const options = [T('Allow', 'İzin ver'), T('Allow this kind in this chat', 'Bu tür için bu sohbette izin ver'), T('Deny', 'Reddet')];
+      const title = approvalTitle(tool, input, T);
+      let answer;
+      try {
+        answer = await this.ask({ questions: [{ title, options }] }, { signal: turn, waiting: true });
+      } catch { return deny('the turn was stopped'); }
+      // the answer comes back as "<title>\n<what was picked or typed>"; the title may itself have lines
+      const said = String(answer).slice(title.length).trim();
+      if (said === options[1]) { this.allowed.add(key); return { behavior: 'allow', updatedInput: input ?? {} }; }
+      if (said === options[0]) return { behavior: 'allow', updatedInput: input ?? {} };
+      return deny(said && said !== options[2] ? `the user said: ${said}` : 'the user declined');
+    };
+    const result = this.approvals.then(run, run);
+    this.approvals = result.then(() => {}, () => {});
+    return result;
   }
   answer({ id, answers }) {
     const pending = this.pending, a = this.agent;
@@ -114,4 +148,20 @@ export class ChatWorkflow {
     a.record({ from: 'user', to: a.id, kind: 'clarification', text });
     this.pending = null; this.emit(); a.setStatus(a.current ? 'running' : 'idle'); pending.resolve(text);
   }
+}
+
+/** what "allow this kind" covers: the tool, and for a shell command its program (npm, git, curl) */
+export function approvalKey(tool, input) {
+  if (tool !== 'Bash') return String(tool);
+  const first = String(input?.command ?? '').trim().split(/\s+/)[0] || '';
+  // a chain ("a && b", "a; b", a pipe, a substitution) is judged as a whole, never as its first program
+  return /[;&|`$()<>\n]/.test(String(input?.command ?? '')) ? `Bash:${String(input?.command ?? '')}` : `Bash:${first}`;
+}
+
+const clip = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+export function approvalTitle(tool, input, T) {
+  const i = input && typeof input === 'object' ? input : {};
+  if (tool === 'Bash') return clip(T('Run: ', 'Çalıştır: ') + String(i.command ?? ''), 900);
+  const target = i.file_path ?? i.path ?? i.url ?? i.pattern ?? '';
+  return clip(`${tool}${target ? ': ' + target : ''}`, 900);
 }

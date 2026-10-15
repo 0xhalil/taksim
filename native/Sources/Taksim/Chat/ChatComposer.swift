@@ -40,6 +40,7 @@ struct ChatComposer: View {
             // as in Cursor: how it works and with which model on the left, the clip and the one action on the right
             HStack(spacing: 6) {
                 modeMenu
+                permissionMenu
                 modelMenu
                 if editorWidth >= 380 { effortMenu }
                 Spacer(minLength: 4)
@@ -368,6 +369,43 @@ struct ChatComposer: View {
             .disabled(running || queued > 0 || model.settingMode || model.sending > 0)
             .help(mode == "plan" ? L("Plan · doesn't change files · ⇧⇥") : mode == "ask" ? L("Ask · read-only · ⇧⇥") : L("Agent · applies changes · ⇧⇥"))
         }
+    }
+
+    /// how this node's turns ask for permission, where its CLI has the choice: the one a person picks to stop
+    /// being asked about everything (auto), or to be asked about everything (manual)
+    @ViewBuilder private var permissionMenu: some View {
+        let mode = agent?.chatMode ?? (agent?.sandbox == "read-only" ? "ask" : "agent")
+        let modes = agent?.permissions ?? []
+        if mode == "agent", !modes.isEmpty {
+            let current = agent?.permission ?? "auto"
+            let narrow = editorWidth < 340
+            if isSnapshot { chip(narrow ? "" : Self.permissionTitle(current), symbol: Self.permissionSymbol(current)) }
+            else {
+                Menu {
+                    ForEach(modes, id: \.self) { next in
+                        Button { Task { await model.setPermission(next, store: store) } } label: {
+                            Label("\(Self.permissionTitle(next)) · \(Self.permissionHint(next))", systemImage: next == current ? "checkmark" : Self.permissionSymbol(next))
+                        }
+                    }
+                } label: {
+                    if narrow { Image(systemName: Self.permissionSymbol(current)) } else { Label(Self.permissionTitle(current), systemImage: Self.permissionSymbol(current)) }
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize().font(.system(size: 11.5))
+                .foregroundStyle(current == "bypassPermissions" ? JB.err : JB.ink)
+                .disabled(running || queued > 0 || model.settingMode || model.sending > 0)
+                .help(L("Permissions: %@", Self.permissionHint(current)))
+            }
+        }
+    }
+
+    static func permissionTitle(_ mode: String) -> String {
+        switch mode { case "default": L("Manual"); case "acceptEdits": L("Accept edits"); case "bypassPermissions": L("Bypass"); default: L("Auto") }
+    }
+    static func permissionHint(_ mode: String) -> String {
+        switch mode { case "default": L("Asks before every change"); case "acceptEdits": L("Edits files, asks about the rest"); case "bypassPermissions": L("Does everything without asking"); default: L("Claude decides what is safe") }
+    }
+    static func permissionSymbol(_ mode: String) -> String {
+        switch mode { case "default": "hand.raised"; case "acceptEdits": "pencil"; case "bypassPermissions": "exclamationmark.shield"; default: "wand.and.stars" }
     }
 
     private var modelLabel: String {

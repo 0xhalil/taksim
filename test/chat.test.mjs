@@ -321,6 +321,56 @@ test("reviewed plans persist, reject stale versions and build only the chosen co
   } finally { await api("DELETE", `/v1/canvases/${c.id}`); }
 });
 
+test("permission prompts reach the person in the chat: allow, allow a kind, deny, and a stopped turn refuses", async () => {
+  const c = (await api("POST", "/v1/canvases", {})).data;
+  const a = (await api("POST", `/v1/canvases/${c.id}/agents`, { model: "fake-delegate", permission: "default" })).data;
+  assert.equal(a.permission, "default");
+  const path = `/v1/canvases/${c.id}/agents/${a.id}`;
+  const agent = getCanvas(c.id).agents.get(a.id);
+  const call = (command) => `CALL ${JSON.stringify({ tool: "approve", args: { tool_name: "Bash", input: { command } } })}`;
+  const waitQuestion = async () => { for (let i = 0; i < 100 && !agent.workflow.pending; i++) await sleep(30); return agent.workflow.pending?.view; };
+  const finish = async () => { for (let i = 0; i < 100 && agent.current; i++) await sleep(30); };
+  const reply = async (q, answer) => (await api("POST", `${path}/workflow`, { action: "answer", id: q.id, answers: { q1: answer } })).status;
+  try {
+    // one yes: allowed once, and the person's chat says what was asked
+    await api("POST", `${path}/messages`, { text: call("curl -s https://example.com") });
+    let q = await waitQuestion();
+    assert.ok(q); assert.equal(agent.status, "waiting");
+    assert.equal(q.questions[0].title, "Run: curl -s https://example.com");
+    assert.equal(q.questions[0].options.length, 3);
+    assert.equal(await reply(q, q.questions[0].options[0]), 200);
+    await finish();
+    assert.match(agent.lastText, /"behavior":"allow"/);
+    // the same program asks again: it was allowed once, not for good
+    await api("POST", `${path}/messages`, { text: call("curl https://example.org") });
+    q = await waitQuestion(); assert.ok(q);
+    // a kind, for this chat: curl no more asks, but a chain of commands is judged whole
+    assert.equal(await reply(q, q.questions[0].options[1]), 200);
+    await finish();
+    assert.match(agent.lastText, /"behavior":"allow"/);
+    await api("POST", `${path}/messages`, { text: call("curl https://example.net") });
+    await finish();
+    assert.equal(agent.workflow.pending, null);
+    assert.match(agent.lastText, /"behavior":"allow"/);
+    await api("POST", `${path}/messages`, { text: call("curl https://example.net; rm -rf ~") });
+    q = await waitQuestion(); assert.ok(q);
+    // free text is a no that says why
+    assert.equal(await reply(q, "not that one"), 200);
+    await finish();
+    assert.match(agent.lastText, /"behavior":"deny"/);
+    assert.match(agent.lastText, /not that one/);
+    // a stopped turn refuses what was waiting
+    await api("POST", `${path}/messages`, { text: call("npm publish") });
+    q = await waitQuestion(); assert.ok(q);
+    await api("POST", `${path}/stop`);
+    await finish();
+    assert.equal(agent.workflow.pending, null);
+    assert.equal((await api("PATCH", path, { permission: "nonsense" })).status, 400);
+    assert.equal((await api("PATCH", path, { permission: "acceptEdits" })).data.permission, "acceptEdits");
+    assert.equal((await api("PATCH", path, { permission: "auto" })).data.permission, null);
+  } finally { await api("DELETE", `/v1/canvases/${c.id}`); }
+});
+
 test("clarifications suspend the real tool call, accept free text and cancel with the turn", async () => {
   const c = (await api("POST", "/v1/canvases", {})).data;
   const a = (await api("POST", `/v1/canvases/${c.id}/agents`, { model: "fake-delegate", chatMode: "ask" })).data;

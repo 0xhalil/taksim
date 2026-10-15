@@ -175,7 +175,7 @@ export async function canvasRoutes(req, res, path) {
       (e.attachments?.length ? `\nAttachments: ${JSON.stringify(e.attachments)}` : "")).join("\n\n");
     if (context.length > 120000) throw httpError(413, "branch context is too large; choose an earlier message");
     const branch = canvas.addAgent({ name: `${agent.name} · ${body.fresh ? T(canvas.lang, "new", "yeni") : T(canvas.lang, "branch", "dal")}`, model: agent.model,
-      account: agent.account, effort: agent.effort, cwd: agent.cwd, sandbox: agent.sandbox, system: agent.system,
+      account: agent.account, effort: agent.effort, cwd: agent.cwd, sandbox: agent.sandbox, permission: agent.permission, system: agent.system,
       role: agent.role, chatMode: agent.chatMode, chat: true, pos: [agent.pos[0] + (agent.cardSize?.[0] || 640) + 40, agent.pos[1]] });
     branch.chatOrigin = { id: agent.id, name: agent.name, at: inherited.at(-1)?.ts || null };
     branch.forkContext = context;

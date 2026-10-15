@@ -119,6 +119,15 @@ fix request still needs checking per model.
 - Computer control: try it with a real run per CLI, and with permissions granted. Consider showing the agent's
   pointer on screen while it acts, and a global stop key.
 
+## Permission modes (per node)
+
+- Claude: Auto, Manual, Accept edits and, with `TAKSIM_ALLOW_DANGEROUS=1`, Bypass. Manual and Accept edits send what Claude
+  would ask about to the chat (`--permission-prompt-tool mcp__taksim__approve`); the person allows, allows that kind for
+  the chat, or denies. Verified with the real CLI (allow and deny). Unset means Auto: a write agent used to run in
+  Accept edits, which refuses shell commands such as `curl` in a headless turn.
+- Codex, Gemini, Copilot, opencode: no choice yet (unverified gap). Their headless runs follow the sandbox alone
+  (codex `sandbox_mode`, gemini `auto_edit`); whether each CLI has a host-answered permission prompt is not checked.
+
 ## Official sources
 
 - [Claude Code computer use](https://code.claude.com/docs/en/computer-use), [Anthropic computer use tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool)

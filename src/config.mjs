@@ -41,6 +41,9 @@ export const isLoopback = (host) => LOOPBACK.includes(host);
 
 export const CLAUDE_PERMISSIONS = () =>
   ["default", "acceptEdits", "plan", "auto", ...(cfg.allowDangerous ? ["bypassPermissions"] : [])];
+// How a node's own turns ask for permission (Claude Code's modes): auto lets Claude judge, default asks about
+// everything, acceptEdits asks about all but file edits. Plan is the chat mode, not one of these.
+export const NODE_PERMISSIONS = () => ["auto", "default", "acceptEdits", ...(cfg.allowDangerous ? ["bypassPermissions"] : [])];
 export const SANDBOXES = () =>
   ["read-only", "workspace-write", ...(cfg.allowDangerous ? ["danger-full-access"] : [])];
 export const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"];

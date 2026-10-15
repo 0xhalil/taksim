@@ -61,6 +61,10 @@ public struct Agent: Codable, Identifiable, Equatable, Sendable {
     public var toolsOn: Bool { toolHelp != false }
     /// shows a chat instead of a card while its terminal is closed
     public var chatMode: String?
+    /// how its turns ask for permission: auto (nil), default, acceptEdits or bypassPermissions
+    public var permission: String?
+    /// the modes this node can run in (empty where its CLI has no such choice)
+    public var permissions: [String]?
     public var chatOrigin: ChatOrigin?
     public struct ChatOrigin: Codable, Equatable, Sendable {
         public var id: String

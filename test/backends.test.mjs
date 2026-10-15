@@ -81,6 +81,27 @@ test("copilot's JSONL: deltas stream, the last message is the answer, the result
   assert.deepEqual([streamed, st.text, st.session, st.error], ["Hello", "Hello", "sess-1", null]);
 });
 
+test("claude's permission mode: auto and bypass decide alone, the others ask the person through taksim", async () => {
+  const { default: claude } = await import("../src/backends/claude.mjs");
+  const run = (sandbox, permission) => claude.build({ model: "sonnet", system: "s", prompt: "p", opts: { cwd: "/tmp/p", sandbox, permission, mcpUrl: "http://127.0.0.1/mcp/t" } }).args;
+  const at = (args, flag) => args[args.indexOf(flag) + 1];
+  for (const mode of ["default", "acceptEdits"]) {
+    assert.equal(at(run("workspace-write", mode), "--permission-mode"), mode);
+    assert.equal(at(run("workspace-write", mode), "--permission-prompt-tool"), "mcp__taksim__approve");
+  }
+  for (const mode of ["auto", "bypassPermissions"]) {
+    assert.equal(at(run("workspace-write", mode), "--permission-mode"), mode);
+    assert.ok(!run("workspace-write", mode).includes("--permission-prompt-tool"));
+  }
+  // read-only turns are plan mode whatever was picked, and ask nothing
+  assert.equal(at(run("read-only", "auto"), "--permission-mode"), "plan");
+  assert.ok(!run("read-only", "default").includes("--permission-prompt-tool"));
+  // the terminal gets the mode as a flag; unset leaves Claude's own default
+  const tui = (permission) => claude.interactive({ model: "sonnet", session: "s", newSession: true, system: "s", mcpUrl: "http://127.0.0.1/mcp/t", hookUrl: "http://127.0.0.1/h", sandbox: null, permission }).args;
+  assert.equal(at(tui("auto"), "--permission-mode"), "auto");
+  assert.ok(!tui(undefined).includes("--permission-mode"));
+});
+
 test("canvas Ask and Agent access maps consistently to each CLI's execution policy", async () => {
   const { default: claude } = await import("../src/backends/claude.mjs");
   const { default: codex } = await import("../src/backends/codex.mjs");

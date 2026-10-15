@@ -21,5 +21,17 @@ extension Tr {
         "Allow computer control": "Bilgisayar kontrolüne izin ver",
         "Controls the computer": "Bilgisayarı kontrol ediyor",
         "Allow in System Settings": "Sistem Ayarları'nda izin ver",
+        "Installing": "Kuruluyor",
+        "Install and sign in": "Kur ve giriş yap",
+        "Could not install": "Kurulamadı",
+        "Auto": "Otomatik",
+        "Manual": "Elle",
+        "Accept edits": "Düzenlemeleri kabul et",
+        "Bypass": "Atla",
+        "Permissions: %@": "İzinler: %@",
+        "Claude decides what is safe": "Neyin güvenli olduğuna Claude karar verir",
+        "Asks before every change": "Her değişiklikten önce sorar",
+        "Edits files, asks about the rest": "Dosyaları düzenler, gerisini sorar",
+        "Does everything without asking": "Hiçbir şey sormadan her şeyi yapar",
     ]
 }

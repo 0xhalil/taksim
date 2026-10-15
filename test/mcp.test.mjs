@@ -59,7 +59,7 @@ test("MCP handshake and tool list", async () => {
   assert.equal(init.result.serverInfo.name, "taksim");
   assert.equal((await rpc(token, { jsonrpc: "2.0", method: "notifications/initialized" })).status, 202);
   const list = await (await rpc(token, { jsonrpc: "2.0", id: 2, method: "tools/list" })).json();
-  assert.deepEqual(list.result.tools.map((t) => t.name), ["update_todos", "ask_user", "list_agents", "ask_agent", "tell_agent", "get_context", "update_context", "remember", "plan_work", "create_agent",
+  assert.deepEqual(list.result.tools.map((t) => t.name), ["approve", "update_todos", "ask_user", "list_agents", "ask_agent", "tell_agent", "get_context", "update_context", "remember", "plan_work", "create_agent",
     "design_tool", "find_tools", "add_tool", "use_tool", "save_tool", "list_bricks", "panel_open", "panel_patch", "panel_push", "panel_read", "panel_close", "ide_open", "ide_note", "ide_debug_state", "ide_close",
     "browser_navigate", "browser_snapshot", "browser_click", "browser_hover", "browser_drag", "browser_type", "browser_select", "browser_upload",
     "browser_press", "browser_scroll", "browser_dialog", "browser_tabs", "browser_screenshot", "browser_back", "browser_eval",

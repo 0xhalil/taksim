@@ -19,6 +19,9 @@ const PROTOCOL = "2025-06-18";
 const ASK_TIMEOUT_S = Number(process.env.TAKSIM_ASK_TIMEOUT_S || 600);
 
 const TOOLS = [
+  { name: "approve", description: "Claude Code's permission prompt, answered by the person in the chat: allows or refuses one tool call. Not for agents to call.",
+    inputSchema: { type: "object", properties: { tool_name: { type: "string" }, input: { type: "object" }, tool_use_id: { type: "string" } }, required: ["tool_name"] },
+    annotations: { readOnlyHint: true } },
   { name: "update_todos", description: "Publish real progress for this Agent turn. Replace the list or merge by stable id. Keep at most one task in_progress; mark completed only after checking its result. Do not invent progress.",
     inputSchema: { type: "object", properties: { todos: { type: "array", maxItems: 40, items: { type: "object", properties: { id: { type: "string" }, content: { type: "string" }, status: { type: "string", enum: ["pending", "in_progress", "completed", "cancelled", "blocked"] } }, required: ["id", "content", "status"] } }, merge: { type: "boolean" } }, required: ["todos"] },
     annotations: { readOnlyHint: true } },
@@ -206,6 +209,7 @@ async function callTool(self, name, args = {}) {
   if (readOnly(self) && ["add_tool", "save_tool", "update_context", "update_todos"].includes(name)) throw new Error("This action needs Agent mode; Ask and Plan only investigate.");
   if (name === "update_todos") return text(JSON.stringify({ todos: self.tasks.update(args) }));
   if (name === "ask_user") return text(await self.workflow.ask(args));
+  if (name === "approve") return text(JSON.stringify(await self.workflow.approve(args)));
   if (name === "propose_plan") return text(JSON.stringify(self.workflow.publish(args)));
   const target = () => {
     const t = canvas.find(args.agent);

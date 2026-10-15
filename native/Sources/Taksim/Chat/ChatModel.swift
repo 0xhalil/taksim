@@ -371,6 +371,15 @@ final class ChatModel {
         } catch { self.error = (error as? APIError)?.message ?? error.localizedDescription }
     }
 
+    func setPermission(_ permission: String, store: CanvasStore) async {
+        guard !settingMode else { return }
+        settingMode = true
+        defer { settingMode = false }
+        do {
+            try await store.updateAgent(agent, ["permission": permission])
+        } catch { self.error = (error as? APIError)?.message ?? error.localizedDescription }
+    }
+
     func takeActivity(_ activity: ChatActivity?, reset: Bool) {
         activityVersion += 1
         if reset { activities = []; streaming = "" }

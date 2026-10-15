@@ -44,7 +44,11 @@ export default {
     // persisted session can be resumed later, e.g. in a terminal)
     if (opts.cwd && !opts.chat) {
       // read-only agents run in plan mode: they can read and reason, not edit or run commands
-      args.push("--permission-mode", opts.sandbox === "read-only" ? "plan" : opts.permission || "acceptEdits");
+      const readOnly = opts.sandbox === "read-only";
+      args.push("--permission-mode", readOnly ? "plan" : opts.permission || "acceptEdits");
+      // a turn that can't answer on a terminal: what the mode would ask about goes to the person in the chat
+      // (taksim's approve tool) instead of being refused. auto and bypass don't ask.
+      if (opts.mcpUrl && !readOnly && ["default", "acceptEdits"].includes(opts.permission)) args.push("--permission-prompt-tool", "mcp__taksim__approve");
       if (opts.tools) args.push("--tools", opts.tools);
       if (!opts.mcpUrl) {
         args.push("--strict-mcp-config"); // skip the user's MCP connectors in proxied runs
@@ -74,11 +78,11 @@ export default {
   },
 
   // The interactive TUI for a terminal node. The user's own MCP servers and settings stay in effect.
-  interactive({ model, session, newSession, system, mcpUrl, hookUrl, sandbox, effort, mcp }) {
+  interactive({ model, session, newSession, system, mcpUrl, hookUrl, sandbox, effort, mcp, permission }) {
     const [file, ...pre] = this.cmd;
     const args = [...pre, "--model", model, newSession ? "--session-id" : "--resume", session,
       ...(effort ? ["--effort", effort] : []),
-      ...(sandbox === "read-only" ? ["--permission-mode", "plan"] : []),
+      ...(sandbox === "read-only" ? ["--permission-mode", "plan"] : permission ? ["--permission-mode", permission] : []),
       // the TUI keeps everything the CLI loads (plugins, claude.ai connectors) unless a server is turned off
       ...(mcp?.off?.length ? ["--strict-mcp-config", "--mcp-config", mcpConfig(mcpUrl, [...mcp.cli, ...mcp.added])]
         : ["--mcp-config", mcpConfig(mcpUrl, mcp?.added || [])]),
