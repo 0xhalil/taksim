@@ -10,6 +10,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { BACKENDS, listModels } from "./index.mjs";
+import { claudeName } from "./claude-names.mjs";
 
 const STALE_MS = 30 * 60 * 1000;
 const details = new Map(); // model id -> { name, description, context, efforts, defaultEffort }
@@ -122,7 +123,7 @@ export function describeModels(lang = "en") {
     const base = { ...m, tier: tierOf(m.id), ...(isFree(m) ? { free: true } : {}) };
     if (!d) return base;
     const desc = Array.isArray(d.description) ? (lang === "tr" ? d.description[1] : d.description[0]) : d.description;
-    return { ...base, display_name: d.name || m.id, description: desc || null, context_window: d.context || null,
+    return { ...base, display_name: claudeName(m.id) || d.name || m.id, description: desc || null, context_window: d.context || null,
       efforts: d.efforts?.length ? d.efforts : null, default_effort: d.defaultEffort || null };
   });
 }
