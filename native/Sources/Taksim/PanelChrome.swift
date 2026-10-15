@@ -254,7 +254,7 @@ struct PanelBody: View {
             if views.isEmpty {
                 Text(L("No views")).font(.system(size: 12)).foregroundStyle(JB.muted).padding(4)
             }
-            ForEach(Self.rows(views, narrow: width < 504), id: \.first!.view.id) { row in
+            ForEach(Array(Self.rows(views, narrow: width < 504).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(row, id: \.view.id) { cell in
                         BrickCard(view: cell.view, feed: model.feed, status: model.panel?.sources[cell.view.source ?? ""],
@@ -527,8 +527,8 @@ struct GhostPanel: View {
                 PanelButton(symbol: "xmark", help: L("Not needed")) { model.actions.dismissGhost() }
             }
             .padding(.leading, 10).padding(.trailing, 6).frame(height: 34)
-            if let spec = tool?.spec {
-                PreviewBody(tool: tool!, spec: spec, width: model.size.width - 16, owner: "\(model.id)/\(tool!.id)")
+            if let tool, let spec = tool.spec {
+                PreviewBody(tool: tool, spec: spec, width: model.size.width - 16, owner: "\(model.id)/\(tool.id)")
                     .opacity(hover ? 0.85 : 0.4).saturation(hover ? 1 : 0.25).allowsHitTesting(false)
                     .frame(minHeight: 0, maxHeight: .infinity, alignment: .top).clipped()
             } else { Spacer() }
@@ -559,7 +559,7 @@ struct PreviewBody: View {
     var body: some View {
         let feed = PanelFeed(sample: tool.preview ?? .null)
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(PanelBody.rows(spec.views, narrow: width < 504), id: \.first!.view.id) { row in
+            ForEach(Array(PanelBody.rows(spec.views, narrow: width < 504).enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(row, id: \.view.id) { cell in
                         BrickCard(view: cell.view, feed: feed, status: nil, width: PanelBody.width(cell.span, of: width), preview: true,

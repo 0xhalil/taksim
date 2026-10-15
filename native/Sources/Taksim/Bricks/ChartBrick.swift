@@ -272,7 +272,7 @@ final class ChartLayerView: LayerBrickView {
         var d0 = now - windowMs, d1 = now
         if !(!xMode || v.number("window_s") != nil), let a = pts.first, let b = pts.last {
             d0 = a.t; d1 = b.t
-            let gap = pts.count > 1 ? zip(pts.dropFirst(), pts).map { $0.t - $1.t }.min()! : 3_600_000
+            let gap = pts.count > 1 ? (zip(pts.dropFirst(), pts).map { $0.t - $1.t }.min() ?? 3_600_000) : 3_600_000
             if kind == "bar" || pts.count == 1 { d0 -= gap / 2; d1 += gap / 2 }
         }
         // what is visible: in a live window also the sample just before it, held up to its edge

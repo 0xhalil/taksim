@@ -71,9 +71,10 @@ struct ChatMarkdown: View {
                 let run = t.prefix(while: { String($0) == String(fence.prefix(1)) })
                 if run.count >= fence.count, t.dropFirst(run.count).trimmingCharacters(in: .whitespaces).isEmpty {
                     out.append(.code(language, current.joined(separator: "\n"))); code = nil
-                } else { code!.append(line) }
+                } else { code?.append(line) }
             } else if t.hasPrefix("```") || t.hasPrefix("~~~") {
-                flush(); fence = String(t.prefix(while: { $0 == t.first! })); language = String(t.dropFirst(fence.count)).trimmingCharacters(in: .whitespaces); code = []
+                let marker = t.first ?? "`"
+                flush(); fence = String(t.prefix(while: { $0 == marker })); language = String(t.dropFirst(fence.count)).trimmingCharacters(in: .whitespaces); code = []
             } else { prose.append(line) }
         }
         if let code { out.append(.code(language, code.joined(separator: "\n"))) }

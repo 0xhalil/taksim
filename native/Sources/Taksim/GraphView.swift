@@ -137,7 +137,12 @@ final class GraphView: NSView {
         return h.finalize()
     }
 
-    func pos(_ a: Agent) -> CGPoint { localPos[a.id] ?? CGPoint(x: a.pos?[0] ?? 0, y: a.pos?[1] ?? 0) }
+    func pos(_ a: Agent) -> CGPoint {
+        if let p = localPos[a.id] { return p }
+        let x = a.pos?.first ?? 0
+        let y = (a.pos?.count ?? 0) > 1 ? (a.pos?[1] ?? 0) : 0
+        return CGPoint(x: x, y: y)
+    }
 
     /// where a dragged node is while the pointer moves: only the canvas knows, the store hears once on release
     func setLocal(_ id: String, _ p: CGPoint) {
@@ -155,7 +160,8 @@ final class GraphView: NSView {
     /// folded, it narrows to its logo, name, status dot and title buttons
     func collapsedWidth(_ a: Agent) -> CGFloat {
         let buttons = CGFloat((hasIDE(a) ? 3 : 2) + (Self.titleSwitches ? 1 : 0) + (computerOf(a) != nil ? 1 : 0))
-        let full = nameEnd(a) + 22 + buttons * (Self.btn + 4) + 6
+        let titleW = (a.name as NSString).size(withAttributes: [.font: ctitle()]).width
+        let full = Self.th + titleW + 8 + 22 + buttons * (Self.btn + 4) + 6
         return min(expandedSize(a).width, max(150, full.rounded()))
     }
 
@@ -163,9 +169,11 @@ final class GraphView: NSView {
     func expandedSize(_ a: Agent) -> CGSize {
         let term = a.isTerminalOpen
         let raw = term ? (a.size ?? [760, 440]) : (a.cardSize ?? (hasTranscript(a) ? [640, 360] : [300, 150]))
+        let rawW = raw.first ?? (term ? 760 : 300)
+        let rawH = raw.count > 1 ? raw[1] : (term ? 440 : 150)
         let mn = term ? Self.minTerm : hasTranscript(a) ? Self.minChat : Self.minCard, mx = term ? CGSize(width: 1800, height: 1400) : CGSize(width: 1000, height: 900)
         func g(_ v: Double, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(hi, max(lo, (CGFloat(v) / 10).rounded() * 10)) }
-        return CGSize(width: g(raw[0], mn.width, mx.width), height: g(raw[1], mn.height, mx.height))
+        return CGSize(width: g(rawW, mn.width, mx.width), height: g(rawH, mn.height, mx.height))
     }
 
     /// body plus title bar, in graph units (graph.mjs rectOf)
@@ -176,7 +184,9 @@ final class GraphView: NSView {
     func centerOf(_ a: Agent) -> CGPoint { let r = rectOf(a); return CGPoint(x: r.midX, y: r.midY) }
 
     func groupRect(_ g: TaksimKit.Group) -> CGRect {
-        localGroup[g.id] ?? CGRect(x: g.rect[0], y: g.rect[1], width: g.rect[2], height: g.rect[3])
+        if let local = localGroup[g.id] { return local }
+        guard g.rect.count >= 4 else { return .zero }
+        return CGRect(x: g.rect[0], y: g.rect[1], width: g.rect[2], height: g.rect[3])
     }
     var groups: [TaksimKit.Group] { (store?.groups.values.map { $0 } ?? []).sorted { $0.id < $1.id } }
 
@@ -420,7 +430,7 @@ final class GraphView: NSView {
         if let g = groupNoteAt(p) { actions.openGroupNote(g.id, screenRect(noteRect(g))); return }
         if let g = groupResizeAt(p) { drag = .groupResize(id: g.id, start: p, rect: groupRect(g)); return }
         if let g = groupTitleAt(p) {
-            let members = Dictionary(uniqueKeysWithValues: agents.filter { inside(g, centerOf($0)) }.map { ($0.id, pos($0)) })
+            let members = Dictionary(agents.filter { inside(g, centerOf($0)) }.map { ($0.id, pos($0)) }, uniquingKeysWith: { _, last in last })
             drag = .group(id: g.id, start: p, rect: groupRect(g), members: members)
             beginMembership()
             return
@@ -431,14 +441,14 @@ final class GraphView: NSView {
     }
 
     func beginNodeDrag(at p: CGPoint) {
-        let from = Dictionary(uniqueKeysWithValues: agents.filter { selected.contains($0.id) }.map { ($0.id, pos($0)) })
+        let from = Dictionary(agents.filter { selected.contains($0.id) }.map { ($0.id, pos($0)) }, uniquingKeysWith: { _, last in last })
         drag = .nodes(start: p, from: from)
         beginMembership()
     }
 
     func beginMembership() {
-        dragStartGroups = Dictionary(uniqueKeysWithValues: agents.map { ($0.id, groupIds(of: $0)) })
-        dragPos = Dictionary(uniqueKeysWithValues: agents.map { ($0.id, pos($0)) })
+        dragStartGroups = Dictionary(agents.map { ($0.id, groupIds(of: $0)) }, uniquingKeysWith: { _, last in last })
+        dragPos = Dictionary(agents.map { ($0.id, pos($0)) }, uniquingKeysWith: { _, last in last })
     }
 
     override func mouseDragged(with e: NSEvent) {

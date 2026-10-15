@@ -80,7 +80,7 @@ struct InlineEditBar: View {
     /// the rewrite as lines: what goes red, what comes in green, the rest dim
     private func diff(_ rows: [DiffRow]) -> some View {
         let lines = rows.flatMap { r -> [(DiffLine, Bool)] in
-            if r.isChange { return [(r.old!, false), (r.new!, true)] }
+            if let o = r.old, let n = r.new, r.isChange { return [(o, false), (n, true)] }
             if let o = r.old, o.kind == .removed { return [(o, false)] }
             if let n = r.new { return [(n, n.kind == .added)] }
             return []

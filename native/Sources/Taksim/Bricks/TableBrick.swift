@@ -306,9 +306,9 @@ final class TableContent: NSView, NSViewToolTipOwner {
             } else {
                 h.text.place(x: colX[i], baseline: baseline, width: min(h.text.textWidth + 2, colW[i] - 8))
             }
-            if sorted {
+            if let s = sort, sorted {
                 h.arrow.isHidden = false
-                h.arrow.contents = BrickSymbol.image(sort!.desc ? "arrow.down" : "arrow.up", size: 9, color: cg(Pal.muted), scale: textScale)
+                h.arrow.contents = BrickSymbol.image(s.desc ? "arrow.down" : "arrow.up", size: 9, color: cg(Pal.muted), scale: textScale)
                 h.arrow.frame = CGRect(x: numCols.contains(i) ? colX[i] + colW[i] - 12 : colX[i] + h.text.textWidth + 3, y: 0, width: 10, height: TableBrick.headH)
             } else { h.arrow.isHidden = true }
         }
@@ -376,7 +376,8 @@ final class TableContent: NSView, NSViewToolTipOwner {
         }
         // the row's actions, after the last column
         r.ensureButtons(acts, scale: textScale)
-        var x = colX.last.map { $0 + colW.last! } ?? 0
+        var x: CGFloat = 0
+        if let lastX = colX.last, let lastW = colW.last { x = lastX + lastW }
         for (i, b) in r.buttons.enumerated() {
             b.frame = CGRect(x: x, y: (TableBrick.rowH - 18) / 2, width: actW[i], height: 18)
             b.style(self, action: acts[i], hover: hoverButton.map { $0.row == r.id && $0.index == i } ?? false)
@@ -461,8 +462,11 @@ final class TableContent: NSView, NSViewToolTipOwner {
         if p.y < TableBrick.headH {
             // a header sorts: up, down, off
             guard let c = cols.indices.first(where: { p.x >= colX[$0] && p.x < colX[$0] + colW[$0] }).map({ cols[$0] }) else { return }
-            let on = sort?.field == c.field
-            sort = on ? (sort!.desc ? nil : (c.field, true)) : (c.field, false)
+            if let s = sort, s.field == c.field {
+                sort = s.desc ? nil : (c.field, true)
+            } else {
+                sort = (c.field, false)
+            }
             apply(animated: true)
             return
         }

@@ -339,8 +339,8 @@ private struct GraphRepresentable: NSViewRepresentable {
                     m.addItem(think)
                 }
                 item(L("Settings…")) { [weak self] in self?.editAgent(id) }
-                if a.isTerminalOpen, (a.queued ?? 0) > 0, a.autoDeliver == false {
-                    item(L("Deliver pending message (%d)", a.queued!)) { [weak self] in self?.store.deliver(id) }
+                if a.isTerminalOpen, let queued = a.queued, queued > 0, a.autoDeliver == false {
+                    item(L("Deliver pending message (%d)", queued)) { [weak self] in self?.store.deliver(id) }
                 }
                 item(L("Stop")) { [weak self] in self?.store.stop(id) }
                 item(L("Reset session")) { [weak self] in self?.store.resetSession(id) }

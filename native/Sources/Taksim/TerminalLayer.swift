@@ -95,10 +95,10 @@ final class AgentTerminal: NSObject, TerminalViewDelegate, URLSessionWebSocketDe
 
     /// any of the server's terminals: an agent's (/term/<canvas>/<agent>), an account login's (/term/account/<id>)
     init(base: URL, path: String) {
-        var c = URLComponents(url: base, resolvingAgainstBaseURL: false)!
+        var c = URLComponents(url: base, resolvingAgainstBaseURL: false) ?? URLComponents()
         c.scheme = base.scheme == "https" ? "wss" : "ws"
         c.path = path
-        url = c.url!
+        url = c.url ?? base
         origin = "\(base.scheme ?? "http")://\(base.host ?? "127.0.0.1")\(base.port.map { ":\($0)" } ?? "")"
         super.init()
         session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: .main)
@@ -308,7 +308,7 @@ extension GraphView {
     func fitGroups(_ gids: [String], _ id: String) {
         var inner: CGRect?
         for gid in gids {
-            guard let g = store.groups[gid] else { continue }
+            guard let g = store.groups[gid], g.rect.count >= 4 else { continue }
             let cur = CGRect(x: g.rect[0], y: g.rect[1], width: g.rect[2], height: g.rect[3])
             let base = baseRects[gid] ?? cur
             var r = base

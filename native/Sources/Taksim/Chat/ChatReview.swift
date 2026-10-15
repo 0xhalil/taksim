@@ -156,7 +156,7 @@ struct ChatReviewView: View {
             var files: [File]
         }
         if let data = try? await model.api.get("\(base)/review?from=\(from)&to=\(to)", as: States.self) {
-            states = Dictionary(uniqueKeysWithValues: data.files.map { ($0.path, $0.status) })
+            states = Dictionary(data.files.map { ($0.path, $0.status) }, uniquingKeysWith: { _, last in last })
         }
     }
     private func load() async {

@@ -205,6 +205,7 @@ struct CommandPalette: View {
 
     private func cycleTab(_ direction: Int) {
         let tabs = Tab.allCases
-        tab = tabs[(tabs.firstIndex(of: tab)! + direction + tabs.count) % tabs.count]
+        guard let idx = tabs.firstIndex(of: tab) else { return }
+        tab = tabs[(idx + direction + tabs.count) % tabs.count]
     }
 }

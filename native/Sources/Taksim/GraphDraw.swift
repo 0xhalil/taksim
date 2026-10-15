@@ -495,7 +495,7 @@ extension GraphView {
         let pad: CGFloat = 10
         drawMeta(a, x: pad, y: 15, maxW: w - pad * 2, color: a.folder != nil || a.accountName != nil ? Pal.muted1 : Pal.muted)
         let streaming = store.streaming[a.id]
-        let text = (status == "running" && streaming != nil) ? streaming! : (a.lastError ?? (a.lastText?.isEmpty == false ? a.lastText! : a.role ?? ""))
+        let text = (status == "running" ? streaming : nil) ?? a.lastError ?? (a.lastText?.isEmpty == false ? a.lastText : nil) ?? a.role ?? ""
         let lines = max(1, Int((h - 32) / 17))
         let color = a.lastError != nil && status != "running" ? Pal.err : (a.lastText?.isEmpty == false || status == "running") ? Pal.ink : Pal.muted
         let f = cfont(12.5)

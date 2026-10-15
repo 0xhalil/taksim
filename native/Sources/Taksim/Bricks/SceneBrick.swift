@@ -354,7 +354,7 @@ final class QuietText: CATextLayer {
     /// a text's layers by the text they show
     var texts: [(text: String, layer: QuietText, mask: QuietLayer?)] = []
     var isText: Bool { shape.type == "text" }
-    var final: SceneFrame { keys.last!.frame }
+    var final: SceneFrame { keys.last?.frame ?? SceneFrame(look: SceneGeometry.look(shape, scene: (100, 100))) }
 
     init(_ shape: SceneMath.Shape) {
         id = shape.id
@@ -610,7 +610,7 @@ final class SceneLayerView: LayerBrickView {
         for k in keys { let t = k.frame.look.text ?? ""; if !wanted.contains(t) { wanted.append(t) } }
         for t in n.texts where !wanted.contains(t.text) { t.layer.removeFromSuperlayer() }
         n.texts = n.texts.filter { wanted.contains($0.text) }
-        let look = keys.last!.frame.look
+        guard let look = keys.last?.frame.look else { return }
         let style = textStyle(n, look)
         for t in wanted {
             let layer: QuietText
@@ -626,7 +626,7 @@ final class SceneLayerView: LayerBrickView {
             layer.alignmentMode = .left
             layer.bounds = CGRect(x: 0, y: 0, width: BrickText.width(t, style) + 2, height: BrickText.lineHeight(style))
             layer.anchorPoint = CGPoint(x: look.align, y: 0.5)
-            let i = n.texts.firstIndex { $0.text == t }!
+            guard let i = n.texts.firstIndex(where: { $0.text == t }) else { continue }
             if masks, n.texts[i].mask == nil {
                 let m = QuietLayer()
                 m.backgroundColor = CGColor(gray: 0, alpha: 1)
@@ -654,11 +654,12 @@ final class SceneLayerView: LayerBrickView {
         guard let last = keys.last, total > 0 else { return }
         ensureTexts(n, keys, masks: keys.contains { $0.frame.reveal < 1 })
         let frames = keys.map { values(n, $0.frame) }
-        let times = keys.map { NSNumber(value: min(1, max(0, $0.t / total))) } + (keys.last!.t < total ? [1] : [])
-        let ends = keys.last!.t < total
+        guard let lastFrame = frames.last else { return }
+        let times = keys.map { NSNumber(value: min(1, max(0, $0.t / total))) } + (last.t < total ? [1] : [])
+        let ends = last.t < total
         let timings = keys.dropFirst().map { SceneTimeline.timing($0.ease) } + (ends ? [CAMediaTimingFunction(name: .linear)] : [])
         let start = begin ?? CACurrentMediaTime()
-        for (i, (layer, path, final)) in frames.last!.enumerated() {
+        for (i, (layer, path, final)) in lastFrame.enumerated() {
             var vals = frames.map { $0[i].2 }
             if ends { vals.append(final) }
             layer.setValue(final, forKeyPath: path)

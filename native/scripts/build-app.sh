@@ -16,9 +16,11 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$(swift build -c release --show-bin-path)/Taksim" "$APP/Contents/MacOS/Taksim"
 # computer control's hands and eyes (src/computer/): inside the app, so macOS grants them as taksim
 cp "$(swift build -c release --show-bin-path)/taksim-computer" "$APP/Contents/MacOS/taksim-computer"
-# the editor's tree-sitter queries: Bundle.module only looks beside the app or in this .build, so the app points
-# it here at launch (EditorResources); without it, opening a file in the IDE traps on any other Mac
-cp -R "$(swift build -c release --show-bin-path)/CodeEditLanguages_CodeEditLanguages.bundle" "$APP/Contents/Resources/"
+# resource bundles (CodeEditLanguages, SwiftTerm shaders, etc.): Bundle.module only looks beside the app
+# or in this .build, so the app points it here at launch (EditorResources); without them, running outside this checkout traps
+for b in "$(swift build -c release --show-bin-path)"/*.bundle; do
+  [ -d "$b" ] && cp -R "$b" "$APP/Contents/Resources/"
+done
 # the icon (drawn by scripts/make-icon.swift)
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<'PLIST'

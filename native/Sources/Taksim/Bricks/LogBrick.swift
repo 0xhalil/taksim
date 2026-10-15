@@ -92,7 +92,7 @@ final class LogLayerView: LayerBrickView {
         text.toolTip = action?.label
         guard !same else { return }
         let rows = Array(Bricks.rows(c.data).suffix(500))
-        let storage = text.textStorage!
+        guard let storage = text.textStorage else { return }
         let atBottom = isAtBottom
         // the old lines the new ones start with stay; the ones before them go, the ones after them come
         let keep = specChanged ? 0 : Bricks.appendOverlap(old: lines, new: rows)
@@ -189,9 +189,11 @@ final class LogLayerView: LayerBrickView {
         let clip = scroll.contentView.bounds
         ctx.saveGState()
         ctx.translateBy(x: 0, y: -clip.minY)
-        text.layoutManager?.ensureLayout(for: text.textContainer!)
-        let glyphs = text.layoutManager!.glyphRange(forBoundingRect: clip, in: text.textContainer!)
-        text.layoutManager!.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+        if let lm = text.layoutManager, let tc = text.textContainer {
+            lm.ensureLayout(for: tc)
+            let glyphs = lm.glyphRange(forBoundingRect: clip, in: tc)
+            lm.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+        }
         ctx.restoreGState()
     }
 }

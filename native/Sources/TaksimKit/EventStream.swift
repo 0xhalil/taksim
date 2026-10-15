@@ -87,9 +87,10 @@ public enum EventStream {
             let last = Counter(since)
             let task = Task {
                 await SSEConnection.run(session: session, url: {
-                    var comps = URLComponents(url: base.appending(path: "/v1/canvases/\(canvas)/events"), resolvingAgainstBaseURL: false)!
+                    let fallback = base.appending(path: "/v1/canvases/\(canvas)/events")
+                    guard var comps = URLComponents(url: fallback, resolvingAgainstBaseURL: false) else { return fallback }
                     comps.queryItems = [URLQueryItem(name: "since", value: String(last.value))]
-                    return comps.url!
+                    return comps.url ?? fallback
                 }, onState: onState) { event, data in
                     var p = SSEParser()
                     p.raw.type = event

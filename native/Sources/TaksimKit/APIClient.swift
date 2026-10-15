@@ -49,12 +49,12 @@ public struct APIClient: Sendable {
         try await send("DELETE", path, body: Optional<Data>.none)
     }
 
-    /// a path with an optional query ("/v1/…/transcript?limit=40"): the query stays a query
     func url(_ path: String) -> URL {
         let parts = path.split(separator: "?", maxSplits: 1).map(String.init)
-        var c = URLComponents(url: base.appending(path: parts[0]), resolvingAgainstBaseURL: false)!
+        guard let p = parts.first else { return base }
+        guard var c = URLComponents(url: base.appending(path: p), resolvingAgainstBaseURL: false) else { return base.appending(path: p) }
         if parts.count > 1 { c.percentEncodedQuery = parts[1] }
-        return c.url!
+        return c.url ?? base.appending(path: p)
     }
 
     func send<T: Decodable>(_ method: String, _ path: String, body: Data?) async throws -> T {

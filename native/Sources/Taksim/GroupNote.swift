@@ -185,7 +185,7 @@ struct GroupNoteView: View {
         } else if by == "user" {
             Image(systemName: "person.crop.circle.fill").font(.system(size: 15)).foregroundStyle(JB.muted)
                 .frame(width: 16, height: 16).help(L("you"))
-        } else if let a = store.agents[by!] {
+        } else if let by, let a = store.agents[by] {
             BackendTile(backend: a.backend ?? "", size: 16).help(a.name)
         } else {
             Image(systemName: "circle.dashed").font(.system(size: 14)).foregroundStyle(JB.muted2).frame(width: 16, height: 16)

@@ -64,7 +64,7 @@ public enum JSONValue: Codable, Equatable, Sendable {
         case .number(let n): n
         case .string(let s): s
         case .array(let a): a.map(\.any)
-        case .object(let o): Dictionary(uniqueKeysWithValues: o.map { ($0.0, $0.1.any) })
+        case .object(let o): Dictionary(o.map { ($0.0, $0.1.any) }, uniquingKeysWith: { _, last in last })
         }
     }
 
@@ -109,13 +109,16 @@ public struct JSONObject: Equatable, Sendable, Sequence, ExpressibleByDictionary
 
     public var count: Int { keys.count }
     public var isEmpty: Bool { keys.isEmpty }
-    public var values: [JSONValue] { keys.map { dict[$0]! } }
+    public var values: [JSONValue] { keys.compactMap { dict[$0] } }
     public func makeIterator() -> AnyIterator<(String, JSONValue)> {
         var i = 0
         return AnyIterator { () -> (String, JSONValue)? in
-            guard i < keys.count else { return nil }
-            defer { i += 1 }
-            return (keys[i], dict[keys[i]]!)
+            while i < keys.count {
+                let k = keys[i]
+                i += 1
+                if let v = dict[k] { return (k, v) }
+            }
+            return nil
         }
     }
     public static func == (a: JSONObject, b: JSONObject) -> Bool { a.dict == b.dict }

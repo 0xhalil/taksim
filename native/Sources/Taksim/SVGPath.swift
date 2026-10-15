@@ -39,14 +39,14 @@ enum SVGPath {
                 guard let c1 = pt(), let c2 = pt(), let p = pt() else { return path }
                 path.addCurve(to: p, control1: c1, control2: c2); lastCtrl = c2; cur = p
             case "S":
-                let c1 = "CScs".contains(lastCmd) && lastCtrl != nil ? reflect(lastCtrl!, cur) : cur
+                let c1 = ("CScs".contains(lastCmd) ? lastCtrl : nil).map { reflect($0, cur) } ?? cur
                 guard let c2 = pt(), let p = pt() else { return path }
                 path.addCurve(to: p, control1: c1, control2: c2); lastCtrl = c2; cur = p
             case "Q":
                 guard let c1 = pt(), let p = pt() else { return path }
                 path.addQuadCurve(to: p, control: c1); lastCtrl = c1; cur = p
             case "T":
-                let c1 = "QTqt".contains(lastCmd) && lastCtrl != nil ? reflect(lastCtrl!, cur) : cur
+                let c1 = ("QTqt".contains(lastCmd) ? lastCtrl : nil).map { reflect($0, cur) } ?? cur
                 guard let p = pt() else { return path }
                 path.addQuadCurve(to: p, control: c1); lastCtrl = c1; cur = p
             case "A":

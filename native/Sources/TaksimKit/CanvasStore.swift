@@ -190,9 +190,9 @@ public final class CanvasStore {
     public func load(_ c: Canvas) {
         closedTabs.remove(c.id)
         currentId = c.id
-        agents = Dictionary(uniqueKeysWithValues: c.agents.map { ($0.id, $0) })
+        agents = Dictionary(c.agents.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         order = c.agents.map(\.id)
-        groups = Dictionary(uniqueKeysWithValues: (c.groups ?? []).map { ($0.id, $0) })
+        groups = Dictionary((c.groups ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         links = c.links ?? []
         computer = c.computer ?? [:]
         streaming = [:]

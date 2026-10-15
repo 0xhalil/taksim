@@ -111,7 +111,7 @@ enum ThemeChoice: String, CaseIterable, Identifiable {
     }
     var isDark: Bool? { self == .system ? nil : self != .light }
     var scheme: ColorScheme? { isDark.map { $0 ? .dark : .light } }
-    var appearance: NSAppearance? { isDark.map { NSAppearance(named: $0 ? .darkAqua : .aqua)! } }
+    var appearance: NSAppearance? { isDark.flatMap { NSAppearance(named: $0 ? .darkAqua : .aqua) } }
     /// the dark theme this one draws with when the appearance is dark: IntelliJ Dark's values remapped
     var darkMap: [UInt32: UInt32] {
         switch self {

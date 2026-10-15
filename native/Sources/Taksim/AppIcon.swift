@@ -12,7 +12,7 @@ struct AppSymbol: View {
         }
     }
     var templateImage: NSImage {
-        NSImage(systemSymbolName: name, accessibilityDescription: nil)!
+        NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage()
     }
 }
 

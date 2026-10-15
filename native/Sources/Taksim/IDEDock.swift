@@ -297,7 +297,7 @@ extension GraphView {
         for a in agents {
             guard let size = ideSize(a), let canvas = store.currentId else { continue }
             keep.insert(a.id)
-            let h = ides[a.id] ?? makeIDE(a.id, canvas: canvas)
+            let h = ides[a.id] ?? makeIDE(a.id, canvas: canvas, api: store.api)
             h.model.state = IDEDockState(a.ide)
             h.model.title = a.folder?.name ?? a.ide?["rootName"]?.string ?? a.name
             h.model.branch = a.folder?.branch
@@ -321,9 +321,9 @@ extension GraphView {
         }
     }
 
-    private func makeIDE(_ id: String, canvas: String) -> IDEHost {
+    private func makeIDE(_ id: String, canvas: String, api: APIClient) -> IDEHost {
         let m = IDEDockModel(id: id)
-        let h = IDEHost(model: m, ide: IDEModel(agent: id, client: IDEClient(api: store!.api, canvas: canvas, agent: id)))
+        let h = IDEHost(model: m, ide: IDEModel(agent: id, client: IDEClient(api: api, canvas: canvas, agent: id)))
         h.canvas = canvas
         m.collapse = { [weak self] in self?.store?.ideUI(id, collapsed: true); self?.relayoutDocks() }
         m.open = { [weak self] in self?.store?.ideUI(id, collapsed: false); self?.relayoutDocks() }
