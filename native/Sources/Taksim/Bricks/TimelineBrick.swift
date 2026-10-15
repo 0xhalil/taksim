@@ -61,7 +61,7 @@ struct TimelineBrick: BrickView {
             var lanes: [String: [[Bricks.Interval]]] = [:]
             for it in items.sorted(by: { $0.start < $1.start }) {
                 var subs = lanes[it.group ?? "—", default: []]
-                if let i = subs.firstIndex(where: { ($0.last!.open ? Double.infinity : $0.last!.end!) <= it.start }) { subs[i].append(it) }
+                if let i = subs.firstIndex(where: { (($0.last.flatMap { $0.open ? nil : $0.end }) ?? Double.infinity) <= it.start }) { subs[i].append(it) }
                 else { subs.append([it]) }
                 lanes[it.group ?? "—"] = subs
             }

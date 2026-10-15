@@ -176,13 +176,14 @@ func key(_ o: Obj) throws {
     var parts = combo.split(separator: "+", omittingEmptySubsequences: false).map(String.init)
     if combo.hasSuffix("++") { parts.removeLast(2); parts.append("+") } // "cmd++"
     let name = parts.removeLast()
-    let flags = try modifierFlags(parts), mods = parts.compactMap { modifierKeys[$0.lowercased()]?.1 }
+    let flags = try modifierFlags(parts)
+    let mods = parts.compactMap { modifierKeys[$0.lowercased()] }
     let lower = name.lowercased()
     let code = keyCodes[lower] ?? modifierKeys[lower]?.1
     let times = max(1, min(100, Int(num(o["repeat"]) ?? 1))), hold = min(10, num(o["hold"]) ?? 0)
     for _ in 0..<times {
         var held = CGEventFlags()
-        for (i, m) in mods.enumerated() { held.insert(modifierKeys[parts[i].lowercased()]!.0); keyEvent(m, true, held) }
+        for (flag, keyCode) in mods { held.insert(flag); keyEvent(keyCode, true, held) }
         if let code {
             keyEvent(code, true, flags)
             if hold > 0 { usleep(useconds_t(hold * 1_000_000)) }
@@ -190,7 +191,7 @@ func key(_ o: Obj) throws {
         } else if name.count == 1 {
             typeText(name, flags)
         } else { throw Failure("unknown key \(name)") }
-        for m in mods.reversed() { keyEvent(m, false, []) }
+        for (_, keyCode) in mods.reversed() { keyEvent(keyCode, false, []) }
         usleep(20000)
     }
 }
@@ -240,6 +241,7 @@ func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {
 func frame(_ el: AXUIElement) -> CGRect? {
     guard let p = attr(el, kAXPositionAttribute), let s = attr(el, kAXSizeAttribute) else { return nil }
     var pt = CGPoint.zero, sz = CGSize.zero
+    guard CFGetTypeID(p) == AXValueGetTypeID(), CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
     AXValueGetValue(p as! AXValue, .cgPoint, &pt)
     AXValueGetValue(s as! AXValue, .cgSize, &sz)
     return CGRect(origin: pt, size: sz)
@@ -264,7 +266,7 @@ func read(_ o: Obj) throws -> Obj {
     guard let app else { throw Failure("no running app \(o["app"] as? String ?? "")") }
     let root = AXUIElementCreateApplication(app.processIdentifier)
     AXUIElementSetMessagingTimeout(root, 2)
-    let win = attr(root, kAXFocusedWindowAttribute).map { $0 as! AXUIElement }
+    let win = attr(root, kAXFocusedWindowAttribute).flatMap { CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil }
         ?? (attr(root, kAXWindowsAttribute) as? [AXUIElement])?.first
     guard let win else { return ["app": app.localizedName ?? "", "nodes": [Obj]()] }
     let limit = Int(num(o["max"]) ?? 400)

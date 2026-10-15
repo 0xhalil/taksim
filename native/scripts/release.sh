@@ -65,6 +65,10 @@ if [ "$(uname -m)" = arm64 ]; then
   echo "smoke test: the bundled node and node-pty work"
 fi
 
+# The signed app starts in a clean room (a copy, a sandbox that cannot read this checkout) and opens what opening a
+# file opens; a missing resource bundle traps there, as it did on other Macs in 0.1.2. Not published if it fails.
+native/scripts/smoke.sh "$APP" || { echo "the packaged app cannot start without this checkout" >&2; exit 1; }
+
 # Apple's notary service looks a file over (minutes) and says Accepted or why not
 notarize() {
   RESULT=$(xcrun notarytool submit "$1" --key "$TAKSIM_NOTARY_KEY" --key-id "$TAKSIM_NOTARY_KEY_ID" \

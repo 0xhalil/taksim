@@ -83,19 +83,32 @@ final class EditorMarks: TextViewCoordinator {
     var reveal: IDEReveal? { didSet { if reveal != oldValue { drawReveal() } } }
 
     nonisolated func prepareCoordinator(controller: TextViewController) {
-        MainActor.assumeIsolated { self.controller = controller }
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { self.controller = controller }
+        } else {
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.controller = controller } }
+        }
     }
 
     nonisolated func controllerDidAppear(controller: TextViewController) {
-        MainActor.assumeIsolated {
+        let block = { @MainActor in
             self.controller = controller
-            drawNotes()
+            self.drawNotes()
             DispatchQueue.main.async { self.drawReveal() }
+        }
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { block() }
+        } else {
+            DispatchQueue.main.async { MainActor.assumeIsolated { block() } }
         }
     }
 
     nonisolated func textViewDidChangeText(controller: TextViewController) {
-        MainActor.assumeIsolated { drawNotes() } // lines moved under them
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { self.drawNotes() }
+        } else {
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.drawNotes() } }
+        }
     }
 
     nonisolated func destroy() {}
@@ -179,6 +192,13 @@ final class EditorMarks: TextViewCoordinator {
 /// there. build-app.sh ships the bundle in Contents/Resources; for the one moment `Bundle.module` is made, the
 /// main bundle answers from there.
 enum EditorResources {
+    /// TAKSIM_SELFTEST=1: do what opening a file does, print the result and quit (scripts/smoke.sh runs it in a
+    /// sandbox that hides this checkout, to see what a Mac without a build folder sees)
+    static func selfTest() {
+        let lang = IDEEditor.language("/tmp/selftest.swift")
+        print("selftest: \(lang.id)")
+        exit(lang.id == .swift ? 0 : 3)
+    }
     static func load() {
         guard let res = Bundle.main.resourceURL,
               FileManager.default.fileExists(atPath: res.appendingPathComponent("CodeEditLanguages_CodeEditLanguages.bundle").path),

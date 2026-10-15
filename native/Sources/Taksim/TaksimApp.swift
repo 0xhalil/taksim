@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         EditorResources.load()
+        if ProcessInfo.processInfo.environment["TAKSIM_SELFTEST"] == "1" { EditorResources.selfTest() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -329,8 +330,8 @@ final class AppModel {
             }
             // TAKSIM_SNAPSHOT_IDEDOCK=agentId[:project|commit]: open its IDE as the node's </> would (which
             // pane the shot shows is set once the dock is up, below)
-            if let v = env["TAKSIM_SNAPSHOT_IDEDOCK"] {
-                s.openIDE(v.split(separator: ":").map(String.init)[0])
+            if let v = env["TAKSIM_SNAPSHOT_IDEDOCK"], let id = v.split(separator: ":").first {
+                s.openIDE(String(id))
             }
             // terminals connect and draw what the server sends first
             let host = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 1200, height: 726), styleMask: [.borderless], backing: .buffered, defer: false)
