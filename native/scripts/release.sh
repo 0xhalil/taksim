@@ -2,7 +2,8 @@
 # Publishes a version of the app to GitHub Releases, where installed apps find it (Updater.swift):
 #   native/scripts/release.sh 0.3.0 ["what changed"]
 # builds the app with that version, packs the engine (bin, src, ui, its runtime modules) and this Mac's Node
-# into it, zips it, writes the zip's SHA-256 beside it, and creates release v0.3.0 with both files.
+# into it, zips it, writes the zip's SHA-256 beside it, makes Taksim.dmg (the website's download) and creates
+# release v0.3.0 with those files.
 # The releases repository is TAKSIM_RELEASE_REPO (default 0xhalil/taksim, the source repository itself); it must be public.
 # Without --publish it only builds the files under native/build/release/ (to try them first).
 set -e
@@ -36,9 +37,14 @@ ZIP="$OUT/Taksim-$VERSION.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 shasum -a 256 "$ZIP" | awk '{print $1}' > "$ZIP.sha256"
 echo "$ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(cat "$ZIP.sha256")"
+# the website's Download button points at releases/latest/download/Taksim.dmg: always this exact name
+DMG="$OUT/Taksim.dmg"
+STAGE=$(mktemp -d); cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
+hdiutil create -quiet -volname Taksim -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"; rm -rf "$STAGE"
+echo "$DMG ($(du -h "$DMG" | cut -f1))"
 
 [ -n "$PUBLISH" ] || { echo "built; add --publish to release it on $REPO"; exit 0; }
-gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" --repo "$REPO" --title "taksim $VERSION" --notes "${NOTES:-taksim $VERSION}"
+gh release create "v$VERSION" "$ZIP" "$ZIP.sha256" "$DMG" --repo "$REPO" --title "taksim $VERSION" --notes "${NOTES:-taksim $VERSION}"
 echo "published v$VERSION on $REPO"
 
 # Homebrew: the cask in the tap (TAKSIM_TAP, default 0xhalil/homebrew-taksim) points at this release

@@ -884,6 +884,8 @@ footer p { margin: 0; margin-left: auto; color: var(--muted); font: 400 12px/1.4
   requestAnimationFrame(frame);
   texts();
   start(still);
+  // the mark plays again every 2 s (the opening runs about 1.7 s), but not while the tab is out of sight
+  setInterval(function () { if (!document.hidden) markPlay(); }, 2000);
 })();
 </script>
 
