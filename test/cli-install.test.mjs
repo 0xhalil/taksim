@@ -36,7 +36,8 @@ test("installing a missing CLI: one click, progress in the list, the CLI found a
   assert.equal((await codex()).installed, false);
   // npm gets the official package and installs under taksim's own folder (no -g into the system)
   standIn(`echo "$@" > "${join(tools, "args")}"; P=""; while [ $# -gt 0 ]; do [ "$1" = "--prefix" ] && P="$2"; shift; done
-sleep 0.4; mkdir -p "$P/bin"; printf '#!/bin/sh\\nexit 0\\n' > "$P/bin/codex"; chmod +x "$P/bin/codex"`);
+sleep 0.4; mkdir -p "$P/bin"; printf '#!/bin/sh\\nexit 0\\n' > "$P/bin/codex"; chmod +x "$P/bin/codex"; sleep 0.5`);
+  // (npm, like this stand-in, puts the command in place a moment before it exits: found means no longer installing)
   const started = await api("POST", "/v1/accounts/backends/codex/install");
   assert.equal(started.status, 202);
   assert.equal(started.data.installing, true);

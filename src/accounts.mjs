@@ -175,9 +175,13 @@ export function listAccounts() {
     status: statusCache.get(a.id) || null, loggingIn: logins.has(a.id) }));
 }
 
-// The CLIs accounts can be made for, and whether each is installed here.
+// The CLIs accounts can be made for, and whether each is installed here. A CLI that is found is no longer
+// installing: npm puts the command in place a moment before it exits, and the list showed both at once.
 export function accountBackends() {
-  return ACCOUNT_BACKENDS.map((name) => ({ name, label: KINDS[name].label, installed: installed(name), ...installState(name) }));
+  return ACCOUNT_BACKENDS.map((name) => {
+    const found = installed(name);
+    return { name, label: KINDS[name].label, installed: found, ...(found ? { installing: false, installError: null } : installState(name)) };
+  });
 }
 
 // Installs a CLI that isn't on this computer (see cli-install.mjs); the list above shows how it goes.
