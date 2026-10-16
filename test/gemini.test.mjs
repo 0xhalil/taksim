@@ -40,7 +40,7 @@ test("headless: stream-json, read-only as plan, a named session; its MCP url in 
   assert.equal(a[a.indexOf("--approval-mode") + 1], "plan");
   assert.equal(a[a.indexOf("--session-id") + 1], "s-1");
   assert.match(a.at(-1), /<instructions>\nbe brief\n<\/instructions>\n\nhi/);
-  assert.deepEqual(r.env, { TAKSIM_MCP_URL: "http://127.0.0.1:1/mcp/tok", TAKSIM_HOOK_URL: "" }, "hooks stay quiet in headless runs");
+  assert.deepEqual(r.env, { TAKSIM_MCP_URL: "http://127.0.0.1:1/mcp/tok", TAKSIM_HOOK_URL: "", TAKSIM_PERMISSION_URL: "" }, "hooks stay quiet in headless runs");
   assert.ok(gemini.build({ model: "gemini", prompt: "x", opts: { cwd: "/tmp", session: "s-1" } }).args.includes("--resume"));
 });
 

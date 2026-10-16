@@ -7,6 +7,7 @@
 
 import { randomUUID } from "node:crypto";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
+import { asksPermission, permissionEnv, hookCommand, HOOK_TIMEOUT_S } from "../term/permission-hook.mjs";
 
 const hook = (event) => ({ hooks: [{ type: "command",
   command: `[ -n "$TAKSIM_HOOK_URL" ] && curl -s -m 5 -X POST -H 'content-type: application/json' --data-binary @- "$TAKSIM_HOOK_URL/${event}" >/dev/null 2>&1; true` }] });
@@ -14,7 +15,10 @@ const hook = (event) => ({ hooks: [{ type: "command",
 /** what taksim adds to a Gemini account's settings.json: the same for every agent, the urls come from the env */
 export const TAKSIM_SETTINGS = {
   mcpServers: { taksim: { httpUrl: "$TAKSIM_MCP_URL", trust: true, timeout: 15 * 60 * 1000 } },
-  hooks: { SessionStart: [hook("ready")], BeforeAgent: [hook("start")], AfterAgent: [hook("stop")] },
+  hooks: { SessionStart: [hook("ready")], BeforeAgent: [hook("start")], AfterAgent: [hook("stop")],
+    // Manual / Accept edits: asks the person before a tool runs, only in runs that set the url (permission-hook.mjs)
+    BeforeTool: [{ matcher: "*", hooks: [{ type: "command", timeout: HOOK_TIMEOUT_S * 1000,
+      command: `[ -z "$TAKSIM_PERMISSION_URL" ] && exit 0; exec $TAKSIM_PERMISSION_HOOK` }] }] },
 };
 
 export default {
@@ -27,14 +31,18 @@ export default {
   matches: (m) => m.startsWith("gemini"),
   maxConcurrency: Number(process.env.TAKSIM_GEMINI_CONCURRENCY || 2),
   hooks: true,          // BeforeAgent / AfterAgent report terminal turns
+  // Manual and Accept edits ask through a BeforeTool hook, which lives in the settings of taksim's Gemini accounts
+  permissions: ["auto", "default", "acceptEdits"], permissionsNeedAccount: true,
   readyHook: true,      // SessionStart says the TUI is up
   ownSessionIds: true,  // --session-id names a new session; --resume <uuid> continues it
 
   build({ model, system, prompt, opts }) {
     const args = ["--output-format", "stream-json", "--skip-trust"];
     if (model !== "gemini") args.push("-m", model);
-    // plan = read-only; auto_edit lets it change files without asking; yolo would also run commands unasked
-    args.push("--approval-mode", !opts.cwd || opts.sandbox === "read-only" ? "plan" : "auto_edit");
+    // plan = read-only; auto_edit lets it change files without asking; yolo would also run commands unasked.
+    // Manual / Accept edits: the BeforeTool hook asks the person, so the CLI's own confirmation steps aside
+    const asks = asksPermission(opts);
+    args.push("--approval-mode", !opts.cwd || opts.sandbox === "read-only" ? "plan" : asks ? "yolo" : "auto_edit");
     if (opts.session) args.push(opts.newSession ? "--session-id" : "--resume", opts.session);
     else args.push("--session-id", randomUUID());
 
@@ -42,7 +50,8 @@ export default {
     const text = system ? `<instructions>\n${system}\n</instructions>\n\n${prompt}` : prompt;
     args.push("-p", text);
     if (opts.mcp?.off?.length) args.push("--allowed-mcp-server-names", "taksim", ...opts.mcp.cli.map((s) => s.name));
-    const env = opts.mcpUrl ? { TAKSIM_MCP_URL: opts.mcpUrl, TAKSIM_HOOK_URL: "" } : undefined;
+    const env = { ...(opts.mcpUrl ? { TAKSIM_MCP_URL: opts.mcpUrl, TAKSIM_HOOK_URL: "" } : {}),
+      ...(asks ? { ...permissionEnv(opts), TAKSIM_PERMISSION_HOOK: hookCommand("gemini") } : { TAKSIM_PERMISSION_URL: "" }) };
     return { args, cwd: opts.cwd || CHAT_DIR, stdin: "", env };
   },
 

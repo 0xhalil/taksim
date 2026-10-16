@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
 import { HOME } from "../canvas/store.mjs";
+import { asksPermission, permissionEnv, hookCommand, HOOK_TIMEOUT_S } from "../term/permission-hook.mjs";
 
 const onPath = (f) => (process.env.PATH || "").split(delimiter).some((d) => d && existsSync(join(d, f)));
 export const COPILOT_CMD = splitCmd(process.env.TAKSIM_COPILOT_BIN || (onPath("copilot") ? "copilot" : "npx --yes @github/copilot"));
@@ -21,7 +22,10 @@ export function hookPlugin() {
   const dir = join(HOME, "copilot-plugin");
   const files = {
     ".claude-plugin/plugin.json": { name: "taksim", version: "1.0.0", description: "taksim turn hooks" },
-    "hooks/hooks.json": { hooks: { UserPromptSubmit: [hook("start")], Stop: [hook("stop", true)] } },
+    "hooks/hooks.json": { hooks: { UserPromptSubmit: [hook("start")], Stop: [hook("stop", true)],
+      // Manual / Accept edits (headless runs that set the url): the person allows or refuses each tool call
+      preToolUse: [{ type: "command", timeoutSec: HOOK_TIMEOUT_S,
+        bash: `[ -z "$TAKSIM_PERMISSION_URL" ] && exit 0; exec ${hookCommand("copilot")}` }] } },
   };
   for (const [f, data] of Object.entries(files)) {
     const path = join(dir, f), text = JSON.stringify(data, null, 2);
@@ -54,6 +58,7 @@ export function copilotBackend({ name, wire, ...rest }) {
     cmd: COPILOT_CMD,
     maxConcurrency: 2,
     hooks: true,          // UserPromptSubmit / Stop report terminal turns
+    permissions: ["auto", "default", "acceptEdits"], // Manual and Accept edits ask through a preToolUse hook
     readyHook: true,      // a turn starts only with the start hook, not with a typed line
     // the composer's footer: past the folder trust question (SessionStart waits for the first prompt)
     readyPattern: /\/ commands · \? help/,
@@ -78,7 +83,10 @@ export function copilotBackend({ name, wire, ...rest }) {
         ...(opts.mcp?.added || []).flatMap((s) => ["--allow-tool", s.name]), ...mcpOff(opts.mcp));
       if (opts.session) args.push("--session-id", opts.session);
       if (opts.effort) args.push("--reasoning-effort", opts.effort);
-      return { args, cwd: opts.cwd || CHAT_DIR, stdin: "", env: { COPILOT_AUTO_UPDATE: "false", ...w.env } };
+      // Manual / Accept edits: tools are still allowed up front, and the plugin's preToolUse hook asks the person
+      const asks = asksPermission(opts);
+      if (asks) args.push("--plugin-dir", hookPlugin());
+      return { args, cwd: opts.cwd || CHAT_DIR, stdin: "", env: { COPILOT_AUTO_UPDATE: "false", ...w.env, ...(asks ? permissionEnv(opts) : { TAKSIM_PERMISSION_URL: "" }) } };
     },
 
     // The interactive TUI for a terminal node; tools still ask in the TUI unless the agent is read-only.

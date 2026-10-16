@@ -1,12 +1,26 @@
 // Codex CLI: `codex exec --json`.
 
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { CHAT_DIR, ROOT, splitCmd } from "../config.mjs";
+import { asksPermission, permissionEnv, hookCommand, HOOK_TIMEOUT_S } from "../term/permission-hook.mjs";
 
 const tq = (s) => String(s).replace(/\\/g, "\\\\").replace(/"/g, `\\"`);
 const tomlArray = (a) => `[${a.map((x) => `"${tq(x)}"`).join(", ")}]`;
+/**
+ * -c assignments for taksim's PreToolUse hook and its trust. Codex runs a hook it didn't load from a managed
+ * layer only when hooks.state holds its hash: sha256 of the key-sorted JSON of the group (codex-rs config
+ * fingerprint.rs), keyed by where the -c layer puts it (checked with codex 0.162.1).
+ */
+export function codexPermissionHook() {
+  const handler = { async: false, command: hookCommand("codex"), timeout: HOOK_TIMEOUT_S, type: "command" };
+  const hash = createHash("sha256").update(JSON.stringify({ event_name: "pre_tool_use", hooks: [handler], matcher: ".*" })).digest("hex");
+  return ["-c", `hooks.PreToolUse=[{matcher=".*",hooks=[{type="command",command="${tq(handler.command)}",timeout=${HOOK_TIMEOUT_S}}]}]`,
+    "-c", `hooks.state={"/<session-flags>/config.toml:pre_tool_use:0:0"={trusted_hash="sha256:${hash}"}}`];
+}
+
 /** -c assignments for an agent's MCP servers: the added ones (pre-approved: exec can't ask), the ones turned off */
 function mcpArgs(mcp) {
   const out = [];
@@ -31,6 +45,7 @@ export default {
   matches: (m) => /^(gpt|codex|o\d)/.test(m),
   maxConcurrency: Number(process.env.TAKSIM_CODEX_CONCURRENCY || 2),
   hooks: true,           // notify reports the end of each terminal turn (there is no start event)
+  permissions: ["auto", "default", "acceptEdits"], // Manual and Accept edits ask through a PreToolUse hook
   ownSessionIds: false,  // the thread id arrives with the first notify
   readyPattern: /Ask Codex to do anything/, // composer placeholder: past the update/trust screens
   busyPattern: /esc to interrupt|Working \(/,  // shown while a turn runs
@@ -50,12 +65,17 @@ export default {
       common.push("-c", `mcp_servers.taksim.url="${tq(opts.mcpUrl)}"`, "-c", "mcp_servers.taksim.tool_timeout_sec=900",
         "-c", 'mcp_servers.taksim.default_tools_approval_mode="approve"', ...mcpArgs(opts.mcp));
     }
+    // Manual / Accept edits: a PreToolUse hook asks the person in the chat before a command, a patch or an MCP
+    // tool runs. It is given for this run only, and trusted for this run only, by its hash: only this hook,
+    // never another hook the person has not reviewed (as --dangerously-bypass-hook-trust would).
+    const asks = asksPermission(opts);
+    if (asks) common.push(...codexPermissionHook());
     const args = opts.session
       ? ["exec", "resume", ...common, opts.session, "-"]
       : ["exec", ...common, "-"];
     // codex exec has no system-prompt flag, so instructions ride in the prompt.
     const stdin = system ? `<instructions>\n${system}\n</instructions>\n\n${prompt}` : prompt;
-    return { args, cwd: opts.cwd || CHAT_DIR, stdin };
+    return { args, cwd: opts.cwd || CHAT_DIR, stdin, ...(asks ? { env: permissionEnv(opts) } : {}) };
   },
 
   // The interactive TUI for a terminal node; codex has no system-prompt flag, the MCP server's

@@ -24,6 +24,7 @@ export default {
   cmd: splitCmd(process.env.TAKSIM_CLAUDE_BIN || "claude"),
   models: ["opus", "sonnet", "haiku", "fable"],
   defaultModel: process.env.TAKSIM_CLAUDE_MODEL || "sonnet",
+  permissions: true,    // every node permission mode: its own --permission-mode, asking through mcp__taksim__approve
   matches: (m) => /^(claude|opus|sonnet|haiku|fable)/.test(m),
   maxConcurrency: Number(process.env.TAKSIM_CLAUDE_CONCURRENCY || 3),
   hooks: true,          // start/stop hooks report terminal turns

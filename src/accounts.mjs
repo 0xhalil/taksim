@@ -324,8 +324,8 @@ export function removeAccount(ref) {
 export function accountEnv(account) {
   if (!account?.dir || !KINDS[account.backend]) return {};
   const env = KINDS[account.backend].env(account.dir);
-  // a Gemini account made before taksim wrote its part into the settings gets it now
-  if (account.backend === "gemini" && existsSync(account.dir) && !readJson(join(account.dir, ".gemini", "settings.json")).mcpServers?.taksim) {
+  // a Gemini account made before taksim wrote its part (or its permission hook) into the settings gets it now
+  if (account.backend === "gemini" && existsSync(account.dir) && (s => !s.mcpServers?.taksim || !s.hooks?.BeforeTool)(readJson(join(account.dir, ".gemini", "settings.json")))) {
     try { KINDS.gemini.seed(account.dir); } catch { /* its CLI runs without taksim's tools */ }
   }
   // signed in with an API key: the CLI gets it from the environment, read from the keychain as it starts

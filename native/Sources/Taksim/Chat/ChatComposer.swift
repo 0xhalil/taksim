@@ -403,7 +403,7 @@ struct ChatComposer: View {
         switch mode { case "default": L("Manual"); case "acceptEdits": L("Accept edits"); case "bypassPermissions": L("Bypass"); default: L("Auto") }
     }
     static func permissionHint(_ mode: String) -> String {
-        switch mode { case "default": L("Asks before every change"); case "acceptEdits": L("Edits files, asks about the rest"); case "bypassPermissions": L("Does everything without asking"); default: L("Claude decides what is safe") }
+        switch mode { case "default": L("Asks before every change"); case "acceptEdits": L("Edits files, asks about the rest"); case "bypassPermissions": L("Does everything without asking"); default: L("The agent decides what is safe") }
     }
     static func permissionSymbol(_ mode: String) -> String {
         switch mode { case "default": "hand.raised"; case "acceptEdits": "pencil"; case "bypassPermissions": "exclamationmark.shield"; default: "wand.and.stars" }

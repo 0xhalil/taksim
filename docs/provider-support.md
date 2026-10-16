@@ -113,7 +113,8 @@ fix request still needs checking per model.
   `session.todos_changed` signal.
 - Bring task events of agents opened as terminals into the native chat.
 - Verify task and tool flows with real CLI versions; check a local model's tool calling separately.
-- Widen the inventory of provider features: question/permission flows, plan tools, steering a turn, session branches,
+- Gemini's permission hook: try it with a real run on a signed-in taksim Gemini account.
+- Widen the inventory of provider features: question flows, plan tools, steering a turn, session branches,
   context meters, sub-agents, image input and provider-specific settings. Judge each against official sources and a
   real connection; parity across these isn't there yet.
 - Computer control: try it with a real run per CLI, and with permissions granted. Consider showing the agent's
@@ -121,12 +122,32 @@ fix request still needs checking per model.
 
 ## Permission modes (per node)
 
-- Claude: Auto, Manual, Accept edits and, with `TAKSIM_ALLOW_DANGEROUS=1`, Bypass. Manual and Accept edits send what Claude
-  would ask about to the chat (`--permission-prompt-tool mcp__taksim__approve`); the person allows, allows that kind for
-  the chat, or denies. Verified with the real CLI (allow and deny). Unset means Auto: a write agent used to run in
-  Accept edits, which refuses shell commands such as `curl` in a headless turn.
-- Codex, Gemini, Copilot, opencode: no choice yet (unverified gap). Their headless runs follow the sandbox alone
-  (codex `sandbox_mode`, gemini `auto_edit`); whether each CLI has a host-answered permission prompt is not checked.
+Auto, Manual and Accept edits on every CLI that runs headless; Bypass stays Claude's (with `TAKSIM_ALLOW_DANGEROUS=1`).
+Manual asks before edits, commands, web fetches and other MCP tools; Accept edits lets edits through and asks about
+the rest; reads and taksim's own tools never ask. Every question is the same chat card (Allow, Allow this kind in this
+chat, Deny) from the same approve flow, and anything but a clear yes is a no.
+
+| Connection | How it asks | Verified |
+|---|---|---|
+| Claude | `--permission-prompt-tool mcp__taksim__approve` | Real CLI: allow and deny |
+| Codex | `PreToolUse` hook given with `-c` for the run, trusted for that run only by its hash (`hooks.state`), never with `--dangerously-bypass-hook-trust` | Real run (gpt-6-luna, 2026-10-16): allow wrote the file, deny didn't |
+| Copilot | `preToolUse` in taksim's hook plugin (`--plugin-dir`); a hook decision holds under `--allow-all-tools` | Real run (2026-10-16): allow and deny |
+| opencode | taksim's plugin (`OPENCODE_CONFIG_CONTENT` `plugin`), `tool.execute.before` throws on a no | Real run (deepseek-v4.1-flash-free, 2026-10-16): allow and deny; the model was told it was declined |
+| Gemini | `BeforeTool` hook in the settings of taksim's Gemini accounts; the run uses `--approval-mode yolo` so the hook is the gate | Unit tests only: no signed-in Gemini on the test machine. Not offered on this Mac's own Gemini login, which runs without taksim's settings |
+
+How it works: `src/term/permission-hook.mjs` (the hook the CLIs run, Node), `permission-adapters.mjs` (each CLI's
+payload in Claude's words, and its answer format), `permission-plugin.mjs` (opencode), and
+`POST /hooks/<agent token>/permission` on the engine. `test/permission-hook.test.mjs` covers the decisions, every
+format and a real child process against a stand-in engine.
+
+Limits:
+
+- Codex runs an allowed command inside its sandbox as before: an approved `curl` still has no network under
+  `workspace-write`.
+- A hook that crashes or times out lets the call through on Codex, Gemini and Copilot (their rule, not taksim's); the
+  timeout is a day, and a hook that can't reach taksim answers no.
+- Terminal nodes (the CLIs' own TUIs) still ask in the terminal.
+- Codex reads files with shell commands, so in Manual it asks about those too.
 
 ## Official sources
 

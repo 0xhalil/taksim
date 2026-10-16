@@ -142,17 +142,23 @@ export class Agent {
 
   get backend() { return pickBackend(this.model).backend.name; }
 
+  /** the modes this node's CLI can run in: Claude all of them, a CLI with a permission hook all but bypass */
+  permissionModes() {
+    const b = pickBackend(this.model)?.backend;
+    if (!b?.permissions || (b.permissionsNeedAccount && !this.login?.dir)) return [];
+    return NODE_PERMISSIONS().filter((p) => b.permissions === true || b.permissions.includes(p));
+  }
   /** how this node's turns ask for permission: what the person picked, else Claude judges (auto) */
   permissionMode() {
     const p = this.permission || "auto";
-    return NODE_PERMISSIONS().includes(p) ? p : "auto";
+    return this.permissionModes().includes(p) ? p : "auto";
   }
 
   toJSON() { return Object.fromEntries(PERSISTED.map((k) => [k, this[k] ?? null])); }
 
   view() {
     // how full the context is, as the CLI measured it on the last turn; a new session starts empty
-    return { ...this.toJSON(), permissions: this.backend === "claude" ? NODE_PERMISSIONS() : [], context: this.session ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
+    return { ...this.toJSON(), permissions: this.permissionModes(), context: this.session ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
       waitingOn: [...this.waitingOn], blockedBy: this.blockedBy || [], workingWith: this.orchestration?.working() || [],
       lastError: this.lastError, lastText: this.lastText.slice(0, 280),
       accountName: this.accountName, usageKey: this.usageKey, folder: this.folder,
@@ -519,7 +525,9 @@ export class Agent {
       // CLIs that let us name sessions get a fresh id up front; the others report theirs.
       const newSession = !this.session && backend.ownSessionIds;
       const session = this.session || (newSession ? randomUUID() : undefined);
-      const opts = { cwd, sandbox: sandbox || undefined, permission: this.permissionMode(), session, newSession, mcpUrl, effort: this.effort || undefined, lang: canvas.lang, mcp: agentServers(this) };
+      // CLIs without a permission-prompt tool ask through a pre-tool hook that posts here (src/term/permission-hook.mjs)
+      const permissionUrl = `${this.hookUrl}/permission`;
+      const opts = { cwd, sandbox: sandbox || undefined, permission: this.permissionMode(), permissionUrl, session, newSession, mcpUrl, effort: this.effort || undefined, lang: canvas.lang, mcp: agentServers(this) };
       let streamed = "";
       // group changes since the last turn, said in the message too: a resumed session may otherwise keep
       // to what it answered before joining (the system prompt alone doesn't override its own history)

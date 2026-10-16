@@ -1,7 +1,9 @@
 // opencode: `opencode run --format json`. Models are provider/model, listed by `opencode models`.
 
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
+import { asksPermission, permissionEnv, PLUGIN } from "../term/permission-hook.mjs";
 
 /** opencode's mcp entries for an agent's added servers, and the user's own ones it turned off */
 function opencodeServers(mcp) {
@@ -20,6 +22,7 @@ export default {
   defaultModel: process.env.TAKSIM_OPENCODE_MODEL || "opencode-go/glm-5.3",
   matches: (m) => m.includes("/"),
   maxConcurrency: Number(process.env.TAKSIM_OPENCODE_CONCURRENCY || 2),
+  permissions: ["auto", "default", "acceptEdits"], // Manual and Accept edits ask through taksim's plugin
 
   async init() {
     const [bin, ...pre] = this.cmd;
@@ -57,10 +60,13 @@ export default {
       if (opts.sandbox === "read-only") args.push("--agent", "plan");
       if (system) text = `<instructions>\n${system}\n</instructions>\n\n${prompt}`;
     }
+    // Manual / Accept edits: taksim's plugin asks the person before a tool runs (permission-plugin.mjs)
+    const asks = asksPermission(opts);
+    if (asks) config.plugin = [pathToFileURL(PLUGIN).href];
     if (opts.session) args.push("--session", opts.session);
     if (opts.effort) args.push("--variant", opts.effort);
     args.push("--", text);
-    const env = Object.keys(config).length ? { OPENCODE_CONFIG_CONTENT: JSON.stringify(config) } : undefined;
+    const env = { ...(Object.keys(config).length ? { OPENCODE_CONFIG_CONTENT: JSON.stringify(config) } : {}), ...(asks ? permissionEnv(opts) : {}) };
     return { args, cwd: opts.cwd || CHAT_DIR, stdin: "", env };
   },
 

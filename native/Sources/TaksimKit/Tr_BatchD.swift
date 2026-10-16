@@ -51,5 +51,6 @@ extension Tr {
         "now": "şimdi",
         "per row": "her satır için",
         "scene": "sahne",
+        "The agent decides what is safe": "Neyin güvenli olduğuna ajan karar verir",
     ]
 }

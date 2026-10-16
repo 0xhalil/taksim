@@ -65,7 +65,8 @@ test("the terminal gets taksim's hook plugin and the agent's instructions", asyn
   assert.equal(t.env.TAKSIM_HOOK_URL, "http://h/hooks/t");
   assert.equal(readFileSync(join(t.env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS, "AGENTS.md"), "utf8"), "You are on a canvas.");
   const hooks = JSON.parse(readFileSync(join(t.args[t.args.indexOf("--plugin-dir") + 1], "hooks", "hooks.json"), "utf8")).hooks;
-  assert.deepEqual(Object.keys(hooks), ["UserPromptSubmit", "Stop"]);
+  assert.deepEqual(Object.keys(hooks), ["UserPromptSubmit", "Stop", "preToolUse"]);
+  assert.match(hooks.preToolUse[0].bash, /^\[ -z "\$TAKSIM_PERMISSION_URL" \] && exit 0;/, "the permission hook stays quiet unless a run asks");
   assert.match(hooks.Stop[0].hooks[0].command, /\$TAKSIM_HOOK_URL\/stop/);
 });
 

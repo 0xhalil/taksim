@@ -104,6 +104,13 @@ async function handle(req, res) {
 
   // turn start/stop from a terminal agent's CLI hooks; the agent token is the credential
   const hook = path.match(/^\/hooks\/([\w-]+)\/(ready|start|stop)$/);
+  // a CLI's pre-tool hook asking whether a tool call may run: the person answers in the chat (headless turns)
+  const ask = path.match(/^\/hooks\/([\w-]+)\/permission$/);
+  if (ask && req.method === "POST") {
+    const agent = agentByToken(ask[1]);
+    if (!agent) return sendJson(res, 404, { error: { message: "unknown hook token" } });
+    return sendJson(res, 200, await agent.workflow.approve(await readJson(req).catch(() => ({}))));
+  }
   if (hook && req.method === "POST") {
     const agent = agentByToken(hook[1]);
     if (!agent) return sendJson(res, 404, { error: { message: "unknown hook token" } });
