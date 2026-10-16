@@ -30,7 +30,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # waiting for the test run happens on a cheap Linux machine, not on the macOS one that builds
+  tested:
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: The tests passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          # the `test` workflow runs on every push to main; a tag pushed right behind it waits for it
+          for i in $(seq 1 60); do
+            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=20" \
+              --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
+            case " $runs " in *" success "*) echo "tests passed on $SHA"; exit 0 ;; esac
+            case " $runs " in *" pending "*) ;; *"  "*) [ "$i" -gt 6 ] && break ;; *) echo "tests did not pass on $SHA: $runs" >&2; exit 1 ;; esac
+            sleep 30
+          done
+          echo "no passing test run for $SHA" >&2; exit 1
+
   release:
+    needs: tested
+    if: ${{ !cancelled() && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
     runs-on: macos-26
     timeout-minutes: 240
     steps:
@@ -73,21 +96,6 @@ jobs:
             echo "publish=$PUBLISH"
             echo "notes<<TAKSIM_NOTES_END"; echo "$NOTES"; echo "TAKSIM_NOTES_END"
           } >> "$GITHUB_OUTPUT"
-      - name: The tests passed on this commit
-        if: steps.v.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.sha }}
-        run: |
-          # the `test` workflow runs on every push to main; a tag pushed right behind it waits for it
-          for i in $(seq 1 60); do
-            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=20" \
-              --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
-            case " $runs " in *" success "*) echo "tests passed on $SHA"; exit 0 ;; esac
-            case " $runs " in *" pending "*) ;; *"  "*) [ "$i" -gt 6 ] && break ;; *) echo "tests did not pass on $SHA: $runs" >&2; exit 1 ;; esac
-            sleep 30
-          done
-          echo "no passing test run for $SHA" >&2; exit 1
       - name: Import the Developer ID certificate
         env:
           CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
