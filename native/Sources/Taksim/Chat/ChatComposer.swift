@@ -430,15 +430,6 @@ struct ChatComposer: View {
                         ForEach(store.models.filter { $0.owned_by == provider }.map(\.id), id: \.self) { m in modelChoice(m) }
                     }
                 }
-                // how much it thinks: the model's own levels, under the models (not a button of its own)
-                let levels = store.models.first { $0.id == agent?.model }?.efforts ?? []
-                if !levels.isEmpty {
-                    Divider()
-                    Section(L("Thinking")) {
-                        effortChoice(nil, name: L("Default"))
-                        ForEach(levels, id: \.self) { l in effortChoice(l, name: AgentSheet.effortName(l)) }
-                    }
-                }
             } label: { Text(modelLabel + (agent?.effort.map { " · " + AgentSheet.effortName($0) } ?? "")) } // the menu draws its own chevron, after the name
             .menuStyle(.borderlessButton).menuIndicator(.visible).fixedSize().font(.system(size: 11.5)).foregroundStyle(JB.muted)
             .help(L("Model: %@", agent?.model ?? "")).disabled(running || queued > 0 || model.sending > 0 || model.settingMode)
@@ -446,17 +437,40 @@ struct ChatComposer: View {
         }
     }
 
-    private func modelChoice(_ name: String) -> some View {
-        Button { Task { do { try await store.updateAgent(agentId, ["model": name]) } catch { model.error = error.localizedDescription } } } label: {
-            let shown = store.models.first { $0.id == name }?.display_name ?? name
-            if name == agent?.model { Label(shown, systemImage: "checkmark") } else { Text(shown) }
+    /// a model; one with thinking levels opens them beside it (Sonnet ▸ Default, Low … Max), and a level picks both
+    @ViewBuilder private func modelChoice(_ name: String) -> some View {
+        let info = store.models.first { $0.id == name }
+        let shown = info?.display_name ?? name
+        let current = name == agent?.model
+        if let levels = info?.efforts, !levels.isEmpty {
+            Menu {
+                effortChoice(name, nil, label: L("Default"))
+                Divider()
+                ForEach(levels, id: \.self) { l in effortChoice(name, l, label: AgentSheet.effortName(l)) }
+            } label: {
+                let title = shown + (current ? agent?.effort.map { " · " + AgentSheet.effortName($0) } ?? "" : "")
+                if current { Label(title, systemImage: "checkmark") } else { Text(title) }
+            }
+        } else {
+            Button { pick(name, effort: nil) } label: {
+                if current { Label(shown, systemImage: "checkmark") } else { Text(shown) }
+            }
         }
     }
 
-    private func effortChoice(_ level: String?, name: String) -> some View {
-        Button { store.setEffort(agentId, level) } label: {
-            if agent?.effort == level { Label(name, systemImage: "checkmark") } else { Text(name) }
+    private func effortChoice(_ name: String, _ level: String?, label: String) -> some View {
+        Button { pick(name, effort: level) } label: {
+            if name == agent?.model, agent?.effort == level { Label(label, systemImage: "checkmark") } else { Text(label) }
         }
+    }
+
+    /// the same model: only its thinking changes; another one: model and level go together (no level: its default)
+    private func pick(_ name: String, effort: String?) {
+        if name == agent?.model { return store.setEffort(agentId, effort) }
+        let levels = store.models.first { $0.id == name }?.efforts ?? []
+        var change: [String: Any] = ["model": name]
+        if !levels.isEmpty { change["effort"] = effort ?? "" }
+        Task { do { try await store.updateAgent(agentId, change) } catch { model.error = error.localizedDescription } }
     }
 
     private func chip(_ text: String, symbol: String?) -> some View {
