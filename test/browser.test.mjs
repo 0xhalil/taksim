@@ -9,7 +9,8 @@ const home = mkdtempSync(join(tmpdir(), "taksim-browser-"));
 process.env.TAKSIM_HOME = home;
 const { callBrowserTool, BROWSER_TOOLS } = await import("../src/browser/tools.mjs");
 const { browserPath, stopBrowser } = await import("../src/browser/browser.mjs");
-after(async () => { await stopBrowser(); rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); });
+// Chrome's helpers still write to the profile for a moment after it exits: up to 5 s to let go
+after(async () => { await stopBrowser(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 const FORM = `<!doctype html><title>Form</title><label>Name <input id=n></label><button onclick="document.title='Hi '+n.value">Greet</button>`;
 
