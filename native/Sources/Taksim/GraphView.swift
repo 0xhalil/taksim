@@ -31,8 +31,17 @@ final class GraphView: NSView {
     var actions = Actions()
 
     // view: LiteGraph's DragAndScale
-    var scale: CGFloat = 1 { didSet { if scale != oldValue { layoutTerminals() } } }
-    var offset = CGPoint.zero { didSet { if offset != oldValue { layoutTerminals() } } }
+    var scale: CGFloat = 1 { didSet { if scale != oldValue, !movingView { layoutTerminals() } } }
+    var offset = CGPoint.zero { didSet { if offset != oldValue, !movingView { layoutTerminals() } } }
+    /// scale and offset change together: the views over the canvas are laid out once, not after each
+    private var movingView = false
+    func moveView(scale s: CGFloat, offset o: CGPoint) {
+        guard s != scale || o != offset else { return }
+        movingView = true
+        scale = s; offset = o
+        movingView = false
+        layoutTerminals()
+    }
     var terminals: [String: AgentTerminal] = [:]
     var transcripts: [String: AgentTranscript] = [:] // the native conversation of each agent in chat mode
     var flashes: [String: CFTimeInterval] = [:]      // a press the node heard but can't act on yet
@@ -340,24 +349,66 @@ final class GraphView: NSView {
         CGPoint(x: bounds.width / 2 / scale - offset.x - 150, y: bounds.height / 2 / scale - offset.y - 75)
     }
 
-    /// while a zoom gesture runs, the SwiftUI views over the canvas (chats, panels, IDEs) are scaled by AppKit
-    /// rather than laid out again at each step, which made zooming stutter; they settle once it stops
-    static var liveZoom = false
-    private static var zoomSettle: DispatchWorkItem?
-
     func zoom(by k: CGFloat, at p: CGPoint) {
-        Self.liveZoom = true
-        Self.zoomSettle?.cancel()
-        let settle = DispatchWorkItem { [weak self] in
-            Self.liveZoom = false
-            self?.layoutTerminals()
-        }
-        Self.zoomSettle = settle
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: settle)
-        let g = toGraph(p)
-        scale = min(10, max(0.1, scale * k))
-        offset = CGPoint(x: p.x / scale - g.x, y: p.y / scale - g.y)
+        beginLiveView()
+        let g = toGraph(p), s = min(10, max(0.1, scale * k))
+        moveView(scale: s, offset: CGPoint(x: p.x / s - g.x, y: p.y / s - g.y))
         needsDisplay = true
+    }
+
+    // ---------- live view: zooming and panning without laying anything out ----------
+
+    /// While the view zooms or pans, the views over the canvas (chats, panels, IDEs, terminals) stay where they
+    /// were laid out and their layers are scaled and shifted to follow on the GPU. Moved for real, every scroll
+    /// view in them made its SwiftUI view lay itself out again: 50–200 ms a step with a few chats open. They are
+    /// placed for real once the gesture rests. (scale, offset) as last laid out.
+    private(set) var liveFrom: (scale: CGFloat, offset: CGPoint)?
+    private var liveSettle: DispatchWorkItem?
+
+    func beginLiveView() {
+        if liveFrom == nil { liveFrom = (scale, offset) }
+        liveSettle?.cancel()
+        let settle = DispatchWorkItem { [weak self] in self?.endLiveView() }
+        liveSettle = settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: settle)
+    }
+
+    func endLiveView() {
+        liveSettle?.cancel(); liveSettle = nil
+        guard liveFrom != nil else { return }
+        liveFrom = nil
+        // the views take their real place and size and lay their content out at the new zoom before they lose
+        // the transform, all in the frame the canvas draws next
+        layoutTerminals()
+        for v in canvasViews where !v.isHidden { v.layoutSubtreeIfNeeded() }
+        setLiveTransform(k: 1, t: .zero)
+    }
+
+    /// what was laid out at (s0, o0) shows at (scale, offset): screen point x goes to x·k + (offset − o0)·scale
+    func applyLiveView() {
+        guard let f = liveFrom else { return }
+        setLiveTransform(k: scale / f.scale, t: CGPoint(x: (offset.x - f.offset.x) * scale, y: (offset.y - f.offset.y) * scale))
+    }
+
+    /// the views laid out on the canvas (not the canvas's own drawing, which AppKit keeps in a layer of its own)
+    var canvasViews: [NSView] {
+        terminals.values.map(\.box) + transcripts.values.flatMap { [$0.box, $0.plan].compactMap { $0 } } + Array(panels.values) + Array(ides.values)
+    }
+
+    /// x·k + t (this view's flipped coordinates) on each view's layer: a layer turns around its anchor point, in
+    /// its parent layer's coordinates, which run y up unless flipped
+    private func setLiveTransform(k: CGFloat, t: CGPoint) {
+        guard let parent = layer else { return }
+        let lt = parent.contentsAreFlipped() ? t : CGPoint(x: t.x, y: parent.bounds.height * (1 - k) - t.y)
+        // no transaction of its own: one would reach the screen at once, a frame before the canvas redraws the
+        // nodes under it, and on a quick zoom the chats grew and shrank inside their frames (a view's own layer
+        // doesn't animate a change)
+        for v in canvasViews {
+            guard let l = v.layer else { continue }
+            if k == 1, t == .zero { l.transform = CATransform3DIdentity; continue }
+            let d = CGPoint(x: l.position.x * (k - 1) + lt.x, y: l.position.y * (k - 1) + lt.y)
+            l.transform = CATransform3DConcat(CATransform3DMakeScale(k, k, 1), CATransform3DMakeTranslation(d.x, d.y, 0))
+        }
     }
 
     // ---------- animation: redraw every frame while something moves ----------
@@ -588,8 +639,8 @@ final class GraphView: NSView {
             // wheel up / fingers up zooms in, as LiteGraph does (wheelDeltaY > 0)
             zoom(by: 1 + e.scrollingDeltaY * (e.hasPreciseScrollingDeltas ? 0.004 : 0.04), at: sp)
         } else {
-            offset.x += e.scrollingDeltaX / scale
-            offset.y += e.scrollingDeltaY / scale
+            beginLiveView()
+            offset = CGPoint(x: offset.x + e.scrollingDeltaX / scale, y: offset.y + e.scrollingDeltaY / scale)
             needsDisplay = true
         }
     }

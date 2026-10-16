@@ -77,9 +77,10 @@ extension GraphView {
     func stepViewAnim() {
         guard let v = viewAnim else { return }
         let t = min(1, (CACurrentMediaTime() - v.start) / 0.35), k = 1 - pow(1 - t, 3)
-        scale = v.from.0 + (v.to.0 - v.from.0) * k
-        offset = CGPoint(x: v.from.1.x + (v.to.1.x - v.from.1.x) * k, y: v.from.1.y + (v.to.1.y - v.from.1.y) * k)
-        if t >= 1 { viewAnim = nil }
+        beginLiveView()
+        moveView(scale: v.from.0 + (v.to.0 - v.from.0) * k,
+                 offset: CGPoint(x: v.from.1.x + (v.to.1.x - v.from.1.x) * k, y: v.from.1.y + (v.to.1.y - v.from.1.y) * k))
+        if t >= 1 { viewAnim = nil; endLiveView() }
     }
 
     // ---------- text ----------

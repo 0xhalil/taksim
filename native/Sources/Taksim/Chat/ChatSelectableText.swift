@@ -104,9 +104,25 @@ struct ChatText: View {
         }
 
         func sizeThatFits(_ proposal: ProposedViewSize, nsView: Quiet, context: Context) -> CGSize? {
-            let natural = ChatText.size(string, width: nil)
+            let c = context.coordinator
+            // the same words at the same width: no measuring again (a zoom step lays every chat out again)
+            if c.string !== string, c.string?.isEqual(to: string) != true { c.string = string; c.sizes = [:] }
+            let key = wraps ? proposal.width.map { $0.isFinite ? $0 : -1 } ?? -1 : -1
+            if let hit = c.sizes[key] { return hit }
+            let natural = c.sizes[-1] ?? ChatText.size(string, width: nil)
+            c.sizes[-1] = natural
             guard wraps, let width = proposal.width, width.isFinite, width < natural.width else { return natural }
-            return CGSize(width: width, height: ChatText.size(string, width: width).height)
+            let out = CGSize(width: width, height: ChatText.size(string, width: width).height)
+            if c.sizes.count > 8 { c.sizes = [-1: natural] }
+            c.sizes[key] = out
+            return out
+        }
+
+        func makeCoordinator() -> Measured { Measured() }
+        /// the last words measured and their size at each width asked
+        final class Measured {
+            var string: NSAttributedString?
+            var sizes: [CGFloat: CGSize] = [:]
         }
     }
 

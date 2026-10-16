@@ -105,12 +105,6 @@ final class PanelHost: NSView {
     /// screen origin and the panel's size in graph units at this scale
     func place(origin: CGPoint, size: CGSize, scale: CGFloat) {
         let f = CGRect(x: origin.x, y: origin.y, width: size.width * scale, height: size.height * scale)
-        // mid-zoom: keep the laid-out panel and let the bounds scale it to the new size
-        if GraphView.liveZoom, model.size == size, model.scale > 0 {
-            if frame != f { frame = f }
-            setBoundsSize(CGSize(width: size.width * model.scale, height: size.height * model.scale))
-            return
-        }
         if frame != f { frame = f }
         if bounds.size != frame.size { setBoundsSize(frame.size) }
         if host.frame != bounds { host.frame = bounds }

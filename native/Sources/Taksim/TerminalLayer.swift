@@ -185,6 +185,7 @@ extension GraphView {
 
     /// opens, places and closes the terminal views to match the agents (term.mjs ensure / layout / remove)
     func layoutTerminals() {
+        if liveFrom != nil { return applyLiveView() } // mid-gesture: placed for real once it rests
         guard let store, let canvas = store.currentId else { return }
         var keep = Set<String>()
         for a in agents where a.isTerminalOpen {
@@ -372,7 +373,8 @@ final class ZoomBox<Content: View>: NSView {
     init(_ root: Content) {
         host = NSHostingView(rootView: Zoomed(content: root, zoom: zoom))
         super.init(frame: .zero)
-        host.autoresizingMask = [.width, .height]
+        // sized by hand in place(): resizing along with the box laid the whole chat out again at each zoom step
+        host.sizingOptions = []
         addSubview(host)
         FirstClick.enable(on: host)
     }
@@ -380,14 +382,9 @@ final class ZoomBox<Content: View>: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     func place(screen: CGRect, graphSize: CGSize) {
-        frame = screen
-        // mid-zoom: keep the laid-out view and let the bounds scale it to the new size
-        if GraphView.liveZoom, zoom.size == graphSize, zoom.scale > 0 {
-            setBoundsSize(CGSize(width: graphSize.width * zoom.scale, height: graphSize.height * zoom.scale))
-            return
-        }
+        if frame != screen { frame = screen }
         if bounds.size != frame.size { setBoundsSize(frame.size) }
-        host.frame = bounds
+        if host.frame != bounds { host.frame = bounds }
         let scale = graphSize.width > 0 ? screen.width / graphSize.width : 1
         if zoom.size != graphSize { zoom.size = graphSize }
         if abs(zoom.scale - scale) > 0.0001 { zoom.scale = scale }
@@ -463,6 +460,8 @@ extension GraphView {
 
     /// a press goes to the node in front at that point, not to a body underneath that was cut away there
     override func hitTest(_ point: NSPoint) -> NSView? {
+        // mid-gesture the views show away from their frames: the gesture stays with the canvas
+        if liveFrom != nil { return frame.contains(point) ? self : nil }
         guard let hit = super.hitTest(point), hit !== self else { return super.hitTest(point) }
         let local = superview.map { convert(point, from: $0) } ?? point
         guard let top = agentAt(toGraph(local)) else { return hit }

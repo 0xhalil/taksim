@@ -222,12 +222,6 @@ final class IDEHost: NSView {
 
     func place(origin: CGPoint, size: CGSize, scale: CGFloat) {
         let f = CGRect(x: origin.x, y: origin.y, width: size.width * scale, height: size.height * scale)
-        // mid-zoom: keep the laid-out IDE and let the bounds scale it to the new size
-        if GraphView.liveZoom, model.size == size, model.scale > 0 {
-            if frame != f { frame = f }
-            setBoundsSize(CGSize(width: size.width * model.scale, height: size.height * model.scale))
-            return
-        }
         if model.scale != scale { model.scale = scale }
         if model.size != size { model.size = size }
         if frame != f { frame = f }
