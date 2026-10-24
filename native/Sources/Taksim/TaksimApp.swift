@@ -49,7 +49,7 @@ struct TaksimApp: App {
             ContentView(model: model)
                 .frame(minWidth: 720, minHeight: 480)
                 .background(WindowTweaks())
-                .task { delegate.launcher = model.launcher; await model.start(); delegate.store = model.store }
+                .task { delegate.launcher = model.launcher; model.onStarted = { delegate.store = $0 }; await model.start() }
                 .onAppear { applyTheme() }
                 .onChange(of: theme) { applyTheme() }
         }
@@ -106,7 +106,8 @@ final class AppModel {
     @ObservationIgnored var viewCenter: () -> CGPoint = { .zero }
     @ObservationIgnored var openTerminal: (String, Bool) -> Void = { _, _ in }
     let launcher: ServerLauncher?
-    let base: URL
+    /// the engine's address; the launcher's may move off a port another program holds
+    private(set) var base: URL
     /// the engine on the port started from older code than the checkout has: the header offers ↻
     var engineStale = false
     var restartingEngine = false
@@ -117,7 +118,9 @@ final class AppModel {
             base = url
             launcher = nil
         } else {
-            let l = ServerLauncher(port: Int(env["TAKSIM_PORT"] ?? "") ?? 8787, root: ServerLauncher.defaultRoot())
+            let asked = Int(env["TAKSIM_PORT"] ?? "")
+            let kept = UserDefaults.standard.integer(forKey: ServerLauncher.portKey)
+            let l = ServerLauncher(port: asked ?? (kept > 0 ? kept : 8787), root: ServerLauncher.defaultRoot(), movable: asked == nil)
             base = l.baseURL
             launcher = l
         }
@@ -144,6 +147,16 @@ final class AppModel {
             restartingEngine = false
             if let s = store, let id = s.currentId { await s.reconnect(id) }
         }
+    }
+
+    /// the engine didn't start: once more, from the spinner
+    /// the store is up (at launch, or after a retry): the app delegate keeps it for quitting
+    @ObservationIgnored var onStarted: (CanvasStore) -> Void = { _ in }
+
+    func retryStart() async {
+        guard failure != nil, store == nil else { return }
+        failure = nil
+        await start()
     }
 
     func start() async {
@@ -173,6 +186,7 @@ final class AppModel {
         }
         do {
             try await launcher?.ensure()
+            if let launcher { base = launcher.baseURL }
             watchEngine()
             // a released app: new versions and announcements from GitHub Releases
             if let launcher {
@@ -186,6 +200,7 @@ final class AppModel {
             Updater.shared.start()
             let s = CanvasStore(api: APIClient(base: base))
             store = s
+            onStarted(s)
             notifier = AgentNotifier(model: self, store: s)
             Task { await s.loadChoices() } // ready before the first + Ajan
             // TAKSIM_CANVAS=id: open that canvas (a snapshot of a demo server doesn't touch the remembered one)

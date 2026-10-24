@@ -20,7 +20,7 @@ import { INTRO as GEMINI_INTRO } from "../backends/gemini.mjs";
 import { snapshot, changes } from "./checkpoint.mjs";
 import { cfg, NODE_PERMISSIONS } from "../config.mjs";
 import { Terminal } from "../term/pty.mjs";
-import { findAccount, accountEnv, listAccounts, prepareForTerminal } from "../accounts.mjs";
+import { findAccount, accountEnv, listAccounts, prepareForTerminal, accountStatus, machineStatus } from "../accounts.mjs";
 import { usageKey, refreshUsage, noteClaudeLimits } from "../usage.mjs";
 import { appendTranscript, readTranscript, workspaceDir } from "./store.mjs";
 import { Panel } from "../panels/panel.mjs";
@@ -136,6 +136,13 @@ export class Agent {
   get usageKey() { return usageKey(this.login, this.backend); }
   /** after a turn, the plan's numbers (a headless Claude run already reported them; a TUI turn gets a check now and then) */
   noteUsage() { refreshUsage({ key: this.usageKey, backend: this.backend, dir: this.login?.dir, env: this.env }).catch(() => {}); }
+
+  /** its login is signed out (a new computer, a sign-in that expired): a failed turn then offers the sign-in */
+  async signedOut() {
+    // a slow CLI doesn't hold the failed turn back: no answer in 5 s says nothing
+    const st = await Promise.race([this.login ? accountStatus(this.login.id) : machineStatus(this.backend), new Promise((r) => setTimeout(r, 5000).unref())]);
+    return st?.loggedIn === false;
+  }
 
   get hookUrl() { return `http://${cfg.host}:${cfg.port}/hooks/${this.token}`; }
   get mcpUrl() { return `http://${cfg.host}:${cfg.port}/mcp/${this.token}`; }
@@ -580,7 +587,8 @@ export class Agent {
       const message = ac.signal.aborted ? "stopped" : e.message;
       this.workflow.completed(item, false);
       this.lastError = message;
-      this.record({ from: this.id, to: item.from || "user", kind: "error", text: message, tasks: this.tasks.snapshot(true), activities: [...this.activities.values()].map((a) => a.status === "running" ? { ...a, status: "cancelled" } : a), ...(await this.turnChanges(this.workDir(), before)) });
+      const signIn = !ac.signal.aborted && await this.signedOut().catch(() => false);
+      this.record({ from: this.id, to: item.from || "user", kind: "error", text: message, ...(signIn ? { signIn: this.backend } : {}), tasks: this.tasks.snapshot(true), activities: [...this.activities.values()].map((a) => a.status === "running" ? { ...a, status: "cancelled" } : a), ...(await this.turnChanges(this.workDir(), before)) });
       canvas.bus.emit("turn_failed", { id: this.id, error: message });
       item.reject(new Error(`${this.name}: ${message}`));
       if (item.kind === "tell" && sender) {

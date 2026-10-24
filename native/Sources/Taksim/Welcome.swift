@@ -305,7 +305,8 @@ struct WelcomeView: View {
             var fields: [String: Any] = ["model": m]
             let at = model.viewCenter()
             fields["pos"] = [at.x.rounded(), at.y.rounded()]
-            if let a = try? await store.addAgent(fields) { model.agentAdded(a) }
+            // couldn't start it: the sheet asks in full instead of the first run ending on an empty canvas
+            if let a = try? await store.addAgent(fields) { model.agentAdded(a) } else { model.sheet = .add(at: at, model: m) }
         }
     }
 

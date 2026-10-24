@@ -69,6 +69,8 @@ struct ChatEntry: Codable, Identifiable, Hashable {
     var checkpoint: String?
     var after: String?
     var redo: String?
+    /// a failed turn whose login is signed out: the CLI to sign in to (ChatSignIn)
+    var signIn: String?
     var id: String { "\(ts ?? 0)|\(from)|\(kind ?? "")|\((text ?? "").prefix(24))" }
 
     /// the version of the plan this message started ("Apply plan"); the engine's prompt around it isn't the person's words

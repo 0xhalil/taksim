@@ -252,6 +252,11 @@ struct ChatView: View {
                 } else if e.kind == "error" {
                     Label(e.text ?? "", systemImage: "exclamationmark.triangle.fill").font(.system(size: 12.5)).foregroundStyle(JB.err)
                         .textSelection(.enabled)
+                    // signed out: the latest failure signs in where it stands, then asks again
+                    if let cli = e.signIn, i == model.entries.lastIndex(where: { $0.from == model.agent }),
+                       let request = model.entries.prefix(i).last(where: { $0.from == "user" && $0.kind != "restore" }) {
+                        ChatSignIn(backend: cli, store: store, agent: agent) { model.send(request.text ?? "", attachments: request.attachments ?? []) }
+                    }
                 } else {
                     ChatMarkdown(text: e.text ?? "")
                 }

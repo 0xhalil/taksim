@@ -4,7 +4,9 @@ import Foundation
 /// reuse a server already on the port, else start bin/taksim.mjs with the login shell's environment (apps
 /// started from Finder don't inherit PATH, and node and the agent CLIs live there), and stop it on quit.
 public final class ServerLauncher: @unchecked Sendable {
-    public let port: Int
+    public private(set) var port: Int
+    /// the port was not asked for (TAKSIM_PORT): another program on it moves the engine to a free one
+    let movable: Bool
     public let root: URL
     public private(set) var process: Process?
     let logURL: URL
@@ -20,8 +22,9 @@ public final class ServerLauncher: @unchecked Sendable {
         }
     }
 
-    public init(port: Int, root: URL) {
+    public init(port: Int, root: URL, movable: Bool = false) {
         self.port = port
+        self.movable = movable
         self.root = root
         let home = ProcessInfo.processInfo.environment["TAKSIM_HOME"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".taksim")
@@ -29,6 +32,33 @@ public final class ServerLauncher: @unchecked Sendable {
     }
 
     public var baseURL: URL { URL(string: "http://127.0.0.1:\(port)")! }
+
+    /// another program holds the port (a Cloudflare worker's dev server takes 8787): the next free one, kept for
+    /// the next launch; throws when the port was asked for or none is free
+    private func moved() async throws -> Bool {
+        guard movable, let free = (port + 1...port + 40).first(where: Self.isFree) else { throw Failure.portTaken(port) }
+        port = free
+        UserDefaults.standard.set(free, forKey: Self.portKey)
+        return true
+    }
+    public static let portKey = "enginePort"
+
+    /// nothing listens on the port: it can be bound on 127.0.0.1
+    static func isFree(_ port: Int) -> Bool {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        // as Node listens: a port its last engine just let go of (TIME_WAIT) counts as free
+        var one: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(UInt16(port).bigEndian)
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        return withUnsafePointer(to: &addr) { p in
+            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) == 0 }
+        }
+    }
 
     /// "taksim" when our server answers, "other" when something else does, nil when nothing does.
     public func health() async -> String? {
@@ -42,8 +72,8 @@ public final class ServerLauncher: @unchecked Sendable {
     public func ensure() async throws {
         switch await health() {
         case "taksim": return
-        case "other": throw Failure.portTaken(port)
-        default: break
+        case "other": if try await moved() { return try await ensure() }
+        default: if !Self.isFree(port), try await moved() { return try await ensure() }
         }
         var env = ProcessInfo.processInfo.environment.merging(Self.loginShellEnv()) { _, new in new }
         env["TAKSIM_PORT"] = String(port)

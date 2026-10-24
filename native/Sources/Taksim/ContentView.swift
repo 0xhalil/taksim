@@ -91,7 +91,13 @@ struct ContentView: View {
         VStack(spacing: 10) {
             if let f = model.failure {
                 AppIcon.warning.frame(width: 28, height: 28).foregroundStyle(JB.err)
-                Text(f).foregroundStyle(JB.text).multilineTextAlignment(.center).frame(maxWidth: 420)
+                Text(f).foregroundStyle(JB.text).multilineTextAlignment(.center).frame(maxWidth: 420).textSelection(.enabled)
+                // the one action: try again (Node installed meanwhile, the other program closed)
+                Button { Task { await model.retryStart() } } label: {
+                    Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .semibold)).foregroundStyle(JB.accentInk)
+                        .frame(width: 36, height: 28).background(RoundedRectangle(cornerRadius: 6).fill(JB.accent))
+                }
+                .buttonStyle(Press()).pointerStyle(.link).help(L("Try again")).padding(.top, 4)
             } else {
                 ProgressView().controlSize(.small)
             }

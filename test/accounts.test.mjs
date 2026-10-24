@@ -264,3 +264,18 @@ test("a new Gemini account keeps its settings in its own folder and never self-u
   assert.equal(s.general.disableAutoUpdate, true);
   await api("DELETE", `/v1/accounts/${g.id}`);
 });
+
+test("a turn that fails while its login is signed out names the CLI to sign in to; signed in, it doesn't", async () => {
+  const { writeFileSync, rmSync: rm } = await import("node:fs");
+  const acct = (await api("POST", "/v1/accounts", { name: "expired", backend: "fake" })).data;
+  writeFileSync(join(acct.dir, "logged-out"), "");
+  const c = await newCanvas();
+  const a = (await addAgent(c.id, { model: "fake-error", account: acct.id })).data;
+  await say(c.id, a.id, "x");
+  const last = async () => (await api("GET", `/v1/canvases/${c.id}/agents/${a.id}/transcript`)).data.transcript.filter((e) => e.kind === "error").at(-1);
+  assert.equal((await last()).signIn, "fake");
+  rm(join(acct.dir, "logged-out"), { force: true });
+  await say(c.id, a.id, "again");
+  assert.equal((await last()).signIn, undefined, "a failure of its own isn't a sign-in");
+  await api("DELETE", `/v1/accounts/${acct.id}`);
+});
