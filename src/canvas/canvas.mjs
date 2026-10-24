@@ -15,7 +15,7 @@ import { CHAT_MODES, modeOf, readOnly } from "./chat-modes.mjs";
 import { Agent, titleFrom } from "./agent.mjs";
 import * as store from "./store.mjs";
 import { archiveAgent, takeFromHistory } from "./history.mjs";
-import { PREFIX as CLAUDE_CODE, readClaudeSession } from "./claude-sessions.mjs";
+import { isOutside, readOutsideSession } from "./cli-sessions.mjs";
 import { effortsOf } from "../backends/models.mjs";
 import { attribute, entriesOf, joinMemory } from "./memory.mjs";
 
@@ -273,11 +273,11 @@ export class Canvas {
 
   // A past conversation continued here (history.mjs): the agent as it was, on this canvas near `pos`, its
   // transcript with it and its CLI session resumed (one run in another canvas's scratch folder is seeded instead).
-  async continueConversation(id, pos, model) {
+  async continueConversation(id, pos, models) {
     if (this.agents.size >= this.limits.max_agents) {
       throw httpError(409, `canvas is full (${this.limits.max_agents} agents); remove one or raise limits.max_agents`);
     }
-    if (id.startsWith(CLAUDE_CODE)) return await this.continueClaudeSession(id, pos, model);
+    if (isOutside(id)) return await this.continueOutside(id, pos, models);
     const newId = this.agents.has(id) ? shortId() : id;
     const m = takeFromHistory(id, this.id, newId);
     if (!m) throw httpError(404, `no past conversation ${id}`);
@@ -293,20 +293,22 @@ export class Canvas {
     return agent;
   }
 
-  // A conversation begun in Claude Code or the Claude app (claude-sessions.mjs): an agent in its folder resumes
-  // the same session, its chat filled from the session file. Without its folder the conversation seeds a new one.
-  async continueClaudeSession(id, pos, model) {
-    const s = await readClaudeSession(id, "pending");
-    if (!s) throw httpError(404, `no Claude Code session ${id.slice(CLAUDE_CODE.length)}`);
-    // the Claude model last used here, when the app names one
-    const m = model && pickBackend(model).backend.name === "claude" ? model : "sonnet";
-    const agent = this.addAgent({ model: m, name: "Claude Code", pos, chat: true });
+  // A conversation begun in one of the CLIs themselves (cli-sessions.mjs): an agent of that CLI in its folder
+  // resumes the same session, its chat filled from the session file. Without its folder, or for a CLI whose
+  // sessions can't be resumed from taksim's own home (Gemini), the conversation seeds a new session instead.
+  // `models`: the model last used per CLI in the app ({ codex: "gpt-…" }), else the CLI's usual one.
+  async continueOutside(id, pos, models) {
+    const s = await readOutsideSession(id, "pending");
+    if (!s) throw httpError(404, `no session ${id}`);
+    const wanted = typeof models?.[s.backend] === "string" ? models[s.backend] : null;
+    const model = wanted && pickBackend(wanted).backend.name === s.backend && !pickBackend(wanted).error ? wanted : defaultModelFor(s.backend);
+    const agent = this.addAgent({ model, name: s.label, pos, chat: true });
     for (const e of s.entries) { if (e.from === "pending") e.from = agent.id; if (e.to === "pending") e.to = agent.id; }
     let cwd = null;
     try { cwd = s.cwd ? checkDir(s.cwd) : null; } catch { /* a system folder or one that is gone */ }
     agent.cwd = cwd;
-    if (cwd) agent.session = s.session; else agent.seedHistory = true;
-    agent.name = this.uniqueName(s.title.split(/\s+/).slice(0, 5).join(" ").slice(0, 40) || "Claude Code", agent);
+    if (cwd && s.resumable) agent.session = s.session; else agent.seedHistory = true;
+    agent.name = this.uniqueName(titleFrom(s.title) || s.label, agent);
     for (const e of s.entries) store.appendTranscript(this.id, agent.id, e);
     this.bus.emit("agent_updated", { agent: agent.view() });
     this.save();

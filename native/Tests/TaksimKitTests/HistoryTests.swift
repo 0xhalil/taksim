@@ -5,12 +5,12 @@ import Testing
 /// Past conversations as the sidebar lists them: decoded from the engine, dated as the Claude app dates them.
 @Suite struct HistoryTests {
     @Test func decodesBothKinds() throws {
-        let json = #"{"conversations":[{"id":"a1","title":"plan it","name":"Planner","backend":"claude","folder":"web","lastAt":1700000000000,"canvas":{"id":"c1","name":"work"}},{"id":"cc-5e55","source":"claude-code","title":"Walrus rename","name":"Claude Code","backend":"claude","lastAt":1700000001000}]}"#
+        let json = #"{"conversations":[{"id":"a1","title":"plan it","name":"Planner","backend":"claude","folder":"web","lastAt":1700000000000,"canvas":{"id":"c1","name":"work"}},{"id":"cc-5e55","source":"claude","title":"Walrus rename","name":"Claude Code","backend":"claude","lastAt":1700000001000}]}"#
         struct L: Decodable { var conversations: [PastConversation] }
         let l = try JSONDecoder().decode(L.self, from: Data(json.utf8))
         #expect(l.conversations.map(\.id) == ["a1", "cc-5e55"])
         #expect(l.conversations[0].canvas?.name == "work")
-        #expect(l.conversations[1].source == "claude-code")
+        #expect(l.conversations[1].source == "claude")
     }
 
     @Test func datesLikeTheClaudeApp() {

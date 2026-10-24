@@ -88,7 +88,7 @@ export function forgetHistory(id) {
   return true;
 }
 
-/** the CLI sessions taksim's kept conversations hold (claude-sessions.mjs leaves those out of its list) */
+/** the CLI sessions taksim's kept conversations hold (cli-sessions.mjs leaves those out of its list) */
 export function heldSessions() {
   if (!existsSync(DIR)) return [];
   return readdirSync(DIR).map((id) => readMeta(id)?.agent?.session).filter(Boolean);

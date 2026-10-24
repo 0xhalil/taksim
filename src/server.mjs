@@ -18,7 +18,7 @@ import { optsFrom, validateOpts } from "./compat/common.mjs";
 import { openaiChat } from "./compat/openai.mjs";
 import { anthropicMessages } from "./compat/anthropic.mjs";
 import { canvasRoutes, historyRoutes } from "./routes/canvas.mjs";
-import { listClaudeSessions } from "./canvas/claude-sessions.mjs";
+import { listOutsideSessions } from "./canvas/cli-sessions.mjs";
 import { accountRoutes, usageRoutes } from "./routes/accounts.mjs";
 import { connectionRoutes } from "./routes/connections.mjs";
 import { toolboxRoutes } from "./routes/toolbox.mjs";
@@ -260,8 +260,8 @@ export async function startServer({ host = cfg.host, port = cfg.port } = {}) {
   server.on("upgrade", handleUpgrade);
   // an account whose adding was cut short (the app quit mid sign-in) is kept only if it did sign in
   cleanDrafts().catch(() => {});
-  // Claude Code's sessions read once in the background, so the first look at the history is instant
-  if (!process.env.TAKSIM_QUIET) setTimeout(() => listClaudeSessions().catch(() => {}), 4000).unref();
+  // the CLIs' own sessions read once in the background, so the first look at the history is instant
+  if (!process.env.TAKSIM_QUIET) setTimeout(() => listOutsideSessions().catch(() => {}), 4000).unref();
   server.on("close", () => { closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); });
   await initBackends();
   refreshModelDetails(); // in the background: the CLIs take a few seconds to list their models

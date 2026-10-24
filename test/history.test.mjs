@@ -10,8 +10,14 @@ import { join } from "node:path";
 const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
 const project = mkdtempSync(join(tmpdir(), "taksim-project-"));
 const claudeHome = mkdtempSync(join(tmpdir(), "taksim-claude-"));
+const cliHomes = Object.fromEntries(["codex", "copilot", "gemini"].map((c) => [c, mkdtempSync(join(tmpdir(), `taksim-${c}-`))]));
 process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_CLAUDE_HOME = claudeHome;
+// the CLIs' own sessions are read from these, never from the computer's
+process.env.TAKSIM_CODEX_HOME = cliHomes.codex;
+process.env.TAKSIM_COPILOT_HOME = cliHomes.copilot;
+process.env.TAKSIM_GEMINI_HOME = cliHomes.gemini;
+process.env.TAKSIM_HISTORY_TEMP = "1"; // the test projects live in the temporary folder, which is left out otherwise
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
 process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
@@ -23,7 +29,8 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); rmSync(claudeHome, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); rmSync(claudeHome, { recursive: true, force: true });
+  for (const d of Object.values(cliHomes)) rmSync(d, { recursive: true, force: true }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -45,7 +52,7 @@ test("a removed agent's conversation is kept, found by its words, and continued 
   await api("DELETE", `/v1/canvases/${c.id}/agents/${a.id}`);
   await api("DELETE", `/v1/canvases/${c.id}/agents/${quiet.id}`);
 
-  const [kept, ...rest] = (await history()).filter((c) => c.source !== "claude-code");
+  const [kept, ...rest] = (await history()).filter((c) => !c.source);
   assert.equal(rest.length, 0, "an agent nobody talked to leaves nothing behind");
   assert.equal(kept.id, a.id);
   assert.equal(kept.title, "plan the pelican migration");
@@ -106,7 +113,7 @@ test("a conversation begun in Claude Code is listed and continued here: same fol
   // one of taksim's own runs (its scratch folders live under its home) isn't listed
   writeFileSync(join(dir, "own-run.jsonl"), JSON.stringify({ type: "user", cwd: join(home, "canvases", "x"), message: { role: "user", content: "internal" } }) + "\n");
 
-  const [cc, ...more] = (await history()).filter((c) => c.source === "claude-code");
+  const [cc, ...more] = (await history()).filter((c) => c.source === "claude");
   assert.equal(more.length, 0);
   assert.equal(cc.id, "cc-5e55-1011");
   assert.equal(cc.title, "Walrus rename");
@@ -171,4 +178,53 @@ test("a canvas the system named takes its first request's folder, else its words
   const d = await addAgent(renamed.id, { model: "fake-echo" });
   await say(renamed.id, d.id, "hello there");
   assert.equal(await nameOf(renamed.id), "mine");
+});
+
+test("Codex, Copilot and Gemini sessions in a folder are listed with Claude's, and continue in their own CLI", async () => {
+  const proj = mkdtempSync(join(tmpdir(), "taksim-shared-"));
+  // Codex: a rollout with its meta, the CLI's own context as a user message, then the request and the answer
+  const cx = join(cliHomes.codex, "sessions", "2026", "10", "20");
+  mkdirSync(cx, { recursive: true });
+  const ts = "2026-10-20T09:00:00Z";
+  writeFileSync(join(cx, "rollout-2026-10-20T09-00-00-0c0de000-0000-0000-0000-000000000001.jsonl"), [
+    { type: "session_meta", timestamp: ts, payload: { id: "0c0de000-0000-0000-0000-000000000001", cwd: proj, timestamp: ts } },
+    { type: "response_item", timestamp: ts, payload: { type: "message", role: "user", content: [{ type: "input_text", text: "<environment_context>cwd</environment_context>" }] } },
+    // the Codex app's attachments come before the request
+    { type: "response_item", timestamp: ts, payload: { type: "message", role: "user", content: [{ type: "input_text", text: "# Files mentioned by the user:\n\n## notes.pdf: /x/notes.pdf\n\n## My request:\nport the parser to rust" }] } },
+    { type: "response_item", timestamp: ts, payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Ported." }] } },
+  ].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  // Copilot: a session folder
+  const cp = join(cliHomes.copilot, "session-state", "c0b1-0002");
+  mkdirSync(cp, { recursive: true });
+  writeFileSync(join(cp, "workspace.yaml"), `id: c0b1-0002\ncwd: ${proj}\nuser_named: false\ncreated_at: ${ts}\n`);
+  writeFileSync(join(cp, "events.jsonl"), [
+    { type: "user.message", timestamp: ts, data: { content: "add a dark mode toggle" } },
+    { type: "assistant.message", timestamp: ts, data: { content: "", toolRequests: [] } },
+    { type: "assistant.message", timestamp: ts, data: { content: "Added the toggle." } },
+  ].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  // Gemini: a chat file under its project hash, the folder in .project_root
+  const gm = join(cliHomes.gemini, "tmp", "abc123");
+  mkdirSync(join(gm, "chats"), { recursive: true });
+  writeFileSync(join(gm, ".project_root"), proj);
+  writeFileSync(join(gm, "chats", "session-2026-10-20T09-00-9e9e.json"), JSON.stringify({ sessionId: "9e9e-0003", startTime: ts, messages: [
+    { type: "info", content: "update available" }, { type: "user", content: "summarise the open issues" }, { type: "gemini", content: "Three are open." }] }));
+
+  const shared = (await history()).filter((c) => c.cwd === realpathSync(proj));
+  assert.deepEqual(shared.map((c) => [c.source, c.title]).sort(), [["codex", "port the parser to rust"], ["copilot", "add a dark mode toggle"], ["gemini", "summarise the open issues"]]);
+  assert.equal((await history("Three are open")).filter((c) => c.source === "gemini").length, 1, "found by an answer's words");
+
+  const c = await newCanvas();
+  const codex = shared.find((x) => x.source === "codex");
+  const back = (await api("POST", `/v1/canvases/${c.id}/history/${codex.id}`, {})).data;
+  assert.equal(back.backend, "codex");
+  assert.equal(back.session, "0c0de000-0000-0000-0000-000000000001", "the same Codex thread");
+  assert.equal(back.cwd, realpathSync(proj));
+  assert.deepEqual((await transcript(c.id, back.id)).map((e) => e.text), ["port the parser to rust", "Ported."]);
+  const gem = shared.find((x) => x.source === "gemini");
+  const g = (await api("POST", `/v1/canvases/${c.id}/history/${gem.id}`, {})).data;
+  assert.equal(g.backend, "gemini");
+  assert.equal(g.session, null, "Gemini's session lives in its own home: the conversation seeds a new one");
+  assert.equal(g.seedHistory, true);
+  assert.equal((await history()).filter((x) => x.id === codex.id).length, 0, "held by an agent now");
+  rmSync(proj, { recursive: true, force: true });
 });

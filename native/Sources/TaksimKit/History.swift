@@ -14,7 +14,7 @@ public struct PastConversation: Decodable, Equatable, Identifiable, Sendable {
     public var lastText: String?
     public var messages: Int?
     public var lastAt: Double?
-    /// "claude-code": begun in Claude Code or the Claude app, not on a canvas
+    /// the CLI it was begun in ("claude", "codex", "copilot", "gemini") when that was outside taksim; nil for one of taksim's
     public var source: String?
     /// the folder it worked in (what "by project" groups on) and when it began
     public var cwd: String?
@@ -118,8 +118,10 @@ extension CanvasStore {
     /// that conversation continued on the open canvas near `at`: the agent comes back with its chat and session
     public func continueConversation(_ id: String, at: CGPoint) async throws -> Agent {
         var body: [String: Any] = ["pos": [at.x.rounded(), at.y.rounded()]]
-        // one begun in Claude Code continues on the Claude model last picked here
-        if let m = preferences.string(forKey: "lastModel.claude") { body["model"] = m }
+        // one begun in a CLI itself continues on the model last picked here for that CLI
+        var models: [String: String] = [:]
+        for b in ["claude", "codex", "copilot", "gemini", "opencode"] { if let m = preferences.string(forKey: "lastModel.\(b)") { models[b] = m } }
+        if !models.isEmpty { body["models"] = models }
         let a: Agent = try await api.post("\(canvasPath)/history/\(id)", body, as: Agent.self)
         if agents[a.id] == nil { order.append(a.id) }
         agents[a.id] = a

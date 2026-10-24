@@ -14,7 +14,7 @@ import { ideRoutes } from "./ide.mjs";
 import { toolboxRoutes } from "./toolbox.mjs";
 import { computerState, setComputer } from "../computer/access.mjs";
 import { listHistory, forgetHistory, heldSessions } from "../canvas/history.mjs";
-import { listClaudeSessions } from "../canvas/claude-sessions.mjs";
+import { listOutsideSessions } from "../canvas/cli-sessions.mjs";
 import { branchState, addSet, updateSet, removeSet, switchBranches, switchToSet } from "../canvas/branch-sets.mjs";
 
 // /v1/canvases/:id/branches (each repo's branch, the sets, the active one; POST {set} or {branches} switches)
@@ -86,9 +86,9 @@ export async function historyRoutes(req, res, path) {
   if (!m[1] && req.method === "GET") {
     const q = new URL(req.url, "http://x").searchParams;
     const query = q.get("q") || "", limit = Number(q.get("limit") || 200);
-    // Claude Code's own sessions join in, except those taksim's agents hold (on a canvas or kept here)
+    // the CLIs' own sessions join in (every AI that worked in a folder), except those taksim's agents hold
     const owned = new Set([...heldSessions(), ...allCanvases().flatMap((c) => [...c.agents.values()].map((a) => a.session))].filter(Boolean));
-    const all = [...listHistory({ q: query, limit }), ...await listClaudeSessions({ q: query, owned })];
+    const all = [...listHistory({ q: query, limit }), ...await listOutsideSessions({ q: query, owned })];
     return sendJson(res, 200, { conversations: all.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, limit) });
   }
   if (m[1] && req.method === "DELETE") {
@@ -105,7 +105,8 @@ export async function canvasRoutes(req, res, path) {
     const canvas = getCanvas(hm[1]);
     if (!canvas) throw httpError(404, `no canvas ${hm[1]}`);
     const body = await readJson(req).catch(() => ({}));
-    return sendJson(res, 201, (await canvas.continueConversation(hm[2], body?.pos, typeof body?.model === "string" ? body.model : null)).view());
+    return sendJson(res, 201, (await canvas.continueConversation(hm[2], body?.pos, body?.models && typeof body.models === "object" ? body.models
+      : typeof body?.model === "string" ? { claude: body.model } : null)).view());
   }
   if (/\/agents\/[\w-]+\/(tool|panel\/save)$/.test(path)) return toolboxRoutes(req, res, path);
   if (path.includes("/panel")) {
