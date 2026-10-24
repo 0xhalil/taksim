@@ -871,11 +871,8 @@ private struct CLIAccounts: View {
     @State private var savingKey = false
     @State private var draft = ""
     @FocusState private var focus: String?
-    /// CLIs whose own (unnamed) login is hidden from this list: the login itself stays on the computer
-    @AppStorage("hiddenLogins") private var hiddenLogins = ""
     /// the row under the pointer: its remove button shows
     @State private var hovered: String?
-    private var loginHidden: Bool { hiddenLogins.split(separator: ",").contains(Substring(backend.name)) }
 
     private var installed: Bool { backend.installed == true }
     private var list: [AccountsModel.Account] { m.accounts.filter { $0.backend == backend.name }.sorted { ($0.dir == nil ? 0 : 1, $0.name) < ($1.dir == nil ? 0 : 1, $1.name) } }
@@ -897,17 +894,14 @@ private struct CLIAccounts: View {
             }
             if installed {
                 VStack(spacing: 0) {
-                    // the CLI's own login, before anyone named it: listed as the account it is, once signed in
-                    if !list.contains(where: { $0.dir == nil }), !loginHidden, let st = m.machine[backend.name], st.loggedIn == true {
-                        let name = st.email ?? backend.label
-                        row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"], loggingIn: false,
-                            signIn: { Task { await m.signIn(backend) } },
-                            remove: hideLogin,
-                            menu: AnyView(Menu {
-                                Button(L("Hide"), role: .destructive, action: hideLogin)
-                            } label: {
-                                Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.muted).frame(width: 24, height: 24)
-                            }.menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()))
+                    // the CLI's own login on this computer, before anyone named it: always listed, as the agent sheet
+                    // offers it (signed out, it asks to sign in here too); it can't be removed, it is the computer's
+                    if !list.contains(where: { $0.dir == nil }) {
+                        let st = m.machine[backend.name]
+                        let name = st?.email ?? backend.label
+                        row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"],
+                            loggingIn: m.login?.backend == backend.name && !list.contains { $0.id == m.login?.account },
+                            signIn: { Task { await m.signIn(backend) } }, menu: nil)
                         divider
                     }
                     ForEach(list) { a in
@@ -941,10 +935,6 @@ private struct CLIAccounts: View {
         .onChange(of: startAdding) { _, now in if now { beginAdd() } }
     }
 
-    private func hideLogin() {
-        hiddenLogins = (hiddenLogins.split(separator: ",").map(String.init) + [backend.name]).joined(separator: ",")
-    }
-
     private var divider: some View { Rectangle().fill(JB.line).frame(height: 1).padding(.leading, 50) }
 
     private func initialAvatar(_ name: String) -> some View {
@@ -972,7 +962,8 @@ private struct CLIAccounts: View {
                 HStack(spacing: 5) {
                     Circle().fill(loggingIn ? JB.wait : status == nil ? JB.muted2 : status?.loggedIn == true ? JB.ok : JB.err).frame(width: 6, height: 6)
                     Text(loggingIn ? L("Signing in") : status == nil ? "" : status?.loggedIn == true
-                         ? ([status?.email, status?.plan].compactMap { $0 }.joined(separator: " · ").nilIfEmpty ?? L("Signed in")) : L("Sign-in required"))
+                         // the email once: a login named by its email says only its plan under it
+                         ? ([status?.email == name ? nil : status?.email, status?.plan].compactMap { $0 }.joined(separator: " · ").nilIfEmpty ?? L("Signed in")) : L("Sign-in required"))
                         .font(.system(size: 11.5)).foregroundStyle(JB.muted).lineLimit(1)
                 }
             }
@@ -1130,7 +1121,6 @@ private struct CLIAccounts: View {
         let n = newName.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return }
         adding = false
-        hiddenLogins = hiddenLogins.split(separator: ",").map(String.init).filter { $0 != backend.name }.joined(separator: ",")
         Task { await m.add(backend: backend.name, name: n) }
     }
     private func commitRename(_ id: String) {
