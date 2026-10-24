@@ -862,8 +862,6 @@ private struct CLIAccounts: View {
     let backend: AccountsModel.Backend
     let m: AccountsModel
     var startAdding = false
-    @State private var adding = false
-    @State private var newName = ""
     @State private var renaming: String?
     /// the account whose API key is being pasted
     @State private var keyFor: String?
@@ -871,8 +869,6 @@ private struct CLIAccounts: View {
     @State private var savingKey = false
     @State private var draft = ""
     @FocusState private var focus: String?
-    /// the row under the pointer: its remove button shows
-    @State private var hovered: String?
 
     private var installed: Bool { backend.installed == true }
     private var list: [AccountsModel.Account] { m.accounts.filter { $0.backend == backend.name }.sorted { ($0.dir == nil ? 0 : 1, $0.name) < ($1.dir == nil ? 0 : 1, $1.name) } }
@@ -913,7 +909,6 @@ private struct CLIAccounts: View {
                             status: st, usage: m.usage(of: a), loggingIn: m.login?.account == a.id,
                             signIn: { Task { await m.signIn(account: a.id, backend: backend.name, privately: own) } },
                             key: own ? { keyFor = a.id; keyDraft = ""; focus = "key" } : nil,
-                            remove: { remove(a) },
                             menu: AnyView(menu(a)))
                         if keyFor == a.id { keyRow(a) }
                         divider
@@ -946,7 +941,7 @@ private struct CLIAccounts: View {
 
     /// avatar, name (double-click to rename), who is signed in; the one action needed; the rest under ⋯
     private func row(avatar: AnyView, name: String, id: String? = nil, status: AccountsModel.Status?, usage: Usage? = nil, loggingIn: Bool,
-                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, remove: (() -> Void)? = nil, menu: AnyView?) -> some View {
+                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, menu: AnyView?) -> some View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
@@ -980,17 +975,10 @@ private struct CLIAccounts: View {
                 }
                 .buttonStyle(Press()).disabled(m.login != nil)
             }
-            // one click on the row's own ✕ (it shows under the pointer); right click offers it too
-            if let remove, hovered == name, loggingIn == false {
-                Button(action: remove) { Image(systemName: "xmark.circle.fill").font(.system(size: 14)).foregroundStyle(JB.muted).frame(width: 24, height: 24) }
-                    .buttonStyle(Press()).help(L("Remove")).transition(.scale.combined(with: .opacity))
-            }
             if let menu { menu }
         }
         .padding(.horizontal, 12).frame(height: 52)
         .contentShape(Rectangle())
-        .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { if inside { hovered = name } else if hovered == name { hovered = nil } } }
-        .contextMenu { if let remove { Button(L("Remove"), role: .destructive, action: remove) } }
     }
 
     /// the API key, pasted once; Enter checks it with Google and keeps it in the keychain
@@ -1038,7 +1026,7 @@ private struct CLIAccounts: View {
         .menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()
     }
 
-    /// + Hesap ekle: the name comes filled in and selected; Enter makes the account and starts its sign-in
+    /// + Add account: one click makes it (the system names it, then after its email) and starts its sign-in
     @ViewBuilder private var addRow: some View {
         if m.installing.contains(backend.name) {
             // not on this computer: fetching it comes first
@@ -1050,21 +1038,6 @@ private struct CLIAccounts: View {
             .padding(.horizontal, 12).frame(height: 52)
         } else if !installed, m.failed.contains(backend.name), let hint = AccountsModel.installHints[backend.name] {
             installHelp(hint)
-        } else if adding {
-            HStack(spacing: 12) {
-                Circle().strokeBorder(JB.accent, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2])).frame(width: 28, height: 28)
-                    .overlay(Image(systemName: "plus").font(.system(size: 11, weight: .bold)).foregroundStyle(JB.accent))
-                TextField("", text: $newName).textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(JB.ink)
-                    .focused($focus, equals: "add")
-                    .onSubmit { commitAdd() }
-                    .onExitCommand { adding = false }
-                Button { commitAdd() } label: {
-                    Image(systemName: "return").font(.system(size: 11, weight: .semibold)).foregroundStyle(JB.accentInk)
-                        .frame(width: 26, height: 22).background(RoundedRectangle(cornerRadius: 5).fill(JB.accent))
-                }
-                .buttonStyle(Press()).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.horizontal, 12).frame(height: 52)
         } else {
             Button { beginAdd() } label: {
                 HStack(spacing: 12) {
@@ -1094,7 +1067,7 @@ private struct CLIAccounts: View {
                 .buttonStyle(Press()).help(L("Copy"))
             Button { if let u = URL(string: hint.url) { NSWorkspace.shared.open(u) } } label: { Image(systemName: "arrow.up.right.square") }
                 .buttonStyle(Press()).help(hint.url)
-            Button { Task { if await m.install(backend.name) { nameIt() } } } label: { Image(systemName: "arrow.clockwise") }
+            Button { Task { _ = await m.install(backend.name) } } label: { Image(systemName: "arrow.clockwise") }
                 .buttonStyle(Press()).help(L("Try again"))
         }
         .font(.system(size: 12)).padding(.horizontal, 12).frame(minHeight: 52)
@@ -1102,26 +1075,8 @@ private struct CLIAccounts: View {
 
     /// + : a CLI that is here gets its name asked for; one that isn't is installed first, and then asked for
     private func beginAdd() {
-        guard installed else {
-            Task { if await m.install(backend.name) { nameIt() } }
-            return
-        }
-        nameIt()
-    }
-
-    private func nameIt() {
-        newName = m.freeName(backend.label)
-        adding = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            focus = "add"
-            NSApp.keyWindow?.fieldEditor(false, for: nil)?.selectAll(nil) // the name comes selected, ready to type over
-        }
-    }
-    private func commitAdd() {
-        let n = newName.trimmingCharacters(in: .whitespaces)
-        guard !n.isEmpty else { return }
-        adding = false
-        Task { await m.add(backend: backend.name, name: n) }
+        // installs the CLI first when it isn't here; a Gemini account signs in in a private window (another Google account)
+        Task { await m.add(backend: backend.name, name: m.freeName(backend.label)) }
     }
     private func commitRename(_ id: String) {
         let n = draft.trimmingCharacters(in: .whitespaces)

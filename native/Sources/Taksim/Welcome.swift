@@ -127,6 +127,11 @@ final class AccountsModel {
         guard let a = await attempt(backend, { try await self.api.post("/v1/accounts", ["name": name, "backend": backend], as: Account.self) }) else { return }
         accounts.append(a)
         await signIn(account: a.id, backend: backend, privately: backend == "gemini")
+        // signed in: the name the system gave it becomes who it is (the email), unless one was typed meanwhile
+        if let now = accounts.first(where: { $0.id == a.id }), now.name == name, now.status?.loggedIn == true,
+           let email = now.status?.email, !accounts.contains(where: { $0.name.lowercased() == email.lowercased() }) {
+            await rename(a.id, to: email)
+        }
     }
 
     func rename(_ id: String, to name: String) async {
