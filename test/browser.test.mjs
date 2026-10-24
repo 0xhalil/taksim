@@ -12,6 +12,11 @@ const { browserPath, stopBrowser } = await import("../src/browser/browser.mjs");
 // Chrome's helpers still write to the profile for a moment after it exits: up to 5 s to let go
 after(async () => { await stopBrowser(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
+// Chrome preconnects without sending a request. Those sockets can outlive server.close().
+async function closeServer(server) {
+  await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
+}
+
 const FORM = `<!doctype html><title>Form</title><label>Name <input id=n></label><button onclick="document.title='Hi '+n.value">Greet</button>`;
 
 // one page with every kind of interaction; the iframe on the other host name is cross-site (its own process)
@@ -50,7 +55,7 @@ test("an agent reads a page as refs, types, clicks and sees it", { skip: !browse
     // another agent gets a tab of its own
     const other = (await callBrowserTool({ id: "agent-2" }, "browser_snapshot")).content[0].text;
     assert.match(other, /URL: about:blank/);
-  } finally { server.close(); }
+  } finally { await closeServer(server); }
 });
 
 test("hover, right click, drag, select, upload, iframes, new tabs and dialogs", { skip: !browserPath() && "no Chrome installed" }, async () => {
@@ -123,7 +128,7 @@ test("hover, right click, drag, select, upload, iframes, new tabs and dialogs", 
     assert.match(tabs, /\* \[1\] Form/);
     page = await call("browser_tabs", { action: "switch", index: 0 });
     assert.match(await call("browser_snapshot"), /Title: hello Ada/);
-  } finally { server.close(); rmSync(work, { recursive: true, force: true }); }
+  } finally { await closeServer(server); rmSync(work, { recursive: true, force: true }); }
 });
 
 test("browser tools are only answered for their own names", async () => {
