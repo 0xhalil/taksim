@@ -266,9 +266,9 @@ private struct GraphRepresentable: NSViewRepresentable {
 
         // ---------- deleting ----------
 
+        /// without asking: what was said goes to the sidebar's history, where a click brings it back
         func deleteAgent(_ id: String) {
-            guard let a = store.agents[id] else { return }
-            guard !(UserDefaults.standard.object(forKey: "confirmDelete") as? Bool ?? true) || confirm(L("Delete \"%@\"? Its conversation history is deleted too.", a.name), action: L("Delete")) else { return }
+            guard store.agents[id] != nil else { return }
             store.deleteAgent(id)
         }
 

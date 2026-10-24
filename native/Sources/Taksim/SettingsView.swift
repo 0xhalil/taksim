@@ -347,7 +347,6 @@ struct GeneralPane: View {
     let model: AppModel
     let open: (SettingsSection) -> Void
     @AppStorage("showGrid") private var showGrid = true
-    @AppStorage("confirmDelete") private var confirmDelete = true
     @AppStorage("notify.done") private var notifyDone = true
     @AppStorage("notify.approval") private var notifyApproval = true
     @AppStorage("notify.failed") private var notifyFailed = true
@@ -378,9 +377,6 @@ struct GeneralPane: View {
                             Text("\(Int((textSize * 100).rounded()))%").font(.system(size: 12)).foregroundStyle(JB.muted).monospacedDigit().frame(width: 40, alignment: .trailing)
                         }
                         .onChange(of: textSize) { _, v in CanvasText.save(v) }
-                    }
-                    SettingsRow(L("Ask before deleting"), L("Confirm before an agent and its history go")) {
-                        Toggle("", isOn: $confirmDelete).labelsHidden().toggleStyle(.switch).controlSize(.small)
                     }
                 }
                 SettingsGroup(title: L("Notifications")) {
