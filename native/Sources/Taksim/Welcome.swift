@@ -124,14 +124,31 @@ final class AccountsModel {
         guard login == nil else { return }
         clear(backend)
         if backends.first(where: { $0.name == backend })?.installed != true, !(await install(backend)) { return }
-        guard let a = await attempt(backend, { try await self.api.post("/v1/accounts", ["name": name, "backend": backend], as: Account.self) }) else { return }
+        // a draft: the engine keeps it once it signs in and drops it if the sign-in is cancelled, fails or is cut short
+        guard let a = await attempt(backend, { try await self.api.post("/v1/accounts", ["name": name, "backend": backend, "draft": true], as: Account.self) }) else { return }
         accounts.append(a)
         await signIn(account: a.id, backend: backend, privately: backend == "gemini")
+        await load() // a dropped draft leaves the list
+        guard let now = accounts.first(where: { $0.id == a.id }), now.status?.loggedIn == true, let email = now.status?.email else { return }
+        // the same login again (this computer's, or an account already added): the one that exists is pointed at
+        let twin = accounts.first { $0.id != a.id && $0.backend == backend && $0.status?.loggedIn == true && $0.status?.email?.lowercased() == email.lowercased() }?.id
+            ?? (machine[backend]?.loggedIn == true && machine[backend]?.email?.lowercased() == email.lowercased() ? "machine:\(backend)" : nil)
+        if let twin {
+            await remove(a.id)
+            point(at: twin)
+            return
+        }
         // signed in: the name the system gave it becomes who it is (the email), unless one was typed meanwhile
-        if let now = accounts.first(where: { $0.id == a.id }), now.name == name, now.status?.loggedIn == true,
-           let email = now.status?.email, !accounts.contains(where: { $0.name.lowercased() == email.lowercased() }) {
+        if now.name == name, !accounts.contains(where: { $0.name.lowercased() == email.lowercased() }) {
             await rename(a.id, to: email)
         }
+    }
+
+    /// a row to look at (an account id, or "machine:<cli>"): it lights up a moment
+    var pointed: String?
+    func point(at key: String) {
+        withAnimation(.easeOut(duration: 0.2)) { pointed = key }
+        Task { try? await Task.sleep(for: .seconds(1.6)); if pointed == key { withAnimation(.easeOut(duration: 0.6)) { pointed = nil } } }
     }
 
     func rename(_ id: String, to name: String) async {
@@ -228,7 +245,7 @@ final class AccountsModel {
         l.terminal.close()
         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
             login = nil
-            if ok { justSignedIn.insert(l.backend) } else if !quiet { failed.insert(l.backend) }
+            if ok { justSignedIn.insert(l.backend) } else if !quiet { failed.insert(l.backend); problem[l.backend] = L("Sign-in didn't finish") }
         }
     }
 }

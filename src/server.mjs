@@ -22,7 +22,7 @@ import { listClaudeSessions } from "./canvas/claude-sessions.mjs";
 import { accountRoutes, usageRoutes } from "./routes/accounts.mjs";
 import { connectionRoutes } from "./routes/connections.mjs";
 import { toolboxRoutes } from "./routes/toolbox.mjs";
-import { stopAllLogins } from "./accounts.mjs";
+import { stopAllLogins, cleanDrafts } from "./accounts.mjs";
 import { mcpRoute } from "./mcp/server.mjs";
 import { agentByToken } from "./canvas/canvas.mjs";
 import { handleUpgrade } from "./term/ws.mjs";
@@ -258,6 +258,8 @@ export async function startServer({ host = cfg.host, port = cfg.port } = {}) {
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(port, host, resolve); });
   cfg.port = server.address().port;
   server.on("upgrade", handleUpgrade);
+  // an account whose adding was cut short (the app quit mid sign-in) is kept only if it did sign in
+  cleanDrafts().catch(() => {});
   // Claude Code's sessions read once in the background, so the first look at the history is instant
   if (!process.env.TAKSIM_QUIET) setTimeout(() => listClaudeSessions().catch(() => {}), 4000).unref();
   server.on("close", () => { closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); });

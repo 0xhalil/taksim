@@ -279,3 +279,44 @@ test("a turn that fails while its login is signed out names the CLI to sign in t
   assert.equal((await last()).signIn, undefined, "a failure of its own isn't a sign-in");
   await api("DELETE", `/v1/accounts/${acct.id}`);
 });
+
+test("an account being added goes when its sign-in is cancelled or fails, and stays once it signs in", async () => {
+  const { writeFileSync } = await import("node:fs");
+  const names = async () => (await api("GET", "/v1/accounts")).data.accounts.map((a) => a.name);
+  // cancelled mid sign-in
+  const a = (await api("POST", "/v1/accounts", { name: "half", backend: "fake", draft: true })).data;
+  writeFileSync(join(a.dir, "logged-out"), "");
+  await api("POST", `/v1/accounts/${a.id}/login`);
+  await api("DELETE", `/v1/accounts/${a.id}/login`);
+  assert.ok(!(await names()).includes("half"), "cancelled: nothing left behind");
+  assert.ok(!existsSync(a.dir), "its folder goes too");
+  // signed in
+  const b = (await api("POST", "/v1/accounts", { name: "whole", backend: "fake", draft: true })).data;
+  writeFileSync(join(b.dir, "logged-out"), "");
+  await api("POST", `/v1/accounts/${b.id}/login`);
+  await until(async () => (await api("GET", `/v1/accounts/${b.id}/login`)).data.done);
+  const kept = (await api("GET", "/v1/accounts")).data.accounts.find((x) => x.id === b.id);
+  assert.ok(kept && !kept.draft, "signed in: kept, no longer a draft");
+  await api("DELETE", `/v1/accounts/${b.id}/login`);
+  assert.ok((await names()).includes("whole"), "stopping a finished sign-in keeps it");
+  // an ordinary account isn't a draft: a cancelled sign-in leaves it as it was
+  const c = (await api("POST", "/v1/accounts", { name: "plain", backend: "fake" })).data;
+  writeFileSync(join(c.dir, "logged-out"), "");
+  await api("POST", `/v1/accounts/${c.id}/login`);
+  await api("DELETE", `/v1/accounts/${c.id}/login`);
+  assert.ok((await names()).includes("plain"));
+  for (const x of [b, c]) await api("DELETE", `/v1/accounts/${x.id}`);
+});
+
+test("at start, a draft an earlier run left is removed unless it signed in", async () => {
+  const { writeFileSync } = await import("node:fs");
+  const { cleanDrafts } = await import("../src/accounts.mjs");
+  const left = (await api("POST", "/v1/accounts", { name: "left", backend: "fake", draft: true })).data;
+  writeFileSync(join(left.dir, "logged-out"), "");
+  const landed = (await api("POST", "/v1/accounts", { name: "landed", backend: "fake", draft: true })).data;
+  await cleanDrafts();
+  const after = (await api("GET", "/v1/accounts")).data.accounts;
+  assert.ok(!after.some((a) => a.id === left.id));
+  assert.ok(after.some((a) => a.id === landed.id && !a.draft));
+  await api("DELETE", `/v1/accounts/${landed.id}`);
+});

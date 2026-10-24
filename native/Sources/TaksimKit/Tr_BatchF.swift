@@ -23,5 +23,7 @@ extension Tr {
         "Last active": "Son etkinlik",
         "Started": "Başlangıç",
         "Group and sort": "Grupla ve sırala",
+        "Sign-in didn't finish": "Giriş tamamlanmadı",
+        "More": "Diğer",
     ]
 }

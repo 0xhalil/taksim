@@ -199,7 +199,7 @@ export function findAccount(ref) {
   return accounts.find((a) => a.id === ref) || accounts.find((a) => a.name.toLowerCase() === r) || null;
 }
 
-export function createAccount({ name, backend, machine = false, copy_settings = true } = {}) {
+export function createAccount({ name, backend, machine = false, copy_settings = true, draft = false } = {}) {
   name = typeof name === "string" ? name.trim() : "";
   if (!name) throw err(400, "name is required");
   if (typeof backend !== "string" || !Object.hasOwn(KINDS, backend)) throw err(400, `backend must be one of: ${ACCOUNT_BACKENDS.join(", ")}`);
@@ -215,7 +215,8 @@ export function createAccount({ name, backend, machine = false, copy_settings = 
     if (copy_settings) carryOverSettings(KINDS[backend], dir);
     KINDS[backend].seed?.(dir);
   }
-  const account = { id, name, backend, dir, createdAt: Date.now() };
+  // a draft is an account being added: kept once its first sign-in lands, gone if that sign-in doesn't (settleDraft)
+  const account = { id, name, backend, dir, createdAt: Date.now(), ...(draft === true && !machine ? { draft: true } : {}) };
   prepareClaude(account);
   accounts.push(account);
   save();
@@ -353,6 +354,7 @@ export async function setApiKey(ref, key) {
   }
   await saveToken(keyName(a), key);
   a.apiKey = true; a.apiKeyAt = Date.now();
+  delete a.draft; // signed in with its key: the account being added is kept
   save();
   // the account's CLI signs in with the key from now on
   const f = join(a.dir, ".gemini", "settings.json");
@@ -473,11 +475,13 @@ export async function startLogin(ref, { private: privately = false } = {}) {
       prepareClaude(a);
       const st = session.stopped ? null : await accountStatus(a.id).catch(() => null);
       if (!session.stopped && st?.loggedIn && signedInNow(st, before, true)) session.done = true;
-      if (logins.get(a.id) === session) {
+      const current = logins.get(a.id) === session;
+      if (current) {
         logins.delete(a.id);
         lastLogin.set(a.id, { done: session.done, url: session.url, endedAt: Date.now() });
       }
       rmSync(session.openedFile, { force: true });
+      if (current || session.done) settleDraft(a, session.done);
     },
   });
   session.timer = setInterval(async () => {
@@ -489,6 +493,7 @@ export async function startLogin(ref, { private: privately = false } = {}) {
     if (st?.loggedIn && signedInNow(st, before, false) && logins.get(a.id) === session) {
       session.done = true;
       lastLogin.set(a.id, { done: true, url: session.url, endedAt: Date.now() });
+      settleDraft(a, true);
       setTimeout(() => session.term.kill(), 1500); // let the CLI print its own confirmation first
     }
   }, a.backend === "claude" ? 2500 : 1200);
@@ -530,6 +535,25 @@ export function stopLogin(ref) {
   logins.delete(a.id);
   lastLogin.set(a.id, { done: s.done, url: s.url, endedAt: Date.now() });
   s.term.kill();
+  settleDraft(a, s.done);
+}
+
+// An account being added (draft) whose first sign-in ended: kept when it signed in, removed when it didn't, so a
+// cancelled, failed or abandoned add leaves no signed-out "Claude Code 2" behind. A Gemini draft stays when its
+// browser sign-in is cancelled: it can still be signed in with an API key (setApiKey settles it then).
+function settleDraft(a, signedIn) {
+  if (!a.draft || !accounts.includes(a)) return;
+  if (signedIn) { delete a.draft; save(); return; }
+  if (a.backend === "gemini") return;
+  try { removeAccount(a.id); } catch { /* removed meanwhile */ }
+}
+
+/** at start: drafts an earlier run left (the app quit mid sign-in) are kept if they did sign in, else removed */
+export async function cleanDrafts() {
+  for (const a of accounts.filter((x) => x.draft)) {
+    const st = await accountStatus(a.id).catch(() => null);
+    if (st?.loggedIn) { delete a.draft; save(); } else { try { removeAccount(a.id); } catch { /* gone */ } }
+  }
 }
 
 export function stopAllLogins() {

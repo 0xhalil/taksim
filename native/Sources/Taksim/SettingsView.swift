@@ -897,7 +897,8 @@ private struct CLIAccounts: View {
                         let name = st?.email ?? backend.label
                         row(avatar: AnyView(initialAvatar(name)), name: name, status: st, usage: m.usage["machine:\(backend.name)"],
                             loggingIn: m.login?.backend == backend.name && !list.contains { $0.id == m.login?.account },
-                            signIn: { Task { await m.signIn(backend) } }, menu: nil)
+                            signIn: { Task { await m.signIn(backend) } }, menu: nil,
+                            items: AnyView(Button(L("Sign in again")) { Task { await m.signIn(backend) } }), pointKey: "machine:\(backend.name)")
                         divider
                     }
                     ForEach(list) { a in
@@ -909,7 +910,7 @@ private struct CLIAccounts: View {
                             status: st, usage: m.usage(of: a), loggingIn: m.login?.account == a.id,
                             signIn: { Task { await m.signIn(account: a.id, backend: backend.name, privately: own) } },
                             key: own ? { keyFor = a.id; keyDraft = ""; focus = "key" } : nil,
-                            menu: AnyView(menu(a)))
+                            menu: AnyView(menu(a)), items: AnyView(menuItems(a)), pointKey: a.id)
                         if keyFor == a.id { keyRow(a) }
                         divider
                     }
@@ -941,7 +942,7 @@ private struct CLIAccounts: View {
 
     /// avatar, name (double-click to rename), who is signed in; the one action needed; the rest under ⋯
     private func row(avatar: AnyView, name: String, id: String? = nil, status: AccountsModel.Status?, usage: Usage? = nil, loggingIn: Bool,
-                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, menu: AnyView?) -> some View {
+                     signIn: @escaping () -> Void, key: (() -> Void)? = nil, menu: AnyView?, items: AnyView? = nil, pointKey: String = "") -> some View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
@@ -977,8 +978,11 @@ private struct CLIAccounts: View {
             }
             if let menu { menu }
         }
-        .padding(.horizontal, 12).frame(height: 52)
+        .padding(.leading, 12).padding(.trailing, menu == nil ? 12 : 4).frame(height: 52)
+        // the row the system points at (the same login added again) lights up a moment
+        .background(JB.accent.opacity(m.pointed == pointKey ? 0.16 : 0))
         .contentShape(Rectangle())
+        .contextMenu { if let items { items } }
     }
 
     /// the API key, pasted once; Enter checks it with Google and keeps it in the keychain
@@ -1013,17 +1017,23 @@ private struct CLIAccounts: View {
         Task { if await m.setKey(a.id, backend: backend.name, key: k) { keyFor = nil; keyDraft = "" }; savingKey = false }
     }
 
+    /// what can be done with an account: under its ⋯, and on a right click anywhere on its row
+    @ViewBuilder private func menuItems(_ a: AccountsModel.Account) -> some View {
+        Button(L("Sign in again")) { Task { await m.signIn(account: a.id, backend: backend.name, privately: backend.name == "gemini" && a.dir != nil) } }
+        if backend.name == "gemini", a.dir != nil { Button(L("API key")) { keyFor = a.id; keyDraft = ""; focus = "key" } }
+        Button(L("Rename")) { draft = a.name; renaming = a.id; focus = "rename" }
+        Divider()
+        Button(a.dir == nil ? L("Remove name") : L("Delete"), role: .destructive) { remove(a) }.disabled(m.login?.account == a.id)
+    }
+
+    /// ⋯ with a target the size of a finger, not of its three dots
     private func menu(_ a: AccountsModel.Account) -> some View {
-        Menu {
-            Button(L("Sign in again")) { Task { await m.signIn(account: a.id, backend: backend.name, privately: backend.name == "gemini" && a.dir != nil) } }
-            if backend.name == "gemini", a.dir != nil { Button(L("API key")) { keyFor = a.id; keyDraft = ""; focus = "key" } }
-            Button(L("Rename")) { draft = a.name; renaming = a.id; focus = "rename" }
-            Divider()
-            Button(a.dir == nil ? L("Remove name") : L("Delete"), role: .destructive) { remove(a) }.disabled(m.login?.account == a.id)
-        } label: {
-            Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold)).foregroundStyle(JB.muted).frame(width: 24, height: 24)
+        Menu { menuItems(a) } label: {
+            Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold)).foregroundStyle(JB.muted)
+                .frame(width: 34, height: 34).contentShape(Rectangle())
         }
         .menuStyle(.button).buttonStyle(Press()).menuIndicator(.hidden).fixedSize()
+        .pointerStyle(.link).help(L("More"))
     }
 
     /// + Add account: one click makes it (the system names it, then after its email) and starts its sign-in
