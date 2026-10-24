@@ -3,7 +3,7 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,15 +12,17 @@ process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
 process.env.TAKSIM_GEMINI_BIN = process.execPath; // any file that exists: the tests must not need a real Gemini CLI
+const shellCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+delete process.env.GOOGLE_APPLICATION_CREDENTIALS; // a developer's own service account must not change what runs get
 
 const { startServer } = await import("../src/server.mjs");
-const { default: gemini, INTRO } = await import("../src/backends/gemini.mjs");
+const { default: gemini, INTRO, googleLoginEnv } = await import("../src/backends/gemini.mjs");
 const { pickBackend } = await import("../src/backends/index.mjs");
 const { accountEnv, findAccount } = await import("../src/accounts.mjs");
 
 let server, base;
 before(async () => { server = await startServer({ host: "127.0.0.1", port: 0 }); base = `http://127.0.0.1:${server.address().port}`; });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); if (shellCredentials) process.env.GOOGLE_APPLICATION_CREDENTIALS = shellCredentials; rmSync(home, { recursive: true, force: true }); });
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, data: await r.json().catch(() => null) };
@@ -98,4 +100,17 @@ test("a private sign-in notes the page without opening the default browser", asy
   const r = await api("POST", `/v1/accounts/${acct.id}/login`, { private: true });
   assert.equal(r.data.private, true);
   await api("DELETE", `/v1/accounts/${acct.id}/login`);
+});
+
+test("a service account in the shell doesn't take over the Google login; Vertex AI keeps it", () => {
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = "/x/service-account.json";
+  try {
+    assert.equal(gemini.build({ model: "gemini", prompt: "hi", opts: {} }).env.GOOGLE_APPLICATION_CREDENTIALS, "");
+    assert.equal(gemini.interactive({ model: "gemini", session: "s", newSession: true }).env.GOOGLE_APPLICATION_CREDENTIALS, "");
+    const dir = mkdtempSync(join(tmpdir(), "taksim-vertex-"));
+    mkdirSync(join(dir, ".gemini"));
+    writeFileSync(join(dir, ".gemini", "settings.json"), JSON.stringify({ security: { auth: { selectedType: "vertex-ai" } } }));
+    assert.deepEqual(googleLoginEnv(dir), {});
+    rmSync(dir, { recursive: true, force: true });
+  } finally { delete process.env.GOOGLE_APPLICATION_CREDENTIALS; }
 });

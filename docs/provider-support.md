@@ -130,6 +130,30 @@ Ollama cut it to the last ~2k of its 4096 window without a word (`truncating inp
 and the turn answered nothing. Codex `--oss` (a 24k prompt) described the fix without making it; opencode with an
 Ollama provider sent no request in 5 minutes.
 
+## Antigravity
+
+Google ended Gemini CLI for personal Google accounts: since 2026-06-18 it answers "This client is no longer supported
+for Gemini Code Assist for individuals" (`IneligibleTierError`), and taksim says so in plain words. Gemini CLI stays
+for API keys, Vertex AI and Code Assist Standard / Enterprise. A Google AI Pro / Ultra plan now runs through the
+Antigravity CLI (`agy`, `src/backends/antigravity.mjs`), signed in with the same Google login as the Antigravity app.
+
+Checked 2026-10-25 with agy 1.4.7 on a signed-in Google AI Pro account:
+
+| What | How | Checked |
+| --- | --- | --- |
+| Models and levels | `agy models`, read when the engine starts and with the model details; `<slug>-low/-medium/-high` become one `agy:<slug>` with its levels, sent as `--model <slug> --effort <level>` | Real run: Gemini 4 Argon, Gemini 3.8 Flash, Claude Opus / Sonnet 5.5, GPT-OSS 120B |
+| Headless turns | `-p … --output-format stream-json`: `text_delta` steps stream, `result` gives the answer and usage | Real run: an agent wrote a file in its folder |
+| Sessions | init's `conversation_id`; `--conversation <id>` resumes (an unknown id starts a new one) | Real run |
+| taksim's tools | `--add-dir` a folder of taksim's whose `.agents/mcp_config.json` names its MCP server (`serverUrl`) and the agent's added servers; the person's project and `~/.gemini/config` stay untouched | Real run: `list_agents` from a canvas agent |
+| Tool activity | tool `step_update`s (ACTIVE, DONE, ERROR) | Real events, unit test |
+| Permissions | read-only and chats `--mode plan`; the rest `--dangerously-skip-permissions` | Real run. Manual / Accept edits aren't offered: headless agy can't ask and refuses instead, and its hooks aren't documented yet |
+| Terminal | its TUI with `--model`, `--effort`, `--mode plan`, `--conversation`; a new one gets its instructions with `-i` | Opens on a real account; its first start shows agy's own setup (theme, Gemini import) once. No hooks, so taksim can't tell when a turn ends: queued messages wait for "send now", and a new terminal session's id isn't picked up |
+| Accounts | this computer's login only (the keychain); who is signed in is read from agy's log | Real account |
+| Install | Google's release server, checked against its SHA-512, into taksim's own `cli/bin` (no shell profile changes) | Not run from the app yet (installed here with Google's install.sh) |
+
+Not there yet: the user's own MCP servers can't be turned off per agent (agy has one global list), a turn's denied
+actions only show as text, and `/usage` quota isn't read into taksim's plan bars.
+
 ## Open work
 
 - Relay Copilot's newer SQL task list through a reliable SDK/RPC read; don't build a list from the bare
@@ -138,7 +162,9 @@ Ollama provider sent no request in 5 minutes.
 - Verify task and tool flows with real CLI versions.
 - Local models: the canvas's own tools (other agents, panels) through the light loop; a real run on LM Studio and
   llama.cpp; image input for models that take it.
-- Gemini's permission hook: try it with a real run on a signed-in taksim Gemini account.
+- Gemini's permission hook: try it with a real run on a signed-in taksim Gemini account (an API key or Vertex AI one:
+  personal Google logins moved to Antigravity).
+- Antigravity: turn hooks for its terminal, Manual / Accept edits, plan quota in the usage bars.
 - Widen the inventory of provider features: question flows, plan tools, steering a turn, session branches,
   context meters, sub-agents, image input and provider-specific settings. Judge each against official sources and a
   real connection; parity across these isn't there yet.
@@ -184,6 +210,7 @@ Limits:
 - [opencode CLI events, installed 1.18.32](https://github.com/anomalyco/opencode/blob/v1.18.32/packages/opencode/src/cli/cmd/run.ts)
 - [opencode todo tool](https://github.com/anomalyco/opencode/blob/v1.18.32/packages/opencode/src/tool/todo.ts)
 - [Gemini todo tool](https://geminicli.com/docs/tools/todos/)
+- [Antigravity CLI](https://antigravity.google), `agy --help` and `agy help mcp` (1.4.7)
 - [Gemini JSON stream format](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/output/types.ts)
 - [Copilot event schema](https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/session-events.ts)
 - [Copilot tool names](https://docs.github.com/en/copilot/reference/hooks-reference)

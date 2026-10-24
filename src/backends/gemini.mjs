@@ -6,6 +6,9 @@
 // Signing in is the CLI's own: a Google login in the account's folder, or an API key (accounts.mjs).
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
 import { asksPermission, permissionEnv, hookCommand, HOOK_TIMEOUT_S } from "../term/permission-hook.mjs";
 
@@ -20,6 +23,19 @@ export const TAKSIM_SETTINGS = {
     BeforeTool: [{ matcher: "*", hooks: [{ type: "command", timeout: HOOK_TIMEOUT_S * 1000,
       command: `[ -z "$TAKSIM_PERMISSION_URL" ] && exit 0; exec $TAKSIM_PERMISSION_HOOK` }] }] },
 };
+
+/**
+ * A Google login (a Google AI Pro / Ultra plan, the one Antigravity uses too) is overridden by a service account
+ * the shell exports for other work: with GOOGLE_APPLICATION_CREDENTIALS set the CLI signs in as that account and
+ * fails on its Cloud project ("Cloud Code Private API has not been used"). Only Vertex AI uses it, so every other
+ * sign-in gets it blanked.
+ */
+export function googleLoginEnv(dir = null) {
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_GENAI_USE_VERTEXAI === "true") return {};
+  let type = null;
+  try { type = JSON.parse(readFileSync(join(dir || homedir(), ".gemini", "settings.json"), "utf8")).security?.auth?.selectedType; } catch {}
+  return type === "vertex-ai" ? {} : { GOOGLE_APPLICATION_CREDENTIALS: "" };
+}
 
 export default {
   name: "gemini",
@@ -50,7 +66,7 @@ export default {
     const text = system ? `<instructions>\n${system}\n</instructions>\n\n${prompt}` : prompt;
     args.push("-p", text);
     if (opts.mcp?.off?.length) args.push("--allowed-mcp-server-names", "taksim", ...opts.mcp.cli.map((s) => s.name));
-    const env = { ...(opts.mcpUrl ? { TAKSIM_MCP_URL: opts.mcpUrl, TAKSIM_HOOK_URL: "" } : {}),
+    const env = { ...googleLoginEnv(), ...(opts.mcpUrl ? { TAKSIM_MCP_URL: opts.mcpUrl, TAKSIM_HOOK_URL: "" } : {}),
       ...(asks ? { ...permissionEnv(opts), TAKSIM_PERMISSION_HOOK: hookCommand("gemini") } : { TAKSIM_PERMISSION_URL: "" }) };
     return { args, cwd: opts.cwd || CHAT_DIR, stdin: "", env };
   },
@@ -63,7 +79,14 @@ export default {
       newSession ? "--session-id" : "--resume", session,
       ...(sandbox === "read-only" ? ["--approval-mode", "plan"] : [])];
     if (newSession && system) args.push("-i", `${INTRO}\n<instructions>\n${system}\n</instructions>`);
-    return { file, args, env: { TAKSIM_MCP_URL: mcpUrl, TAKSIM_HOOK_URL: hookUrl } };
+    return { file, args, env: { ...googleLoginEnv(), TAKSIM_MCP_URL: mcpUrl, TAKSIM_HOOK_URL: hookUrl } };
+  },
+
+  // Google ended Gemini CLI for personal accounts (Code Assist for individuals) and moved them to Antigravity
+  explain(stderr) {
+    if (/IneligibleTierError|no longer supported for Gemini Code Assist for individuals/.test(stderr)) {
+      return "Gemini CLI no longer runs on a personal Google account; Google moved it to Antigravity. Pick an Antigravity model (agy:…) instead.";
+    }
   },
 
   parse(ev, st, onText) {

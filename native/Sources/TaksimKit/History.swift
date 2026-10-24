@@ -120,7 +120,7 @@ extension CanvasStore {
         var body: [String: Any] = ["pos": [at.x.rounded(), at.y.rounded()]]
         // one begun in a CLI itself continues on the model last picked here for that CLI
         var models: [String: String] = [:]
-        for b in ["claude", "codex", "copilot", "gemini", "opencode"] { if let m = preferences.string(forKey: "lastModel.\(b)") { models[b] = m } }
+        for b in ["claude", "codex", "copilot", "antigravity", "gemini", "opencode"] { if let m = preferences.string(forKey: "lastModel.\(b)") { models[b] = m } }
         if !models.isEmpty { body["models"] = models }
         let a: Agent = try await api.post("\(canvasPath)/history/\(id)", body, as: Agent.self)
         if agents[a.id] == nil { order.append(a.id) }

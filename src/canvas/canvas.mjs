@@ -681,7 +681,7 @@ export function closeCanvases() {
 }
 
 // a thinking level: one the model lists (when its CLI says which), or null for the CLI's default
-const EFFORT_BACKENDS = ["claude", "codex", "copilot", "opencode", "fake"]; // the CLIs that take a thinking level (fake: tests)
+const EFFORT_BACKENDS = ["claude", "codex", "copilot", "opencode", "antigravity", "fake"]; // the CLIs that take a thinking level (fake: tests)
 const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]; // until `claude --help` has been read
 function checkEffort(effort, model) {
   if (effort === undefined || effort === null || effort === "") return null;

@@ -13,6 +13,7 @@ const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
 process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
+delete process.env.GOOGLE_APPLICATION_CREDENTIALS; // a developer's service account would show up in Gemini's env
 process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
 
 const { startServer } = await import("../src/server.mjs");
@@ -212,7 +213,8 @@ test("signing in: the sign-in link is picked up, and a login that stays open is 
 
 test("every CLI is offered, and an account's environment points only that CLI at its own folder", async () => {
   const { backends } = (await api("GET", "/v1/accounts")).data;
-  assert.deepEqual(backends.map((b) => b.name), ["claude", "codex", "opencode", "copilot", "gemini", "fake"]);
+  assert.deepEqual(backends.map((b) => b.name), ["claude", "codex", "opencode", "copilot", "gemini", "antigravity", "fake"]);
+  assert.equal(backends.find((b) => b.name === "antigravity").named, false, "one login per computer");
   assert.equal(backends.find((b) => b.name === "fake").installed, true);
   const { accountEnv } = await import("../src/accounts.mjs");
   const env = (backend) => accountEnv({ backend, dir: "/x" });

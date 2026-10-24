@@ -16,7 +16,10 @@ export const PACKAGES = {
   gemini: "@google/gemini-cli",
   copilot: "@github/copilot",
   opencode: "opencode-ai",
+  // not on npm: Google's own build, as its install.sh fetches it (antigravity.google/cli/install.sh)
+  antigravity: "agy",
 };
+const AGY_UPDATES = "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app";
 
 export const CLI_DIR = join(HOME, "cli");
 export const CLI_BIN = join(CLI_DIR, "bin");
@@ -73,7 +76,36 @@ async function npmCommand() {
   return { file: process.execPath, args: [cli], env: { PATH: [dirname(process.execPath), process.env.PATH || ""].join(delimiter) } };
 }
 
+/** Antigravity CLI: the platform's build from Google's release server, checked against its SHA-512, into HOME/cli/bin.
+ *  install.sh would also add ~/.local/bin to the shell profiles; this leaves them as they are. */
+async function installAgy() {
+  const os = process.platform === "darwin" ? "darwin" : process.platform === "linux" ? "linux" : null;
+  const arch = process.arch === "arm64" ? "arm64" : process.arch === "x64" ? "amd64" : null;
+  if (!os || !arch) throw new Error(`Antigravity CLI has no build for ${process.platform}/${process.arch}`);
+  const manifest = await (await fetch(`${AGY_UPDATES}/manifests/${os}_${arch}.json`, { signal: AbortSignal.timeout(30000) })).json();
+  if (typeof manifest?.url !== "string" || !/^https:\/\//.test(manifest.url) || !/^[0-9a-f]{128}$/i.test(manifest.sha512 || "")) throw new Error("Antigravity's release server did not name a download");
+  const res = await fetch(manifest.url, { signal: AbortSignal.timeout(300000) });
+  if (!res.ok) throw new Error(`Antigravity download failed (${res.status})`);
+  const data = Buffer.from(await res.arrayBuffer());
+  const { createHash } = await import("node:crypto");
+  if (createHash("sha512").update(data).digest("hex") !== manifest.sha512.toLowerCase()) throw new Error("the Antigravity download did not match its checksum");
+  const { writeFile, rename, chmod, mkdtemp } = await import("node:fs/promises");
+  mkdirSync(CLI_BIN, { recursive: true });
+  const tmp = await mkdtemp(join(CLI_DIR, "agy-"));
+  try {
+    const target = join(tmp, "antigravity");
+    if (/\.tar\.gz(\?|$)/.test(manifest.url)) {
+      await writeFile(join(tmp, "agy.tar.gz"), data);
+      await run("/usr/bin/tar", ["-xzf", join(tmp, "agy.tar.gz"), "-C", tmp, "antigravity"]);
+    } else await writeFile(target, data);
+    await chmod(target, 0o755);
+    await rename(target, join(CLI_BIN, "agy"));
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
+  useCliDir();
+}
+
 async function install(backend) {
+  if (backend === "antigravity") return installAgy();
   const pkg = PACKAGES[backend];
   mkdirSync(CLI_BIN, { recursive: true });
   const npm = await npmCommand();

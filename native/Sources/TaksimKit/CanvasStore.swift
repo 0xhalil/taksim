@@ -500,11 +500,11 @@ public final class CanvasStore {
 
     /// the CLIs the server can run agents on, in the usual order
     public var backends: [String] {
-        let order = ["claude", "codex", "copilot", "opencode", "gemini", "local", "fake"]
+        let order = ["claude", "codex", "copilot", "antigravity", "opencode", "gemini", "local", "fake"]
         return Array(Set(models.map(\.owned_by))).sorted { (order.firstIndex(of: $0) ?? 99, $0) < (order.firstIndex(of: $1) ?? 99, $1) }
     }
     nonisolated public static func label(of backend: String) -> String {
-        ["claude": "Claude Code", "codex": "Codex", "copilot": "GitHub Copilot", "opencode": "opencode", "gemini": "Gemini CLI", "local": L("Local"), "fake": "test"][backend] ?? backend
+        ["claude": "Claude Code", "codex": "Codex", "copilot": "GitHub Copilot", "opencode": "opencode", "antigravity": "Antigravity", "gemini": "Gemini CLI", "local": L("Local"), "fake": "test"][backend] ?? backend
     }
 
     // ---------- plan usage (src/usage.mjs) ----------
@@ -563,6 +563,7 @@ public final class CanvasStore {
     public func backendOf(_ model: String) -> String {
         models.first { $0.id == model }?.owned_by
             ?? (model.hasPrefix("local:") ? "local" : model == "copilot" || model.hasPrefix("copilot:") ? "copilot"
+                : model == "agy" || model.hasPrefix("agy:") ? "antigravity"
                 : model.contains("/") ? "opencode" : model.range(of: "^(gpt|codex|o\\d)", options: .regularExpression) != nil ? "codex" : "claude")
     }
 

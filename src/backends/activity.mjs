@@ -2,6 +2,13 @@
 const detailOf = (input) => String(input?.command || input?.file_path || input?.filePath || input?.path || input?.query || input?.description || "").slice(0, 4000);
 const tool = (lang) => (lang === "tr" ? "Araç" : "Tool");
 export function activityOf(event, lang = "en") {
+  // Antigravity: a tool is one step of its conversation, ACTIVE then DONE or ERROR
+  if (event.event === "step_update" && event.step_update?.step_type === "tool") {
+    const s = event.step_update, p = s.tool_info?.parameters || {};
+    return [{ id: `${s.conversation_id}:${s.step_index}`, label: s.tool_name || tool(lang),
+      detail: String(p.CommandLine || p.AbsolutePath || p.TargetFile || p.DirectoryPath || p.Query || p.Url || detailOf(p)).slice(0, 4000),
+      status: s.state === "ERROR" ? "error" : s.state === "DONE" ? "done" : "running" }];
+  }
   if (event.type === "tool_use" && event.part?.type === "tool") {
     const p = event.part, state = p.state;
     if (!p.callID || !state || !["running", "completed", "error"].includes(state.status)) return [];

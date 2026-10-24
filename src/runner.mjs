@@ -131,7 +131,8 @@ export function run(backend, { model, system, prompt, opts, onText = () => {}, o
       if (signal?.aborted) return reject(new Error("cancelled"));
       if (st.error) return reject(new Error(st.error));
       if (code === 0 || st.text) return resolve(st);
-      reject(new Error(stderr.trim().split("\n").slice(-5).join("\n") || `${backend.name} exited with code ${code}`));
+      // a backend may say in plain words what its CLI's error means
+      reject(new Error(backend.explain?.(stderr) || stderr.trim().split("\n").slice(-5).join("\n") || `${backend.name} exited with code ${code}`));
     });
     child.stdin.end(stdin);
   });

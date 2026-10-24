@@ -124,7 +124,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: ["notification", "bildirim", "sound", "ses", "badge", "rozet", "delete", "sil", "language", "dil", "english", "türkçe", "ızgara", "tuval", "grid", "canvas", "yazı", "text size", "port", "node", "motor", "engine", "sunucu", "server", "url", "adres"]
         case .appearance: ["tema", "theme", "darcula", "koyu", "açık", "kontrast", "dark", "light", "contrast"]
         case .plugins: ["araç", "tool", "market", "eklenti", "plugin", "extension", "yüklü"]
-        case .accounts: ["hesap", "giriş", "login", "e-posta", "ajan", "agent", "claude", "codex", "copilot", "github", "opencode", "gemini", "cli", "kurulu", "installed"]
+        case .accounts: ["hesap", "giriş", "login", "e-posta", "ajan", "agent", "claude", "codex", "copilot", "github", "opencode", "gemini", "antigravity", "google", "cli", "kurulu", "installed"]
         case .connections: ["slack", "github", "token", "bağlantı", "servis", "veri"]
         case .keymap: ["kısayol", "keymap", "tuş", "klavye"]
         }
@@ -1060,6 +1060,9 @@ private struct CLIAccounts: View {
             .padding(.horizontal, 12).frame(height: 52)
         } else if !installed, m.failed.contains(backend.name), let hint = AccountsModel.installHints[backend.name] {
             installHelp(hint)
+        } else if installed, backend.named == false {
+            // one login per computer (Antigravity keeps it in the keychain): its row above is all there is
+            EmptyView()
         } else {
             Button { beginAdd() } label: {
                 HStack(spacing: 12) {

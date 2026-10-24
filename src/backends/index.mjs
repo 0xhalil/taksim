@@ -2,26 +2,27 @@
 //   name, cmd, models, defaultModel, matches(model), maxConcurrency,
 //   build({model, system, prompt, opts, note}) -> {args, cwd, stdin, env?},
 //   parse(jsonEvent, state, onText)
-// and optionally init(), resolveModel(model), checkModel(model) -> error string.
+// and optionally init(), resolveModel(model), checkModel(model) -> error string, explain(stderr) -> plain words.
 
 import { baseUrl, cfg } from "../config.mjs";
 import claude from "./claude.mjs";
 import codex from "./codex.mjs";
 import opencode from "./opencode.mjs";
 import gemini from "./gemini.mjs";
+import antigravity from "./antigravity.mjs";
 import copilot from "./copilot.mjs";
 import local from "./local.mjs";
 import fake from "./fake.mjs";
 
-// Display order; matching order is separate: "local:" and "copilot:" first (a local id may hold a "/"),
+// Display order; matching order is separate: "local:", "copilot:" and "agy:" first (a local id may hold a "/"),
 // then opencode's "provider/model" check, which must win over the other prefixes.
 export const BACKENDS = [
   claude, codex,
-  gemini,
+  antigravity, gemini,
   copilot, opencode, local,
   ...(cfg.fake ? [fake] : []),
 ];
-const rank = (b) => (b === local || b === copilot ? 2 : b === opencode ? 1 : 0);
+const rank = (b) => (b === local || b === copilot || b === antigravity ? 2 : b === opencode ? 1 : 0);
 const MATCH_ORDER = [...BACKENDS].sort((a, b) => rank(b) - rank(a));
 
 export async function initBackends() {

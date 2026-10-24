@@ -4,6 +4,8 @@
 //   Codex        CODEX_HOME
 //   opencode     XDG_DATA_HOME (where auth.json and sessions live; the user's config stays shared)
 //   Gemini CLI   GEMINI_CLI_HOME, with file storage instead of the shared OS keychain entry
+//   Antigravity  the machine login only: the CLI keeps its Google login in the keychain and has no folder to point
+//                elsewhere
 // The "machine" account is the CLI's normal login on this computer (no env override).
 // Logins run the CLI's own sign-in in a terminal; taksim never sees or stores passwords or tokens. It
 // reads only who is signed in (email, plan) from the CLI's status output or its credential files.
@@ -17,7 +19,8 @@ import { HOME } from "./canvas/store.mjs";
 import { Terminal } from "./term/pty.mjs";
 import { CHAT_DIR, cfg, splitCmd } from "./config.mjs";
 import { BACKENDS } from "./backends/index.mjs";
-import { TAKSIM_SETTINGS as GEMINI_TAKSIM } from "./backends/gemini.mjs";
+import { TAKSIM_SETTINGS as GEMINI_TAKSIM, googleLoginEnv } from "./backends/gemini.mjs";
+import { signedInEmail } from "./backends/antigravity.mjs";
 import { saveToken, readTokenSync, dropToken } from "./connectors.mjs";
 import { startInstall, installState } from "./cli-install.mjs";
 
@@ -106,7 +109,9 @@ const KINDS = {
   },
   gemini: {
     label: "Gemini CLI",
-    env: (dir) => ({ GEMINI_CLI_HOME: dir, GEMINI_FORCE_FILE_STORAGE: "true" }),
+    env: (dir) => ({ GEMINI_CLI_HOME: dir, GEMINI_FORCE_FILE_STORAGE: "true", ...googleLoginEnv(dir) }),
+    // the Google login signs in as the person, not as a service account the shell exports
+    machineEnv: () => googleLoginEnv(),
     home: () => join(homedir(), ".gemini"),
     sub: ".gemini",
     copy: ["settings.json", "GEMINI.md"],
@@ -135,6 +140,20 @@ const KINDS = {
       mkdirSync(join(dir, ".gemini"), { recursive: true });
       writeJson(f, s);
     },
+  },
+  antigravity: {
+    label: "Antigravity",
+    machineOnly: true,
+    env: () => ({}),
+    home: () => join(homedir(), ".gemini", "antigravity-cli"),
+    copy: [], link: [],
+    // signed in when its model list came (it needs the login) or its log names who signed in
+    status: async () => {
+      const agy = BACKENDS.find((b) => b.name === "antigravity");
+      const email = signedInEmail();
+      return { loggedIn: !!agy?.details?.length || !!email, email, org: null, plan: email || agy?.details?.length ? "Google" : null, stamp: null };
+    },
+    login: [], // its TUI signs in with Google in the browser; it keeps running after, so taksim closes it
   },
 };
 // test backend: fake-cli reports FAKE_CONFIG_DIR, "fake-cli status" prints a status line. Its machine login
@@ -180,7 +199,7 @@ export function listAccounts() {
 export function accountBackends() {
   return ACCOUNT_BACKENDS.map((name) => {
     const found = installed(name);
-    return { name, label: KINDS[name].label, installed: found, ...(found ? { installing: false, installError: null } : installState(name)) };
+    return { name, label: KINDS[name].label, installed: found, ...(KINDS[name].machineOnly ? { named: false } : {}), ...(found ? { installing: false, installError: null } : installState(name)) };
   });
 }
 
@@ -204,6 +223,7 @@ export function createAccount({ name, backend, machine = false, copy_settings = 
   if (!name) throw err(400, "name is required");
   if (typeof backend !== "string" || !Object.hasOwn(KINDS, backend)) throw err(400, `backend must be one of: ${ACCOUNT_BACKENDS.join(", ")}`);
   if (findAccount(name)) throw err(409, `an account named "${name}" already exists`);
+  if (!machine && KINDS[backend].machineOnly) throw err(400, `${KINDS[backend].label} signs in only as this computer's login`);
   if (machine && accounts.some((a) => a.backend === backend && !a.dir)) {
     throw err(409, `this machine's ${backend} login already has a name`);
   }
@@ -364,7 +384,8 @@ export async function setApiKey(ref, key) {
   writeJson(f, s);
   return accountStatus(a.id);
 }
-// For reading a login's status and signing it in: the machine login of a CLI that keeps it elsewhere (test CLI).
+// For reading a login's status and signing it in: the machine login's own env where a CLI needs one (Gemini's
+// Google login, the test CLI's folder).
 function loginEnv(account) {
   return account?.dir ? accountEnv(account) : KINDS[account?.backend]?.machineEnv?.() || {};
 }

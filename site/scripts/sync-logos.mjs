@@ -9,7 +9,7 @@ const swift = readFileSync(root + "native/Sources/Taksim/Logos.swift", "utf8");
 const page = root + "site/index.html";
 const html = readFileSync(page, "utf8");
 
-const NAMES = ["claude", "codex", "gemini", "opencode", "copilot"];
+const NAMES = ["claude", "codex", "antigravity", "gemini", "opencode", "copilot"];
 const section = (name) => swift.slice(swift.indexOf(`static let ${name}:`), swift.indexOf("]\n", swift.indexOf(`static let ${name}:`)));
 const paths = Object.fromEntries([...section("paths").matchAll(/"(\w+)":\s*"([^"]+)"/g)].map((m) => [m[1], m[2]]));
 const icons = Object.fromEntries([...section("icons").matchAll(/"(\w+)":\s*##"([\s\S]*?)"##/g)].map((m) => [m[1], m[2]]));

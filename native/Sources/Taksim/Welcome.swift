@@ -8,7 +8,7 @@ import TaksimKit
 /// The CLIs' sign-in state on this computer, and the login running in the welcome, if any.
 @MainActor @Observable
 final class AccountsModel {
-    struct Backend: Decodable, Identifiable { var name: String; var label: String; var installed: Bool?; var installing: Bool?; var installError: String?; var id: String { name } }
+    struct Backend: Decodable, Identifiable { var name: String; var label: String; var installed: Bool?; var installing: Bool?; var installError: String?; var named: Bool?; var id: String { name } }
     struct Account: Decodable, Identifiable {
         var id: String; var name: String; var backend: String; var dir: String?
         var status: Status?; var loggingIn: Bool?
@@ -34,7 +34,7 @@ final class AccountsModel {
     init(api: APIClient) { self.api = api }
 
     private struct List: Decodable { var accounts: [Account]; var backends: [Backend] }
-    static let order = ["claude", "codex", "copilot", "opencode", "gemini", "fake"]
+    static let order = ["claude", "codex", "copilot", "antigravity", "opencode", "gemini", "fake"]
 
     func load() async {
         guard let l = try? await api.get("/v1/accounts", as: List.self) else { return }
@@ -80,6 +80,7 @@ final class AccountsModel {
     static let installHints: [String: (command: String, url: String)] = [
         "claude": ("npm install -g @anthropic-ai/claude-code", "https://docs.anthropic.com/en/docs/claude-code"),
         "codex": ("npm install -g @openai/codex", "https://github.com/openai/codex"),
+        "antigravity": ("curl -fsSL https://antigravity.google/cli/install.sh | bash", "https://antigravity.google"),
         "gemini": ("npm install -g @google/gemini-cli", "https://github.com/google-gemini/gemini-cli"),
         "copilot": ("npm install -g @github/copilot", "https://github.com/github/copilot-cli"),
         "opencode": ("npm install -g opencode-ai", "https://opencode.ai"),

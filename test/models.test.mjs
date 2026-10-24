@@ -85,6 +85,8 @@ test("the create-agents switch: on, the agent is told to orchestrate, pick the f
   const { tierOf } = await import("../src/backends/models.mjs");
   assert.deepEqual(["haiku", "sonnet", "opus", "gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "opencode/exo-free"].map(tierOf),
     ["light", "standard", "strong", "light", "standard", "strong", "standard"]);
+  assert.deepEqual(["gemini-2.5-pro", "agy:gemini-4-argon", "agy:gemini-3.8-flash", "gpt-5-mini"].map(tierOf),
+    ["strong", "standard", "light", "light"], "gemini isn't light for the mini in its name");
 });
 
 test("the arrows say why: a helper's reason on the created link, the latest topic on the message link", async () => {

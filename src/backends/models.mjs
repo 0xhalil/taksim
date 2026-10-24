@@ -3,6 +3,7 @@
 //   codex:    ~/.codex/models_cache.json (the list codex fetched; "list" models only, the rest are hidden)
 //   opencode: `opencode models --verbose` (name, limits, variants = efforts)
 //   claude:   aliases, with the efforts `claude --help` names for --effort
+//   antigravity: `agy models` (its init), a model's levels gathered from its -low/-medium/-high slugs
 // GET /v1/models gives the list with these details; it refreshes in the background when it gets old.
 
 import { spawn } from "node:child_process";
@@ -95,6 +96,11 @@ async function refresh() {
   if (opencode) {
     for (const d of parseOpencodeVerbose(await output(opencode.cmd, ["models", "--verbose"], 30000))) details.set(d.id, d);
   }
+  const agy = backend("antigravity");
+  if (agy) {
+    await agy.init?.(); // the account's list now, not the one from when the engine started
+    for (const d of agy.details || []) details.set(d.id, { name: d.name, description: null, context: null, efforts: d.efforts, defaultEffort: null });
+  }
   refreshedAt = Date.now();
 }
 
@@ -111,7 +117,7 @@ export function effortsOf(model) {
 
 // How much a model costs to run, roughly, from its name: light (fast and cheap: haiku, luna, flash, mini…),
 // strong (the most capable and dearest: opus, astra, pro…), standard otherwise. Free and local ones say so.
-const LIGHT = /haiku|luna|mini|nano|flash|lite|small|\b[1-9]b\b/i;
+const LIGHT = /haiku|luna|\bmini\b|nano|flash|lite|small|\b[1-9]b\b/i; // "mini" a word of its own: gemini is not light
 const STRONG = /opus|astra|ultra|\bpro\b|-pro|reserve/i;
 export function tierOf(id) { return LIGHT.test(id) ? "light" : STRONG.test(id) ? "strong" : "standard"; }
 export const isFree = (m) => m.owned_by === "local" || /free/i.test(m.id);
