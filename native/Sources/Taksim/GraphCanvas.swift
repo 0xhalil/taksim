@@ -60,7 +60,7 @@ private struct GraphRepresentable: NSViewRepresentable {
                   let m = try? JSONSerialization.jsonObject(with: ev.data) as? [String: Any],
                   let from = m["from"] as? String, let to = m["to"] as? String,
                   let a = store.agents[from], store.agents[to] != nil else { return }
-            v.pulse(from: from, to: to, color: Pal.backend(a.backend))
+            v.pulse(from: from, to: to, color: Pal.mark(a.backend))
         }
         DispatchQueue.main.async { v.fit() }
         return v

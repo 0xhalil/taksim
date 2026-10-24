@@ -284,6 +284,16 @@ struct BackendTile: View {
     let backend: String
     var size: CGFloat = 22
     var body: some View {
+        if let icon = Logos.icon(backend) {
+            // the product's own icon, as it is
+            Image(nsImage: icon).resizable().interpolation(.high).frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size / 4.4))
+        } else {
+            mark
+        }
+    }
+
+    private var mark: some View {
         RoundedRectangle(cornerRadius: size / 4.4).fill(JB.backend(backend))
             .frame(width: size, height: size)
             .overlay {

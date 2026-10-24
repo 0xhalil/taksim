@@ -519,7 +519,7 @@ struct StoryView: View {
             let q = phase(t, at + 0.35, 0.9)
             if q > 0 && q < 1 {
                 let pt = CGPoint(x: from.x + (to.x - from.x) * ease(q), y: from.y + (to.y - from.y) * ease(q))
-                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 4, y: pt.y - 4, width: 8, height: 8)), with: .color(JB.backend(nodes[a].0)))
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 4, y: pt.y - 4, width: 8, height: 8)), with: .color(JB.mark(nodes[a].0)))
             }
         }
         // the cards
@@ -535,10 +535,17 @@ struct StoryView: View {
             c.fill(body, with: .color(JB.nodeBody))
             c.fill(Path(roundedRect: CGRect(x: r.minX, y: r.minY, width: r.width, height: 22), cornerRadius: 8), with: .color(JB.nodeHead))
             c.stroke(body, with: .color(JB.line), lineWidth: 1)
-            c.fill(Path(roundedRect: CGRect(x: r.minX + 6, y: r.minY + 4, width: 14, height: 14), cornerRadius: 3.5), with: .color(JB.backend(n.0)))
-            if let d = Logos.paths[n.0] {
+            let tile = CGRect(x: r.minX + 6, y: r.minY + 4, width: 14, height: 14)
+            if let icon = Logos.icon(n.0) {
+                // the product's own icon, clipped in a copy so the card goes on unclipped
+                var t = c
+                t.clip(to: Path(roundedRect: tile, cornerRadius: 3.5))
+                t.draw(Image(nsImage: icon), in: tile)
+            } else if let d = Logos.paths[n.0] {
+                c.fill(Path(roundedRect: tile, cornerRadius: 3.5), with: .color(JB.backend(n.0)))
                 c.fill(Path(SVGPath.parse(d)).applying(CGAffineTransform(scaleX: 10 / 24, y: 10 / 24).concatenating(CGAffineTransform(translationX: r.minX + 8, y: r.minY + 6))), with: .color(.white))
             } else {
+                c.fill(Path(roundedRect: tile, cornerRadius: 3.5), with: .color(JB.backend(n.0)))
                 var prompt = Path()
                 prompt.move(to: CGPoint(x: r.minX + 9.5, y: r.minY + 8)); prompt.addLine(to: CGPoint(x: r.minX + 12.5, y: r.minY + 11)); prompt.addLine(to: CGPoint(x: r.minX + 9.5, y: r.minY + 14))
                 prompt.move(to: CGPoint(x: r.minX + 13.5, y: r.minY + 14)); prompt.addLine(to: CGPoint(x: r.minX + 16.5, y: r.minY + 14))

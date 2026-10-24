@@ -31,18 +31,9 @@ enum JB {
     static var tabEdge: Color { dyn(0x1E1F22, 0xEBECF0) }
     static var tint: Color { dyn(0xFFFFFF, 0x000000, darkAlpha: 0.05, lightAlpha: 0.04) }
 
-    /// each CLI's color, only on its logo tile (ui/canvas/graph.mjs COLORS)
-    static func backend(_ name: String?) -> Color {
-        switch name {
-        case "claude": Color(hex: 0xC4552D)
-        case "codex": Color(hex: 0x2B7A98)
-        case "opencode": Color(hex: 0x6A4FB3)
-        case "gemini": Color(hex: 0x3A7D44)
-        case "copilot": Color(hex: 0x57606A)
-        case "local": Color(hex: 0x7A6A3A)
-        default: Color(hex: 0x6B6862)
-        }
-    }
+    /// each CLI's brand colour, only on its logo tile (Logos.tiles); `mark` for what it does on the canvas
+    static func backend(_ name: String?) -> Color { Color(hex: Logos.tile(name)) }
+    static func mark(_ name: String?) -> Color { Color(hex: Logos.mark(name)) }
 
     static func status(_ s: String?) -> Color? {
         switch s {

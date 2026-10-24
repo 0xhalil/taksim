@@ -11,8 +11,10 @@ enum Pal {
     static let accent = dyn(0x3574F0, 0x3574F0), ok = dyn(0x5FB865, 0x208A3C), err = dyn(0xF75464, 0xDB3B4B), wait = dyn(0x2AACB8, 0x0B8A96)
     static let grid = dyn(0x35373B, 0xDFE1E5), nodeHead = dyn(0x323438, 0xF2F3F5), nodeBody = dyn(0x2B2D30, 0xFFFFFF)
     static let tint = NSColor(name: nil) { $0.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 1, alpha: 0x22 / 255) : NSColor(white: 0, alpha: 0x18 / 255) }
-    static let backends: [String: NSColor] = ["claude": NSColor(hex: 0xC4552D), "codex": NSColor(hex: 0x2B7A98), "opencode": NSColor(hex: 0x6A4FB3), "gemini": NSColor(hex: 0x3A7D44), "copilot": NSColor(hex: 0x57606A), "local": NSColor(hex: 0x7A6A3A)]
-    static func backend(_ b: String?) -> NSColor { backends[b ?? ""] ?? NSColor(hex: 0x6B6862) }
+    /// a CLI's brand colour (Logos.tiles): its logo tile
+    static func backend(_ b: String?) -> NSColor { NSColor(hex: Logos.tile(b)) }
+    /// what it does on the canvas (a pulse): its brand colour, grey for a black brand
+    static func mark(_ b: String?) -> NSColor { NSColor(hex: Logos.mark(b)) }
     static func status(_ s: String?) -> NSColor? { ["running": ok, "waiting": wait, "error": err][s ?? ""] }
 }
 
@@ -526,11 +528,19 @@ extension GraphView {
         for d: CGFloat in [4, 8] { ctx.move(to: CGPoint(x: w - 2, y: h - 2 - d)); ctx.addLine(to: CGPoint(x: w - 2 - d, y: h - 2)); ctx.strokePath() }
     }
 
-    /// Established provider marks; a terminal symbol for providers without a supplied logo.
+    /// The CLI's mark: its own icon, else its brand mark on its colour; a terminal symbol for one without a logo.
     func drawLogo(_ ctx: CGContext, _ backend: String?, x: CGFloat, y: CGFloat, size: CGFloat, bg: NSColor) {
         ctx.saveGState()
+        let tileRect = CGRect(x: x - 3, y: y - 3, width: size + 6, height: size + 6)
+        // the product's own icon, drawn as it is
+        if let icon = Logos.icon(backend) {
+            ctx.addPath(CGPath(roundedRect: tileRect, cornerWidth: 5, cornerHeight: 5, transform: nil)); ctx.clip()
+            icon.draw(in: tileRect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            ctx.restoreGState()
+            return
+        }
         ctx.setFillColor(bg.cgColor)
-        ctx.addPath(CGPath(roundedRect: CGRect(x: x - 3, y: y - 3, width: size + 6, height: size + 6), cornerWidth: 5, cornerHeight: 5, transform: nil)); ctx.fillPath()
+        ctx.addPath(CGPath(roundedRect: tileRect, cornerWidth: 5, cornerHeight: 5, transform: nil)); ctx.fillPath()
         ctx.setFillColor(NSColor.white.cgColor)
         ctx.setStrokeColor(NSColor.white.cgColor)
         if let p = logoPaths[backend ?? ""] {
