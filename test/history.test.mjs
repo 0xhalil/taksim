@@ -139,3 +139,36 @@ test("an agent nobody named is named by its first request; a name given, or chan
   await say(c.id, renamed.id, "something else");
   assert.equal((await view(renamed.id)).name, "Mine");
 });
+
+test("a canvas the system named takes its first request's folder, else its words; a typed name stays", async () => {
+  const own = mkdtempSync(join(tmpdir(), "taksim-shop-"));
+  const auto = (await api("POST", "/v1/canvases", { name: "canvas 4", autoName: true })).data;
+  const a = await addAgent(auto.id, { model: "fake-echo", cwd: own, name: "Worker" });
+  await say(auto.id, a.id, "tidy up the build scripts");
+  const nameOf = async (id) => (await api("GET", `/v1/canvases/${id}`)).data.name;
+  assert.equal(await nameOf(auto.id), own.split("/").pop(), "the project it works in");
+  await say(auto.id, a.id, "and something else");
+  assert.equal(await nameOf(auto.id), own.split("/").pop(), "only once");
+  // another canvas on the same project: its name would repeat a tab, so its words name it
+  const twin = (await api("POST", "/v1/canvases", {})).data;
+  const t = await addAgent(twin.id, { model: "fake-echo", cwd: own });
+  await say(twin.id, t.id, "review the checkout flow");
+  assert.equal(await nameOf(twin.id), "Review the checkout flow");
+  rmSync(own, { recursive: true, force: true });
+
+  const loose = (await api("POST", "/v1/canvases", { name: "canvas 5", autoName: true })).data;
+  const b = await addAgent(loose.id, { model: "fake-echo" });
+  await say(loose.id, b.id, "draft a polite reply to the landlord about the heating");
+  assert.equal(await nameOf(loose.id), "Draft a polite reply", "no folder: its first words, without a dangling 'to'");
+
+  const typed = (await api("POST", "/v1/canvases", { name: "ops" })).data;
+  const c = await addAgent(typed.id, { model: "fake-echo" });
+  await say(typed.id, c.id, "check the disks");
+  assert.equal(await nameOf(typed.id), "ops");
+
+  const renamed = (await api("POST", "/v1/canvases", { name: "canvas 6", autoName: true })).data;
+  await api("PUT", `/v1/canvases/${renamed.id}`, { name: "mine" });
+  const d = await addAgent(renamed.id, { model: "fake-echo" });
+  await say(renamed.id, d.id, "hello there");
+  assert.equal(await nameOf(renamed.id), "mine");
+});

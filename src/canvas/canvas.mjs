@@ -5,14 +5,14 @@ import { computerView, forgetComputer } from "../computer/access.mjs";
 import { randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { pickBackend, BACKENDS } from "../backends/index.mjs";
 import { SANDBOXES, NODE_PERMISSIONS } from "../config.mjs";
 import { httpError, SSE_HEADERS } from "../http.mjs";
 import { findAccount } from "../accounts.mjs";
 import { EventBus } from "./events.mjs";
 import { CHAT_MODES, modeOf, readOnly } from "./chat-modes.mjs";
-import { Agent } from "./agent.mjs";
+import { Agent, titleFrom } from "./agent.mjs";
 import * as store from "./store.mjs";
 import { archiveAgent, takeFromHistory } from "./history.mjs";
 import { PREFIX as CLAUDE_CODE, readClaudeSession } from "./claude-sessions.mjs";
@@ -30,6 +30,9 @@ export class Canvas {
   constructor(data) {
     this.id = data.id;
     this.name = data.name || "canvas";
+    // a name the system gave it ("canvas 2"): the first request made in it names it (nameAfter)
+    // (one saved before this, still empty and called what the app calls a new tab, counts as one too)
+    this.autoName = data.autoName ?? (/^(canvas|tuval)( \d+)?$/.test(this.name) && !(data.agents || []).length);
     this.vars = { project_dir: null, ...data.vars };
     this.limits = { ...DEFAULT_LIMITS, ...data.limits };
     this.createdAt = data.createdAt || Date.now();
@@ -54,7 +57,7 @@ export class Canvas {
   toJSON() {
     return { id: this.id, name: this.name, vars: this.vars, limits: this.limits, createdAt: this.createdAt,
       agents: [...this.agents.values()].map((a) => a.toJSON()), links: this.links, groups: this.groups,
-      branchSets: this.branchSets };
+      branchSets: this.branchSets, autoName: this.autoName };
   }
 
   view() {
@@ -73,7 +76,7 @@ export class Canvas {
   }
 
   update(patch) {
-    if (patch.name !== undefined) this.name = String(patch.name);
+    if (patch.name !== undefined) { this.name = String(patch.name); this.autoName = false; }
     if (patch.vars?.project_dir !== undefined) this.vars.project_dir = checkDir(patch.vars.project_dir);
     if (patch.limits) this.limits = { ...this.limits, ...pickNumbers(patch.limits, ["max_agents", "max_depth", "max_terminals"]) };
     this.bus.emit("canvas_updated", { name: this.name, vars: this.vars, limits: this.limits });
@@ -249,6 +252,22 @@ export class Canvas {
     store.deleteTranscript(this.id, agent.id);
     this.bus.emit("agent_removed", { id: agent.id });
     this.settleGroups();
+    this.save();
+  }
+
+  // The first request made on a canvas the system named: its tab takes the folder the agent works in (the
+  // project, as the Claude app groups conversations), else the request's first words. Once; a typed name stays.
+  nameAfter(agent, text) {
+    if (!this.autoName) return;
+    this.autoName = false;
+    const others = new Set(allCanvases().filter((c) => c !== this).map((c) => c.name));
+    const folder = agent.cwd ? basename(agent.cwd) : null;
+    let title = titleFrom(text);
+    if (title.length > 28) title = title.slice(0, 28).replace(/\s\S*$/, "");
+    const name = folder && !others.has(folder) ? folder : title;
+    if (!name) { this.save(); return; }
+    this.name = name;
+    this.bus.emit("canvas_updated", { name: this.name, vars: this.vars, limits: this.limits });
     this.save();
   }
 
@@ -632,8 +651,9 @@ export const listCanvases = () => [...canvases.values()].sort((a, b) => (a.creat
 export const getCanvas = (id) => canvases.get(id);
 export const allCanvases = () => [...canvases.values()];
 
-export function createCanvas({ name, vars, limits } = {}) {
-  const c = new Canvas({ id: shortId(), name: name || "canvas", limits });
+export function createCanvas({ name, vars, limits, autoName } = {}) {
+  // no name, or one the app made up ("canvas 3"): the first request in it names it
+  const c = new Canvas({ id: shortId(), name: name || "canvas", limits, autoName: !name || autoName === true });
   if (vars?.project_dir) c.vars.project_dir = checkDir(vars.project_dir);
   canvases.set(c.id, c);
   c.flush();

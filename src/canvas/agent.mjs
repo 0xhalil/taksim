@@ -34,11 +34,17 @@ import { projectRules } from "../ide/rules.mjs";
 export const PERSISTED = ["id", "name", "role", "system", "chatOrigin", "forkContext", "chatMode", "chatPlan", "chatReviews", "job", "jobRole", "modeContextSince", "seedHistory", "model", "effort", "delegate", "toolHelp", "chat", "account", "sandbox", "cwd", "session",
   "pos", "size", "cardSize", "collapsed", "context", "mcp", "parent", "depth", "createdBy", "createdAt", "panel", "autoApprove", "ide", "permission", "autoName"];
 
+const TAIL_WORDS = new Set(["a", "an", "the", "to", "of", "for", "and", "or", "in", "on", "at", "with", "from", "by", "is", "my", "our", "your",
+  "bir", "ve", "ile", "için", "de", "da", "bu", "şu", "mi", "mı", "mu", "mü"]);
+
 /** a conversation's title from its first request: its first words, without markup, at most five */
 export function titleFrom(text) {
   const t = String(text || "").replace(/<([\w-]+)[^>]*>[\s\S]*?<\/\1>/g, " ").replace(/```[\s\S]*?```/g, " ")
     .split(/\n|(?<=[.?!])\s/).map((l) => l.replace(/[`*_#>\[\]]/g, "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
-  const words = t.split(" ").slice(0, 5).join(" ").replace(/[,;:.?!-]+$/, "");
+  const cut = t.split(" ").slice(0, 5);
+  // a title doesn't end on a little word ("Draft a polite reply to"): those go
+  while (cut.length > 1 && TAIL_WORDS.has(cut.at(-1).toLowerCase().replace(/[,;:.?!-]+$/, ""))) cut.pop();
+  const words = cut.join(" ").replace(/[,;:.?!-]+$/, "");
   const short = words.length > 40 ? words.slice(0, 40).replace(/\s\S*$/, "") : words;
   return short ? short[0].toLocaleUpperCase() + short.slice(1) : "";
 }
@@ -519,6 +525,7 @@ export class Agent {
 
     this.record({ from: item.from || "user", to: this.id, kind: item.kind, text: item.text, ...(item.attachments?.length ? { attachments: item.attachments } : {}) });
     // a name the system gave it ("claude-2") becomes what the person first asked, as the Claude app titles a chat
+    if (!item.from && item.kind === "user") canvas.nameAfter(this, item.text);
     if (this.autoName && !item.from && item.kind === "user") {
       const title = titleFrom(item.text);
       this.autoName = false;

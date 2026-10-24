@@ -149,7 +149,7 @@ public final class CanvasStore {
         do {
             var list = try await api.get("/v1/canvases", as: CanvasList.self).canvases
             if list.isEmpty {
-                let c: Canvas = try await api.post("/v1/canvases", ["name": Self.nextTabName(open: [])], as: Canvas.self)
+                let c: Canvas = try await api.post("/v1/canvases", ["name": Self.nextTabName(open: []), "autoName": true], as: Canvas.self)
                 list = [CanvasSummary(id: c.id, name: c.name, agents: 0, busy: 0)]
             }
             canvases = list
@@ -317,6 +317,11 @@ public final class CanvasStore {
             agents[p.id] = a
         case "branches_changed":
             refreshBranches()
+        case "canvas_updated":
+            // its first request named it, or it was renamed elsewhere: the tab says so now, not at the next poll
+            struct NamePayload: Decodable { var name: String? }
+            if let name = decode(NamePayload.self)?.name, let id = currentId, let i = canvases.firstIndex(where: { $0.id == id }),
+               canvases[i].name != name { canvases[i].name = name }
         case "agent_removed":
             guard let p = decode(IdPayload.self) else { return }
             refreshBranches()
@@ -597,7 +602,8 @@ public final class CanvasStore {
     public func newCanvas() async {
         let name = Self.nextTabName(open: visibleCanvases.map(\.name))
         do {
-            let c: Canvas = try await api.post("/v1/canvases", ["name": name], as: Canvas.self)
+            // a made-up name: the first request in it names it (canvas.mjs nameAfter)
+            let c: Canvas = try await api.post("/v1/canvases", ["name": name, "autoName": true], as: Canvas.self)
             canvases.append(CanvasSummary(id: c.id, name: c.name, agents: 0, busy: 0))
             await open(c.id)
         } catch { self.error = error.localizedDescription }

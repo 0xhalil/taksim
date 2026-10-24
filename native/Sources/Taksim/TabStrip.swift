@@ -172,7 +172,9 @@ struct CanvasTab: View {
                     .onExitCommand(perform: onCancel)
                     .onChange(of: focused) { _, value in if !value && renaming { onCommit() } }
             } else {
+                // a name the first request gave it fades in where "canvas 2" was
                 Text(canvas.name).lineLimit(1).truncationMode(.tail)
+                    .contentTransition(.opacity).animation(.easeOut(duration: 0.35), value: canvas.name)
             }
             Spacer(minLength: 0)
             if locked {
