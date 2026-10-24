@@ -31,5 +31,12 @@ extension Tr {
         "Download": "İndir",
         "Downloading %d%%": "İndiriliyor %%%d",
         "Starting": "Başlatılıyor",
+        "Memory": "Bellek",
+        "Not running": "Çalışmıyor",
+        "1 model": "1 model",
+        "%d models": "%d model",
+        "Edits files and runs commands": "Dosya düzenler, komut çalıştırır",
+        "Chat only": "Yalnızca sohbet",
+        "Add server": "Sunucu ekle",
     ]
 }

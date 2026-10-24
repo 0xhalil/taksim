@@ -24,6 +24,33 @@ public struct LocalState: Decodable, Equatable, Sendable {
     public var install: Job?
     public var start: Job?
     public var pull: Job?
+    /// every server looked at, with what it serves (Settings)
+    public var servers: [Server]?
+
+    public struct Server: Decodable, Equatable, Sendable, Identifiable {
+        public struct Model: Decodable, Equatable, Sendable, Identifiable {
+            public var id: String
+            public var sizeGB: Double?
+            public var params: String?
+            public var tools: Bool?
+            public var window: Int?
+            public var max: Int?
+        }
+        public var url: String
+        public var builtIn: Bool
+        public var running: Bool
+        public var kind: String?
+        public var models: [Model]
+        public var id: String { url }
+
+        /// what it is called: the program its port is known for, else host:port
+        public var name: String {
+            guard let u = URL(string: url), let host = u.host else { return url }
+            let local = ["127.0.0.1", "localhost", "::1"].contains(host)
+            if local, let p = u.port, let known = [11434: "Ollama", 1234: "LM Studio", 8080: "llama.cpp", 8000: "vLLM", 1337: "Jan"][p] { return known }
+            return u.port.map { "\(host):\($0)" } ?? host
+        }
+    }
 
     /// the one thing that gets a local model going from here
     public enum Step: Equatable, Sendable { case ready, install, download, start, pull(String), busy }
@@ -43,4 +70,15 @@ extension CanvasStore {
     public func installOllama() async throws { _ = try await api.post("/v1/local/install") }
     public func startOllama() async throws { _ = try await api.post("/v1/local/start") }
     public func pullLocalModel(_ model: String) async throws { _ = try await api.post("/v1/local/pull", ["model": model]) }
+}
+
+/// the same calls from Settings, which has the engine's address but no canvas store
+extension APIClient {
+    public func localState() async throws -> LocalState { try await get("/v1/local", as: LocalState.self) }
+    public func addLocalServer(_ url: String) async throws { _ = try await post("/v1/local/servers", ["url": url]) }
+    public func removeLocalServer(_ url: String) async throws { _ = try await post("/v1/local/servers/remove", ["url": url]) }
+    public func deleteLocalModel(_ id: String) async throws { _ = try await post("/v1/local/delete", ["model": id]) }
+    public func installOllama() async throws { _ = try await post("/v1/local/install") }
+    public func startOllama() async throws { _ = try await post("/v1/local/start") }
+    public func pullLocalModel(_ model: String) async throws { _ = try await post("/v1/local/pull", ["model": model]) }
 }

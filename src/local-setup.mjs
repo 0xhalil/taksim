@@ -6,7 +6,7 @@ import { existsSync, statfsSync } from "node:fs";
 import { homedir, totalmem } from "node:os";
 import { delimiter, join } from "node:path";
 import { httpError } from "./http.mjs";
-import local from "./backends/local.mjs";
+import local, { serverList, addServer, removeServer, deleteModel } from "./backends/local.mjs";
 
 const OLLAMA = process.env.TAKSIM_OLLAMA_URL || "http://127.0.0.1:11434";
 const APP = "/Applications/Ollama.app";
@@ -36,7 +36,7 @@ const freeGB = () => { try { const s = statfsSync(homedir()); return (s.bavail *
 
 /** where things stand, for the app's Local tile */
 export async function localState() {
-  const memoryGB = Math.round(totalmem() / 1e9);
+  const memoryGB = Math.round(totalmem() / 2 ** 30); // as macOS says it: 16 GB, not 17
   const step = recommend(memoryGB);
   const up = await running();
   if (up && !local.models.length) await local.refresh(); // a server started outside taksim a moment ago
@@ -47,6 +47,7 @@ export async function localState() {
     recommended: { model: step.model, gb: step.gb },
     memoryGB, freeGB: freeGB() == null ? null : Math.round(freeGB() * 10) / 10,
     install: job.install, start: job.start, pull: job.pull,
+    servers: await serverList(),
   };
 }
 
@@ -133,9 +134,29 @@ export async function localRoutes(req, res, path, { readJson, sendJson }) {
   if (req.method !== "POST") return false;
   if (path === "/v1/local/install") return sendJson(res, 202, installOllama());
   if (path === "/v1/local/start") return sendJson(res, 200, await startOllama());
+  // Settings: servers added and removed (Ollama's and LM Studio's stay), a model deleted to free its disk
+  if (path === "/v1/local/servers") {
+    const body = await readJson(req).catch(() => ({}));
+    const url = addServer(body?.url);
+    if (!url) throw httpError(400, "give the server's address, like http://127.0.0.1:8080");
+    await local.refresh();
+    return sendJson(res, 200, { url });
+  }
+  if (path === "/v1/local/servers/remove") {
+    const body = await readJson(req).catch(() => ({}));
+    removeServer(body?.url);
+    await local.refresh();
+    return sendJson(res, 200, { ok: true });
+  }
+  if (path === "/v1/local/delete") {
+    const body = await readJson(req).catch(() => ({}));
+    try { await deleteModel(String(body?.model || "")); } catch (e) { throw httpError(400, e.message); }
+    await local.refresh();
+    return sendJson(res, 200, { ok: true });
+  }
   if (path === "/v1/local/pull") {
     const body = await readJson(req).catch(() => ({}));
-    return sendJson(res, 202, await pullModel(body?.model || recommend(Math.round(totalmem() / 1e9)).model));
+    return sendJson(res, 202, await pullModel(body?.model || recommend(Math.round(totalmem() / 2 ** 30)).model));
   }
   return false;
 }

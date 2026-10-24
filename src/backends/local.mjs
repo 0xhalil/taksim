@@ -5,10 +5,48 @@
 // Models are "local:<id>", found by asking each server's /v1/models; TAKSIM_LOCAL_URL=url,url replaces the default
 // servers (Ollama :11434, LM Studio :1234).
 
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { TOOLS, READ_ONLY, describe, runTool } from "./local-tools.mjs";
+import { HOME } from "../canvas/store.mjs";
 
-const SERVERS = (process.env.TAKSIM_LOCAL_URL || "http://127.0.0.1:11434/v1,http://127.0.0.1:1234/v1")
-  .split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
+// the servers looked at: Ollama's and LM Studio's usual ports, and the ones added in Settings (local-servers.json);
+// TAKSIM_LOCAL_URL=url,url replaces them all (tests)
+export const BUILT_IN = ["http://127.0.0.1:11434/v1", "http://127.0.0.1:1234/v1"];
+const SAVED = join(HOME, "local-servers.json");
+const clean = (u) => u.trim().replace(/\/+$/, "");
+export function savedServers() {
+  try { return JSON.parse(readFileSync(SAVED, "utf8")).servers.filter((u) => typeof u === "string"); } catch { return []; }
+}
+export function servers() {
+  if (process.env.TAKSIM_LOCAL_URL) return process.env.TAKSIM_LOCAL_URL.split(",").map(clean).filter(Boolean);
+  return [...new Set([...BUILT_IN, ...savedServers()])];
+}
+/** a server's address as it is kept: http(s), its /v1 (an OpenAI-compatible server's API) */
+export function normalizeServer(input) {
+  let s = String(input || "").trim();
+  if (/^[a-z][\w+.-]*:\/\//i.test(s) && !/^https?:\/\//i.test(s)) return null; // ftp://, file://: not a model server
+  if (!/^https?:\/\//i.test(s)) s = "http://" + s;
+  let u;
+  try { u = new URL(s); } catch { return null; }
+  if (!["http:", "https:"].includes(u.protocol) || !u.hostname) return null;
+  const path = u.pathname.replace(/\/+$/, "");
+  return `${u.protocol}//${u.host}${path.endsWith("/v1") ? path : path + "/v1"}`;
+}
+export function addServer(input) {
+  const url = normalizeServer(input);
+  if (!url) return null;
+  if (!servers().includes(url) && !savedServers().includes(url)) {
+    mkdirSync(HOME, { recursive: true });
+    writeFileSync(SAVED, JSON.stringify({ servers: [...savedServers(), url] }, null, 2));
+  }
+  return url;
+}
+export function removeServer(url) {
+  const left = savedServers().filter((u) => u !== url);
+  if (existsSync(SAVED)) writeFileSync(SAVED, JSON.stringify({ servers: left }, null, 2));
+  return left;
+}
 const PREFIX = "local:";
 const REFRESH_MS = 30000;
 const DEFAULT_WINDOW = 4096; // what a server opens when it doesn't say (Ollama's smallest default)
@@ -30,7 +68,7 @@ async function getJson(url, init) {
 }
 
 async function discover() {
-  const found = await Promise.all(SERVERS.map(async (base) => {
+  const found = await Promise.all(servers().map(async (base) => {
     try {
       const j = await getJson(`${base}/models`);
       const ollama = await getJson(`${origin(base)}/api/version`).then((v) => !!v.version, () => false);
@@ -60,6 +98,48 @@ export async function modelFacts(id) {
   } catch { /* the server went away: keep what was known */ }
   facts.set(id, known);
   return known;
+}
+
+/** every server with what it serves, for Settings: Ollama's models with their size, window and whether they call
+ * tools (its /api/tags says all of it); another server's model names */
+export async function serverList() {
+  const ps = new Map();
+  return Promise.all(servers().map(async (base) => {
+    const built = BUILT_IN.includes(base) && !process.env.TAKSIM_LOCAL_URL;
+    const out = { url: base, builtIn: built || !savedServers().includes(base), running: false, kind: null, models: [] };
+    try {
+      const listed = await getJson(`${base}/models`);
+      out.running = true;
+      const tags = await getJson(`${origin(base)}/api/tags`).catch(() => null);
+      if (tags?.models) {
+        out.kind = "ollama";
+        const loaded = await getJson(`${origin(base)}/api/ps`).catch(() => ({ models: [] }));
+        for (const m of loaded.models || []) ps.set(m.name, m.context_length);
+        out.models = tags.models.map((m) => {
+          const max = m.details?.context_length || null;
+          const caps = m.capabilities;
+          if (Array.isArray(caps)) facts.set(m.name, { ...(facts.get(m.name) || {}), tools: caps.includes("tools"), max,
+            window: ps.get(m.name) || Math.min(facts.get(m.name)?.window || DEFAULT_WINDOW, max || Infinity) });
+          // the window it really runs with: the loaded one's, else Ollama's default (not the most the model could take)
+          return { id: m.name, sizeGB: Math.round((m.size || 0) / 1e8) / 10, params: m.details?.parameter_size || null,
+            tools: Array.isArray(caps) ? caps.includes("tools") : null, window: ps.get(m.name) || Math.min(DEFAULT_WINDOW, max || Infinity), max };
+        });
+      } else {
+        out.kind = "openai";
+        out.models = (listed.data || []).map((m) => ({ id: m.id, sizeGB: null, params: null, tools: null, window: null, max: null }));
+      }
+    } catch { /* not running */ }
+    return out;
+  }));
+}
+
+/** an Ollama model gone from this computer (frees its disk) */
+export async function deleteModel(id) {
+  const s = where.get(id);
+  if (!s?.ollama) throw new Error(`${id} isn't an Ollama model here`);
+  const r = await fetch(`${origin(s.base)}/api/delete`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: id }) });
+  if (!r.ok) throw new Error(`Ollama answered ${r.status}`);
+  facts.delete(id);
 }
 
 // ---------- one call to the server, streamed ----------
@@ -253,7 +333,7 @@ const backend = {
     if (!where.has(id)) {
       return where.size
         ? `unknown local model "${id}"; see GET /v1/models`
-        : `no local model server is running (looked at ${SERVERS.join(", ")})`;
+        : `no local model server is running (looked at ${servers().join(", ")})`;
     }
   },
 };

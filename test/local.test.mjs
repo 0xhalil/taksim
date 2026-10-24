@@ -46,6 +46,11 @@ const ollama = createServer(async (req, res) => {
     return res.end(JSON.stringify({ capabilities: ["completion", ...(m.tools ? ["tools"] : [])], model_info: { "qwen3.context_length": 40960 } }));
   }
   if (req.url === "/api/ps") return res.end(JSON.stringify({ models: Object.entries(MODELS).map(([name, m]) => ({ name, model: name, context_length: m.window })) }));
+  if (req.url === "/api/tags") {
+    return res.end(JSON.stringify({ models: Object.entries(MODELS).map(([name, m]) => ({ name, model: name, size: 2.5e9,
+      capabilities: ["completion", ...(m.tools ? ["tools"] : [])], details: { parameter_size: "4B", context_length: 40960 } })) }));
+  }
+  if (req.url === "/api/delete" && req.method === "DELETE") { delete MODELS[body.model]; return res.end("{}"); }
   if (req.url === "/api/pull") {
     // streamed as Ollama does: the manifest, a layer's bytes coming in, then success; the model is there afterwards
     const lines = [{ status: "pulling manifest" }, { status: "pulling abc", total: 1000, completed: 0 }, { status: "pulling abc", total: 1000, completed: 600 },
@@ -203,4 +208,33 @@ test("the Local tile's state: Ollama running, a model for this Mac's memory, and
   }
   assert.deepEqual([pull.done, pull.error], [true, null]);
   assert.ok((await api("GET", "/v1/local")).data.models.includes("local:qwen3:0.6b"), "pulled: on the list at once");
+});
+
+test("Settings: every server with its models' size, window and tools; servers added and removed; a model deleted", async () => {
+  const { normalizeServer, addServer, removeServer, savedServers } = await import("../src/backends/local.mjs");
+  assert.equal(normalizeServer("localhost:8080"), "http://localhost:8080/v1");
+  assert.equal(normalizeServer("http://10.0.0.5:8000/v1/"), "http://10.0.0.5:8000/v1");
+  assert.equal(normalizeServer("https://llm.example.com/api"), "https://llm.example.com/api/v1");
+  assert.equal(normalizeServer("ftp://x"), null);
+  assert.equal(normalizeServer(""), null);
+  assert.equal(addServer("127.0.0.1:8080"), "http://127.0.0.1:8080/v1");
+  addServer("127.0.0.1:8080");
+  assert.deepEqual(savedServers(), ["http://127.0.0.1:8080/v1"], "kept once");
+  removeServer("http://127.0.0.1:8080/v1");
+  assert.deepEqual(savedServers(), []);
+  assert.equal((await api("POST", "/v1/local/servers", { url: "::bad::" })).status, 400);
+
+  const [server] = (await api("GET", "/v1/local")).data.servers;
+  assert.equal(server.running, true);
+  assert.equal(server.kind, "ollama");
+  const coder = server.models.find((m) => m.id === "coder");
+  assert.deepEqual([coder.sizeGB, coder.params, coder.tools, coder.window, coder.max], [2.5, "4B", true, 8192, 40960]);
+  assert.equal(server.models.find((m) => m.id === "plain").tools, false);
+
+  MODELS.spare = { tools: true, window: 4096 };
+  await api("POST", "/v1/local/servers", { url: process.env.TAKSIM_LOCAL_URL }); // a refresh: spare is listed
+  assert.ok((await api("GET", "/v1/local")).data.models.includes("local:spare"));
+  assert.equal((await api("POST", "/v1/local/delete", { model: "spare" })).status, 200);
+  assert.ok(!(await api("GET", "/v1/local")).data.models.includes("local:spare"), "gone from the list at once");
+  assert.equal((await api("POST", "/v1/local/delete", { model: "nope" })).status, 400);
 });

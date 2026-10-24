@@ -217,6 +217,22 @@ final class AppModel {
                 AgentSheet.snapshotModels(s, backend: ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_BACKEND"] ?? "claude", to: path)
             }
             if let path = ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_SETTINGS"] { snapshotSettings(path) }
+            // TAKSIM_SNAPSHOT_LOCAL=/path.png: Settings' Local section alone (it sits below the window's fold)
+            if let path = ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_LOCAL"] {
+                let host = NSHostingView(rootView: LocalModelsSection(api: s.api).padding(20).frame(width: 720).background(JB.bg))
+                let w = NSWindow(contentRect: NSRect(x: -3000, y: 0, width: 720, height: 700), styleMask: [.borderless], backing: .buffered, defer: false)
+                w.contentView = host
+                w.appearance = NSAppearance(named: ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_DARK"] == "1" ? .darkAqua : .aqua)
+                w.orderFrontRegardless()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(3))
+                    w.setContentSize(host.fittingSize)
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+                    host.cacheDisplay(in: host.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                }
+            }
             if let path = ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_PALETTE"] { snapshotPalette(s, path) }
             if let path = ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_WELCOME"] { snapshotWelcome(path) }
             if let path = ProcessInfo.processInfo.environment["TAKSIM_SNAPSHOT_LAUNCH"] { snapshotLaunch(path) }

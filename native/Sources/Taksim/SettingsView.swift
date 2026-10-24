@@ -847,6 +847,8 @@ private struct AccountsPane: View {
                     ForEach(m.backends.filter { $0.name != "fake" || ProcessInfo.processInfo.environment["TAKSIM_URL"] != nil }) { b in
                         CLIAccounts(backend: b, m: m, startAdding: addFor == b.name)
                     }
+                    // the models that run on this Mac, after the CLIs
+                    if let api { LocalModelsSection(api: api) }
                 } else {
                     ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.top, 40)
                 }
