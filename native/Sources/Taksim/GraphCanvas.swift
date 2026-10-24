@@ -11,6 +11,8 @@ struct GraphCanvas: View {
     var addAgent: (CGPoint) -> Void = { _ in }
     var editAgent: (String) -> Void = { _ in }
     var center: (@escaping () -> CGPoint) -> Void = { _ in }
+    /// hands over the view-to-canvas point conversion (a past conversation dropped here opens where it fell)
+    var graphPoint: (@escaping (CGPoint) -> CGPoint) -> Void = { _ in }
     var focus: (@escaping (String) -> Void) -> Void = { _ in }
     var opener: (@escaping (String, Bool) -> Void) -> Void = { _ in }
 
@@ -18,7 +20,7 @@ struct GraphCanvas: View {
         // reading what the canvas shows makes SwiftUI redraw it when any of it changes
         // (streaming text isn't here: a token redraws only its card, through the event listener)
         let _ = (showGrid, ThemeState.shared.choice, store.agents, store.groups, store.links, store.currentId, store.ghosts)
-        GraphRepresentable(store: store, fitRequest: fitRequest, showGrid: showGrid, addAgent: addAgent, editAgent: editAgent, center: center, focus: focus, opener: opener)
+        GraphRepresentable(store: store, fitRequest: fitRequest, showGrid: showGrid, addAgent: addAgent, editAgent: editAgent, center: center, graphPoint: graphPoint, focus: focus, opener: opener)
     }
 }
 
@@ -29,6 +31,7 @@ private struct GraphRepresentable: NSViewRepresentable {
     let addAgent: (CGPoint) -> Void
     let editAgent: (String) -> Void
     let center: (@escaping () -> CGPoint) -> Void
+    let graphPoint: (@escaping (CGPoint) -> CGPoint) -> Void
     let focus: (@escaping (String) -> Void) -> Void
     let opener: (@escaping (String, Bool) -> Void) -> Void
 
@@ -41,6 +44,7 @@ private struct GraphRepresentable: NSViewRepresentable {
         context.coordinator.addAgent = addAgent
         context.coordinator.editAgent = editAgent
         center { [weak v] in v?.viewCenter() ?? .zero }
+        graphPoint { [weak v] p in v?.toGraph(p) ?? p }
         opener { [weak c = context.coordinator] id, isNew in c?.openTerminal(id, isNew) }
         focus { [weak v] id in v?.revealAgent(id) }
         v.store = store

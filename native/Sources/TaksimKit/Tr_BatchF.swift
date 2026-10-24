@@ -14,5 +14,14 @@ extension Tr {
         "Sidebar": "Kenar çubuğu",
         "Sidebar  ⌘⇧A": "Kenar çubuğu  ⌘⇧A",
         "Hide sidebar": "Kenar çubuğunu gizle",
+        "Today": "Bugün",
+        "Previous 7 days": "Son 7 gün",
+        "Previous 30 days": "Son 30 gün",
+        "By date": "Tarihe göre",
+        "By project": "Projeye göre",
+        "Sort": "Sırala",
+        "Last active": "Son etkinlik",
+        "Started": "Başlangıç",
+        "Group and sort": "Grupla ve sırala",
     ]
 }

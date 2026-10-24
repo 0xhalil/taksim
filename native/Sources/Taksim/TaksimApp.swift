@@ -107,6 +107,8 @@ final class AppModel {
     var fitRequest = 0
     var sheet: AgentSheetContext?
     @ObservationIgnored var viewCenter: () -> CGPoint = { .zero }
+    /// a point in the canvas view, in canvas units
+    @ObservationIgnored var graphPoint: (CGPoint) -> CGPoint = { $0 }
     @ObservationIgnored var openTerminal: (String, Bool) -> Void = { _, _ in }
     let launcher: ServerLauncher?
     /// the engine's address; the launcher's may move off a port another program holds
@@ -678,11 +680,12 @@ final class AppModel {
     }
 
     /// a past conversation (the sidebar, ⌘K) back on the open canvas, in the middle of the view, its chat ready to type
-    @discardableResult func continueConversation(_ id: String) async -> Bool {
+    /// `at`: where it was dropped (canvas units); else the middle of the view
+    @discardableResult func continueConversation(_ id: String, at: CGPoint? = nil) async -> Bool {
         guard let store else { return false }
         if store.currentId == nil { await store.newCanvas() }
         do {
-            agentAdded(try await store.continueConversation(id, at: viewCenter()))
+            agentAdded(try await store.continueConversation(id, at: at ?? viewCenter()))
             return true
         } catch {
             store.error = error.localizedDescription

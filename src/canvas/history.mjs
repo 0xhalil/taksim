@@ -65,7 +65,7 @@ export function listHistory({ q = "", limit = 200 } = {}) {
       }
     }
     const { agent, ...summary } = m;
-    out.push({ ...summary, name: agent?.name || "", model: agent?.model || null });
+    out.push({ ...summary, name: agent?.name || "", model: agent?.model || null, cwd: agent?.cwd || null });
   }
   return out.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, limit);
 }

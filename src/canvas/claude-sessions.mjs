@@ -3,7 +3,7 @@
 // continued here: an agent in the same folder resumes the same session, its chat filled from the file.
 // Read only; taksim never changes these files (the CLI appends to its own session as it always does).
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -24,6 +24,8 @@ const typed = (line) => line.type === "user" && !line.isMeta && !line.isSidechai
   && (typeof line.message.content === "string" || line.message.content?.some?.((p) => p?.type === "text"));
 // the CLI's markup around commands and reminders: not part of what was asked
 const clean = (t) => t.replace(/<(command|local-command|system-reminder|bash)[\w-]*>[\s\S]*?<\/\1[\w-]*>/g, " ").replace(/\s+/g, " ").trim();
+
+const real = (p) => { if (!p) return null; try { return realpathSync(p); } catch { return p; } };
 
 async function parse(file) {
   const lines = [];
@@ -48,11 +50,13 @@ async function infoOf(file) {
   const lastAnswer = lines.filter((l) => l.type === "assistant" && !l.isSidechain).map((l) => textOf(l.message?.content)).filter(Boolean).at(-1);
   const info = first ? {
     session: basename(file, ".jsonl"),
-    cwd: first.cwd || lines.find((l) => l.cwd)?.cwd || null,
+    // the folder as taksim names it (/var is /private/var on macOS): the same project groups as one
+    cwd: real(first.cwd || lines.find((l) => l.cwd)?.cwd || null),
     title: (named || clean(textOf(first.message.content))).slice(0, 120),
     lastText: (lastAnswer || "").slice(0, 280),
     messages: lines.filter((l) => (l.type === "user" && typed(l)) || (l.type === "assistant" && textOf(l.message?.content))).length,
     lastAt: st.mtimeMs,
+    createdAt: Date.parse(first.timestamp) || st.birthtimeMs || null,
     // what a search looks in: the words said, not the tool output and request blobs around them
     words: lines.filter((l) => !l.isSidechain && (typed(l) || l.type === "assistant")).map((l) => textOf(l.message?.content)).join("\n").toLowerCase(),
   } : null;
@@ -88,7 +92,7 @@ export async function listClaudeSessions({ q = "", owned = new Set() } = {}) {
     if (needle && ![info.title, info.cwd].join(" ").toLowerCase().includes(needle) && !info.words.includes(needle)) continue;
     out.push({
       id: PREFIX + info.session, source: "claude-code", title: info.title, name: "Claude Code", backend: "claude", model: null,
-      folder: info.cwd ? basename(info.cwd) : null, cwd: info.cwd, lastText: info.lastText, messages: info.messages, lastAt: info.lastAt,
+      folder: info.cwd ? basename(info.cwd) : null, cwd: info.cwd, lastText: info.lastText, messages: info.messages, lastAt: info.lastAt, createdAt: info.createdAt,
     });
   }
   return out;

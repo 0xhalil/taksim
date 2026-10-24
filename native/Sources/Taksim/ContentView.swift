@@ -10,26 +10,41 @@ struct ContentView: View {
         VStack(spacing: 0) {
             HeaderBar(model: model)
             if let store = model.store {
-                TabStrip(store: store)
+                TabStrip(store: store, conversationDropped: { id, canvas in
+                    Task { await store.open(canvas); await model.continueConversation(id) }
+                })
                 HStack(spacing: 0) {
                     if model.showNavigator {
                         AgentNavigator(model: model, store: store)
                         Rectangle().fill(JB.line).frame(width: 1)
                     }
                 if store.currentId == nil && store.visibleCanvases.isEmpty {
-                    // every tab closed: one action, a new canvas
+                    // every tab closed: one action, a new canvas (a conversation dropped here gets one too)
                     Button { Task { await store.newCanvas() } } label: {
                         HStack(spacing: 5) { AppIcon.plus.frame(width: 14, height: 14); Text(L("Canvas")) }
                     }
                     .buttonStyle(AddButtonStyle())
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .dropDestination(for: String.self) { items, _ in
+                        guard let id = items.compactMap(PastConversation.id(fromDrag:)).first else { return false }
+                        Task { await model.continueConversation(id) }
+                        return true
+                    }
                 } else {
                 GraphCanvas(store: store, fitRequest: model.fitRequest,
                             addAgent: { model.sheet = .add(at: $0) },
                             editAgent: { model.sheet = .edit(id: $0) },
                             center: { model.viewCenter = $0 },
+                            graphPoint: { model.graphPoint = $0 },
                             focus: { model.focusAgent = $0 },
                             opener: { model.openTerminal = $0 })
+                // a past conversation dragged from the sidebar opens where it is dropped
+                .dropDestination(for: String.self) { items, at in
+                    guard let id = items.compactMap(PastConversation.id(fromDrag:)).first else { return false }
+                    Task { await model.continueConversation(id, at: model.graphPoint(at)) }
+                    return true
+                }
                 }
                 }
             } else {

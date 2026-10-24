@@ -4,6 +4,8 @@ import TaksimKit
 
 struct TabStrip: View {
     let store: CanvasStore
+    /// a past conversation dropped on a tab: (its id, that tab's canvas)
+    var conversationDropped: (String, String) -> Void = { _, _ in }
     @AppStorage("tabOrder") private var orderJSON = "[]"
     @State private var offset: CGFloat = 0
     @State private var renaming: String?
@@ -40,6 +42,11 @@ struct TabStrip: View {
                                 tab(canvas).frame(width: layout.tabWidth).id(canvas.id)
                                     .draggable(canvas.id)
                                     .dropDestination(for: String.self) { items, _ in
+                                        // a conversation from the sidebar opens on this tab
+                                        if let past = items.compactMap(PastConversation.id(fromDrag:)).first {
+                                            conversationDropped(past, canvas.id)
+                                            return true
+                                        }
                                         guard let id = items.first, tabs.contains(where: { $0.id == id }) else { return false }
                                         move(id, before: canvas.id)
                                         return true
