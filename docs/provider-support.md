@@ -107,12 +107,34 @@ CLI feature; it needs a Git working folder and the saved before/after trees of a
 persist and the Git index isn't touched; undo is refused once a file has changed again. How each real model answers a
 fix request still needs checking per model.
 
+## Local models (checked 2026-10-24)
+
+A real run on an M1 Pro with 16 GB, Ollama 0.40.10, Copilot CLI 1.0.93, Codex CLI 0.162.1, opencode 1.18.32. Task: a
+Git folder whose `calc.py` subtracts in `add()`; "add() should return the sum. Fix it."
+
+- **The context window cuts the prompt silently.** Ollama serves a model with `default_num_ctx=4096` here (it scales
+  with memory) and the OpenAI endpoint takes no per-request size. An agent's prompt (the CLI's instructions, tool
+  schemas and taksim's) is about 20k tokens through Copilot and 24k through Codex: Ollama logged `truncating input
+  prompt limit=2050 prompt=20042`, the model never saw the task and the turn ended with an empty answer. A model made
+  from the same weights with a larger `num_ctx` (`/api/create {from, parameters: {num_ctx}}`, no extra disk) fixes
+  it: `qwen3:1.7b` at 24k read all 21,295 tokens.
+- **Copilot BYOK (taksim's local runner) works.** `qwen3:1.7b` at 24k viewed and edited the file (two tool calls) and
+  the change reached the shared review, in 88 s; `qwen3:8b` at 32k needs about 7.7 GB and made the machine sluggish.
+- **A thinking model's answer can be empty.** Qwen3 put its last message only in `reasoningText` (`content` empty), so
+  the chat shows nothing after the tool lines.
+- **Codex `--oss --local-provider ollama`** answered well in 142 s but didn't call its edit tool: the fix was only
+  described. Its prompt (24,452 tokens) nearly filled the 24k window.
+- **opencode** with an `ollama` provider in `opencode.json` sent no request to Ollama in 5 minutes and printed nothing;
+  not yet understood.
+
 ## Open work
 
 - Relay Copilot's newer SQL task list through a reliable SDK/RPC read; don't build a list from the bare
   `session.todos_changed` signal.
 - Bring task events of agents opened as terminals into the native chat.
-- Verify task and tool flows with real CLI versions; check a local model's tool calling separately.
+- Verify task and tool flows with real CLI versions.
+- Local models: give each a context window its prompt fits in (a sized model per local model), show a thinking
+  model's last reasoning when its answer is empty, find out why opencode's local run stalls.
 - Gemini's permission hook: try it with a real run on a signed-in taksim Gemini account.
 - Widen the inventory of provider features: question flows, plan tools, steering a turn, session branches,
   context meters, sub-agents, image input and provider-specific settings. Judge each against official sources and a
