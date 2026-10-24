@@ -135,3 +135,10 @@ test("browser tools are only answered for their own names", async () => {
   assert.equal(await callBrowserTool({ id: "x" }, "update_todos", {}), null);
   assert.ok(BROWSER_TOOLS.every((t) => t.name.startsWith("browser_") && t.inputSchema));
 });
+
+test("the browser closes and starts again with fresh agent tabs", { skip: !browserPath() && "no Chrome installed" }, async () => {
+  await stopBrowser();
+  const page = (await callBrowserTool({ id: "agent-1" }, "browser_snapshot")).content[0].text;
+  assert.match(page, /URL: about:blank/);
+  assert.doesNotMatch(page, /Hi Ada/);
+});

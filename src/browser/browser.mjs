@@ -47,7 +47,8 @@ class Cdp {
     });
   }
   on(h) { this.handlers.add(h); return () => this.handlers.delete(h); }
-  close() { try { this.ws.close(); } catch {} }
+  // The browser is shutting down too; don't leave a WebSocket close handshake keeping Node alive.
+  close() { try { this.ws.terminate(); } catch {} }
 }
 
 let chrome = null;   // { proc, cdp }
@@ -209,11 +210,17 @@ export async function closeTab(agentId) {
 }
 
 /** Closes the browser; resolves once it has exited. */
-export function stopBrowser() {
-  if (!chrome) return Promise.resolve();
+export async function stopBrowser() {
+  if (!chrome) return;
   const { proc, cdp } = chrome;
   chrome = null; tabs.clear(); owners.clear();
-  const gone = proc.exitCode !== null ? Promise.resolve() : new Promise((r) => { proc.once("exit", r); setTimeout(r, 3000).unref(); });
-  cdp.close(); proc.kill();
-  return gone;
+  const gone = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise((r) => proc.once("exit", r));
+  // Let Chrome stop its helpers and release the profile before removing it or starting another browser.
+  // SIGTERM can leave the network service and its sockets alive on macOS.
+  void cdp.send("Browser.close").catch(() => {});
+  let timer;
+  try {
+    const exited = await Promise.race([gone.then(() => true), new Promise((r) => { timer = setTimeout(() => r(false), 3000); })]);
+    if (!exited) { proc.kill("SIGKILL"); await gone; }
+  } finally { clearTimeout(timer); cdp.close(); }
 }

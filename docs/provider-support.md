@@ -33,6 +33,8 @@ ones, alert/confirm/prompt/leave-page dialogs, and tabs a page opens (they becom
 `test/browser.test.mjs` covers each of these against a real Chrome.
 On macOS, an already focused tab stays focused between tools without reactivating it, so hover menus remain
 available to the next snapshot and click. Dialogs skip the focus check because they pause JavaScript execution.
+Shutdown asks Chrome to close its helpers and releases the debugging socket, with a kill fallback if Chrome stalls;
+the real-browser tests also cover starting a fresh tab after shutdown.
 
 | Connection | Status |
 |---|---|
