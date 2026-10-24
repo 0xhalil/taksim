@@ -220,7 +220,9 @@ final class IDEHost: NSView {
         layer?.borderColor = Pal.line.cgColor
     }
 
-    func place(origin: CGPoint, size: CGSize, scale: CGFloat) {
+    /// `live` (mid-zoom): the box and its strip follow, the IDE inside keeps the size it was laid out at (cut off
+    /// or with room to spare) until the gesture rests, so its text never grows or shrinks
+    func place(origin: CGPoint, size: CGSize, scale: CGFloat, live: Bool = false) {
         let f = CGRect(x: origin.x, y: origin.y, width: size.width * scale, height: size.height * scale)
         if model.scale != scale { model.scale = scale }
         if model.size != size { model.size = size }
@@ -236,7 +238,7 @@ final class IDEHost: NSView {
             let a = CGRect(x: 0, y: hh, width: bounds.width, height: max(0, bounds.height - hh))
             if area.frame != a { area.frame = a }
             if area.bounds.size != a.size { area.setBoundsSize(a.size) }
-            if body.frame.size != a.size { body.frame = CGRect(origin: .zero, size: a.size) }
+            if !live, body.frame.size != a.size { body.frame = CGRect(origin: .zero, size: a.size) }
             corner.frame = CGRect(x: bounds.width - 16, y: bounds.height - 16, width: 16, height: 16)
         }
     }
@@ -304,14 +306,27 @@ extension GraphView {
                 store.wantedDiffs[a.id] = nil
                 Task { await h.ide.openDiff(p.path, old: p.old, new: p.new) }
             }
-            // after the node and its panel
-            let r = rectOf(a)
-            let x = r.maxX + Self.panelGap + (panelSize(a).map { $0.width + Self.panelGap } ?? 0)
-            h.isHidden = scale < Self.panelMinScale || a.isCollapsed
-            h.place(origin: CGPoint(x: (x + offset.x) * scale, y: (r.minY + offset.y) * scale), size: size, scale: scale)
+            placeIDE(h, a, size: size)
         }
         for (id, h) in ides where !keep.contains(id) {
             if h.canvas == (store.currentId ?? "") { h.removeFromSuperview(); ides[id] = nil } else { h.isHidden = true }
+        }
+    }
+
+    /// after the node and its panel
+    private func placeIDE(_ h: IDEHost, _ a: Agent, size: CGSize, live: Bool = false) {
+        let r = rectOf(a)
+        let x = r.maxX + Self.panelGap + (panelSize(a).map { $0.width + Self.panelGap } ?? 0)
+        h.isHidden = scale < Self.panelMinScale || a.isCollapsed
+        h.place(origin: CGPoint(x: (x + offset.x) * scale, y: (r.minY + offset.y) * scale), size: size, scale: scale, live: live)
+    }
+
+    /// mid-gesture: the IDEs move and resize with the canvas, but aren't scaled like the other views over it (their
+    /// text keeps its real size at every zoom, also while the fingers move)
+    func followIDEs() {
+        for a in agents {
+            guard let h = ides[a.id], let size = ideSize(a) else { continue }
+            placeIDE(h, a, size: size, live: true)
         }
     }
 

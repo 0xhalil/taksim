@@ -2,11 +2,12 @@ import AppKit
 import SwiftUI
 import TaksimKit
 
-/// What the agent sheet is open for: a new agent at a spot, or an agent's settings.
+/// What the agent sheet is open for: a new agent at a spot (a model and folder already picked, if any), or an
+/// agent's settings.
 enum AgentSheetContext: Identifiable {
-    case add(at: CGPoint)
+    case add(at: CGPoint, model: String? = nil, cwd: String? = nil)
     case edit(id: String)
-    var id: String { switch self { case .add(let p): "add-\(p.x)-\(p.y)"; case .edit(let id): "edit-\(id)" } }
+    var id: String { switch self { case .add(let p, _, _): "add-\(p.x)-\(p.y)"; case .edit(let id): "edit-\(id)" } }
 }
 
 /// A new agent, or an agent's settings, without a form's clutter: the CLI as logo tiles, then one aligned row
@@ -37,6 +38,9 @@ struct AgentSheet: View {
     @State private var error: String?
     @State private var busy = false
     @State private var dropping = false
+    /// the chosen login is signed out (or its CLI isn't here): the one action signs it in, then creates
+    @State private var signedOut = false
+    @State private var signer: AccountsModel?
     @FocusState private var nameFocused: Bool
 
     private var editing: Agent? { if case .edit(let id) = context { return store.agents[id] }; return nil }
@@ -50,14 +54,18 @@ struct AgentSheet: View {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                     row("cpu", "Model") { modelPicker }
                     if let levels = currentModel?.efforts, !levels.isEmpty { row("brain", L("Thinking")) { effortMeter(levels) } }
-                    row("person.crop.circle", L("Account")) { accountPicker }
+                    row(signedOut ? "person.crop.circle.badge.exclamationmark" : "person.crop.circle", L("Account"), tint: signedOut ? JB.warn : JB.muted) { accountPicker }
                     row("folder", L("Folder")) { folderWell }
                     if let git, git.repo != nil { row("arrow.triangle.branch", "Branch") { branchField(git) } }
                     row("lock", L("Access")) { accessPicker }
                 }
                 moreSection
+                if let l = signer?.login, l.backend == backend {
+                    LoginTerminal(login: l, cancel: { signer?.cancel() }).transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .padding(20)
+            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: signer?.login == nil)
             Rectangle().fill(JB.line).frame(height: 1)
             footer
         }
@@ -65,6 +73,8 @@ struct AgentSheet: View {
         .background(JB.panel)
         .tint(JB.accent)
         .task { await setup() }
+        .task(id: "\(backend)|\(account)") { await checkSignIn() }
+        .onDisappear { signer?.cancel() }
         .task(id: cwd) { try? await Task.sleep(for: .milliseconds(300)); await loadBranches() }
         .onExitCommand { onDone(nil) }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
@@ -116,9 +126,9 @@ struct AgentSheet: View {
     }
 
     /// one row: an icon for a label (its name on hover), the control filling the rest
-    private func row<C: View>(_ symbol: String, _ label: String, @ViewBuilder _ content: () -> C) -> some View {
+    private func row<C: View>(_ symbol: String, _ label: String, tint: Color = JB.muted, @ViewBuilder _ content: () -> C) -> some View {
         GridRow {
-            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(JB.muted)
+            Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(tint)
                 .frame(width: 18).help(label)
                 .gridColumnAlignment(.center)
             content().frame(maxWidth: .infinity, alignment: .leading)
@@ -352,16 +362,26 @@ struct AgentSheet: View {
                 Text(error).font(.system(size: 12)).foregroundStyle(JB.err).lineLimit(2)
             }
             Spacer()
-            Button { Task { await submit() } } label: {
-                Text(editing == nil ? L("Create") : L("Save")).font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(JB.accentInk)
-                    .padding(.horizontal, 16).frame(height: 30)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(JB.accent))
-                    .opacity(busy || model.isEmpty ? 0.5 : 1)
+            // signed out: the same key signs the CLI in where it stands, then creates
+            let signing = signer?.login != nil || signer?.installing.contains(backend) == true
+            Button { Task { await (signedOut ? signInThenSubmit() : submit()) } } label: {
+                HStack(spacing: 7) {
+                    if signedOut {
+                        if signing { ProgressView().controlSize(.mini) } else { BackendTile(backend: backend, size: 16) }
+                    }
+                    Text(signedOut ? (signing ? L("Signing in") : L("Sign in")) : editing == nil ? L("Create") : L("Save"))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(JB.accentInk)
+                .padding(.horizontal, 16).frame(height: 30)
+                .background(RoundedRectangle(cornerRadius: 6).fill(JB.accent))
+                .opacity(busy || signing || model.isEmpty ? 0.5 : 1)
+                .contentTransition(.opacity)
             }
             .buttonStyle(Press())
             .keyboardShortcut(.defaultAction)
-            .disabled(busy || model.isEmpty)
+            .disabled(busy || signing || model.isEmpty)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: signedOut)
         }
         .padding(.horizontal, 20).frame(height: 56)
     }
@@ -416,15 +436,46 @@ struct AgentSheet: View {
             backend = store.backendOf(model)
             more = !role.isEmpty || !system.isEmpty
         } else {
-            model = UserDefaults.standard.string(forKey: "lastModel") ?? "sonnet"
+            let given: (model: String?, cwd: String?) = if case .add(_, let m, let c) = context { (m, c) } else { (nil, nil) }
+            model = given.model ?? UserDefaults.standard.string(forKey: "lastModel") ?? "sonnet"
             backend = store.backendOf(model)
             if !store.models.contains(where: { $0.id == model }) { model = Self.usualModel(backend, in: store.models) ?? model }
             pick(model: model)
             // agents of one tab usually work in the same folder
-            cwd = store.currentAgents.filter { $0.cwd != nil }.max { ($0.createdAt ?? 0) < ($1.createdAt ?? 0) }?.cwd ?? ""
+            cwd = given.cwd ?? store.currentAgents.filter { $0.cwd != nil }.max { ($0.createdAt ?? 0) < ($1.createdAt ?? 0) }?.cwd ?? ""
             account = rememberedAccount()
         }
         nameFocused = true
+    }
+
+    /// whether the chosen login is signed in; unknown (a CLI without logins) counts as ready
+    private func checkSignIn() async {
+        guard !backend.isEmpty else { return }
+        let b = backend, acct = account.isEmpty ? nil : account
+        let ready = await AccountsModel.ready(api: store.api, backend: b, account: acct)
+        guard b == backend, acct == (account.isEmpty ? nil : account) else { return }
+        signedOut = ready == false
+    }
+
+    /// signs the chosen login in (installing its CLI first when it isn't here), then creates the agent
+    private func signInThenSubmit() async {
+        let s = signer ?? AccountsModel(api: store.api)
+        signer = s
+        if s.backends.isEmpty { await s.load() }
+        let b = backend
+        if account.isEmpty {
+            guard let cli = s.backends.first(where: { $0.name == b }) else { return }
+            await s.signIn(cli)
+        } else {
+            if s.backends.first(where: { $0.name == b })?.installed != true, !(await s.install(b)) { return }
+            await s.signIn(account: account, backend: b)
+        }
+        await store.loadChoices()
+        // the machine login may have been named just now: pick it up
+        if account.isEmpty { account = rememberedAccount() }
+        await checkSignIn()
+        if s.problem[b] != nil { error = s.problem[b] }
+        if !signedOut { await submit() }
     }
 
     private func loadBranches() async {
@@ -468,7 +519,7 @@ struct AgentSheet: View {
                 onDone(nil)
             } else {
                 UserDefaults.standard.set(model, forKey: "lastModel")
-                if case .add(let at) = context { fields["pos"] = [at.x.rounded(), at.y.rounded()] }
+                if case .add(let at, _, _) = context { fields["pos"] = [at.x.rounded(), at.y.rounded()] }
                 for k in ["account", "sandbox", "cwd", "effort"] where fields[k] is NSNull { fields[k] = nil }
                 onDone(try await store.addAgent(fields))
             }

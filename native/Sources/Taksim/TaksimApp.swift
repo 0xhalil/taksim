@@ -634,6 +634,11 @@ final class AppModel {
             if store.accounts.contains(where: { $0.id == acct }) { fields["account"] = acct }
             let at = viewCenter()
             fields["pos"] = [at.x.rounded(), at.y.rounded()]
+            // its login is signed out (a first run that skipped the accounts): the sheet signs it in, then creates
+            if await AccountsModel.ready(api: store.api, backend: store.backendOf(m), account: fields["account"] as? String) == false {
+                sheet = .add(at: at, model: m, cwd: folder)
+                return
+            }
             do {
                 let a = try await store.addAgent(fields)
                 UserDefaults.standard.set(m, forKey: "lastModel")

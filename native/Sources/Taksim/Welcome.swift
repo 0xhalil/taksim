@@ -54,6 +54,13 @@ final class AccountsModel {
         return accounts.first { $0.backend == backend && $0.status?.loggedIn == true }?.status
     }
 
+    /// whether an agent on this CLI and login could start now: false when it is signed out or the CLI isn't on this
+    /// computer; nil when that can't be told (a CLI without logins, the engine away)
+    static func ready(api: APIClient, backend: String, account: String?) async -> Bool? {
+        let path = account.map { "/v1/accounts/\($0)/status" } ?? "/v1/accounts/machine/\(backend)"
+        return (try? await api.get(path, as: Status.self))?.loggedIn
+    }
+
     /// signs this computer's login of a CLI in: names it after the CLI (rename later in Settings), then runs
     /// the CLI's own sign-in in a terminal and watches it until it lands
     func signIn(_ b: Backend) async {

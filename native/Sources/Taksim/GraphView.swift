@@ -388,6 +388,7 @@ final class GraphView: NSView {
     func applyLiveView() {
         guard let f = liveFrom else { return }
         setLiveTransform(k: scale / f.scale, t: CGPoint(x: (offset.x - f.offset.x) * scale, y: (offset.y - f.offset.y) * scale))
+        followIDEs()
     }
 
     /// the views laid out on the canvas (not the canvas's own drawing, which AppKit keeps in a layer of its own)
@@ -405,7 +406,8 @@ final class GraphView: NSView {
         // doesn't animate a change)
         for v in canvasViews {
             guard let l = v.layer else { continue }
-            if k == 1, t == .zero { l.transform = CATransform3DIdentity; continue }
+            // an IDE keeps its text size: it is moved and resized instead (followIDEs)
+            if (k == 1 && t == .zero) || v is IDEHost { l.transform = CATransform3DIdentity; continue }
             let d = CGPoint(x: l.position.x * (k - 1) + lt.x, y: l.position.y * (k - 1) + lt.y)
             l.transform = CATransform3DConcat(CATransform3DMakeScale(k, k, 1), CATransform3DMakeTranslation(d.x, d.y, 0))
         }
