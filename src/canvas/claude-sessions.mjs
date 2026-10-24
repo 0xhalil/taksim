@@ -38,11 +38,20 @@ async function parse(file) {
 
 // what the list needs from one session file, read again only when the file changed (asynchronously: the engine keeps
 // answering while a few hundred megabytes of sessions are read the first time)
+const reading = new Map(); // file -> { key, promise }: a list asked for while the warm-up reads waits for that read
 async function infoOf(file) {
   const st = await stat(file);
   const key = `${st.mtimeMs}:${st.size}`;
   const hit = cache.get(file);
   if (hit?.key === key) return hit.info;
+  const busy = reading.get(file);
+  if (busy?.key === key) return busy.promise;
+  const promise = readInfo(file, st, key).finally(() => { if (reading.get(file)?.promise === promise) reading.delete(file); });
+  reading.set(file, { key, promise });
+  return promise;
+}
+
+async function readInfo(file, st, key) {
   const lines = await parse(file);
   const first = lines.find((l) => typed(l) && clean(textOf(l.message.content)));
   const named = lines.filter((l) => l.type === "custom-title" && l.customTitle).at(-1)?.customTitle
