@@ -60,6 +60,12 @@ export function killAll() {
 
 // ---------- runner ----------
 export function run(backend, { model, system, prompt, opts, onText = () => {}, onLimits, onActivity = () => {}, onTasks = () => {}, taskSeed = [], signal, env: extraEnv }) {
+  // a backend that talks to its model itself (local.mjs): no CLI to start
+  if (backend.direct) {
+    if (signal?.aborted) return Promise.reject(new Error("cancelled"));
+    return backend.direct({ model, system, prompt, opts, onText, onActivity, signal })
+      .catch((e) => { throw signal?.aborted ? new Error("cancelled") : e; });
+  }
   const { args, cwd, stdin, env } = backend.build({ model, system, prompt, opts, note: orchestratorNote() });
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("cancelled"));

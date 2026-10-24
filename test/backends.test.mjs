@@ -1,4 +1,4 @@
-// Routing to the Copilot and local backends, their CLI arguments, and Copilot's JSONL events.
+// Routing to the Copilot and local backends, Copilot's CLI arguments and JSONL events (the local loop: local.test.mjs).
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -39,14 +39,10 @@ test("local models are found on the servers that are running", () => {
   assert.match(local.checkModel("local:nope"), /unknown local model/);
 });
 
-test("a local model runs the Copilot CLI offline against its server", () => {
-  const { args, env } = local.build({ model: "local:llama3.2:latest", system: "be brief", prompt: "hi", opts: { cwd: "/tmp/p" } });
-  assert.equal(env.COPILOT_OFFLINE, "true");
-  assert.equal(env.COPILOT_PROVIDER_BASE_URL, base);
-  assert.equal(env.COPILOT_MODEL, "llama3.2:latest");
-  assert.ok(!args.includes("--model"), "the model rides in COPILOT_MODEL");
-  assert.match(args[args.indexOf("-p") + 1], /<instructions>\nbe brief\n<\/instructions>\n\nhi/);
-  assert.ok(args.includes("--allow-all-tools"));
+test("a local model is run by taksim itself, not by a CLI", () => {
+  assert.equal(typeof local.direct, "function");
+  assert.equal(local.build, undefined);
+  assert.equal(local.interactive, undefined, "no terminal mode: there is no CLI to show");
 });
 
 test("copilot picks its own model unless one is named; read-only agents plan", () => {
@@ -120,8 +116,8 @@ test("canvas Ask and Agent access maps consistently to each CLI's execution poli
   assert.ok(!request(opencode, "workspace-write").args.includes("--agent"));
   assert.equal(option(request(gemini, "read-only"), "--approval-mode"), "plan");
   assert.equal(option(request(gemini, "workspace-write"), "--approval-mode"), "auto_edit");
-  for (const backend of [copilot, local]) {
-    const model = backend === local ? "local:llama3.2:latest" : "copilot";
+  for (const backend of [copilot]) {
+    const model = "copilot";
     const ask = backend.build({ model, prompt: "work", opts: { cwd: "/tmp/project", sandbox: "read-only" } });
     const agent = backend.build({ model, prompt: "work", opts: { cwd: "/tmp/project", sandbox: "workspace-write" } });
     assert.ok(ask.args.includes("--plan"));
@@ -137,8 +133,9 @@ test('every provider wires the shared Taksim task tools into agent runs', async 
   const { default: opencode } = await import('../src/backends/opencode.mjs');
   const { default: gemini } = await import('../src/backends/gemini.mjs');
   const url = 'http://127.0.0.1:9876/mcp/test';
-  for (const backend of [claude, codex, opencode, gemini, copilot, local]) {
-    const model = backend === local ? 'local:llama3.2:latest' : backend.defaultModel;
+  // (local models get no MCP: taksim runs their tools itself, local.mjs)
+  for (const backend of [claude, codex, opencode, gemini, copilot]) {
+    const model = backend.defaultModel;
     const out = backend.build({ model, system: 'task policy', prompt: 'work', opts: { cwd: '/tmp/project', mcpUrl: url, sandbox: 'workspace-write' } });
     assert.ok(JSON.stringify([out.args, out.env]).includes(url), backend.name);
   }

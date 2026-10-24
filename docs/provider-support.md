@@ -107,25 +107,28 @@ CLI feature; it needs a Git working folder and the saved before/after trees of a
 persist and the Git index isn't touched; undo is refused once a file has changed again. How each real model answers a
 fix request still needs checking per model.
 
-## Local models (checked 2026-10-24)
+## Local models
 
-A real run on an M1 Pro with 16 GB, Ollama 0.40.10, Copilot CLI 1.0.93, Codex CLI 0.162.1, opencode 1.18.32. Task: a
-Git folder whose `calc.py` subtracts in `add()`; "add() should return the sum. Fix it."
+Taksim talks to a local model server itself (`src/backends/local.mjs`), as the server's own chat does: no CLI in
+between and nothing changed about the model. A model whose server lists `tools` among its capabilities gets a light
+tool loop run by the engine (`local-tools.mjs`: read, edit, list, write files in the agent's folder, run a command);
+Manual and Accept edits ask in the chat as the CLIs' hooks do. The loop is sized to the window the server really opens
+(Ollama's `/api/ps`, else 4096): the instructions and tools take at most a quarter of it (the command tool goes
+first, then writing, listing), the newest conversation fills the rest, and earlier tool results shrink as a turn
+grows. A model that keeps calling tools that aren't there, or with broken arguments, finishes the turn as a chat and
+chats from then on. An answer a thinking model leaves only in its reasoning is said instead of nothing. Ollama is
+spoken to through `/api/chat`; LM Studio, llama.cpp, vLLM and Jan through their OpenAI-compatible endpoint.
 
-- **The context window cuts the prompt silently.** Ollama serves a model with `default_num_ctx=4096` here (it scales
-  with memory) and the OpenAI endpoint takes no per-request size. An agent's prompt (the CLI's instructions, tool
-  schemas and taksim's) is about 20k tokens through Copilot and 24k through Codex: Ollama logged `truncating input
-  prompt limit=2050 prompt=20042`, the model never saw the task and the turn ended with an empty answer. A model made
-  from the same weights with a larger `num_ctx` (`/api/create {from, parameters: {num_ctx}}`, no extra disk) fixes
-  it: `qwen3:1.7b` at 24k read all 21,295 tokens.
-- **Copilot BYOK (taksim's local runner) works.** `qwen3:1.7b` at 24k viewed and edited the file (two tool calls) and
-  the change reached the shared review, in 88 s; `qwen3:8b` at 32k needs about 7.7 GB and made the machine sluggish.
-- **A thinking model's answer can be empty.** Qwen3 put its last message only in `reasoningText` (`content` empty), so
-  the chat shows nothing after the tool lines.
-- **Codex `--oss --local-provider ollama`** answered well in 142 s but didn't call its edit tool: the fix was only
-  described. Its prompt (24,452 tokens) nearly filled the 24k window.
-- **opencode** with an `ollama` provider in `opencode.json` sent no request to Ollama in 5 minutes and printed nothing;
-  not yet understood.
+Checked 2026-10-25 on an M1 Pro with 16 GB and Ollama 0.40.10, `qwen3:1.7b` at Ollama's default 4096 window, task: a
+Git folder whose `calc.py` subtracts in `add()`: three runs out of three fixed it with read and edit (12–31 s, 1.8k
+tokens sent, 1.2 GB), leaving the rest of the file alone. What a small model got wrong on the way, and what the tools
+now take: `offset: 0` and `limit: -1` for "the whole file", `old` copied with read_file's line numbers or without the
+file's indentation, and rewriting a whole file it had misread (write_file creates new files only).
+
+Before this, local models ran through the Copilot CLI offline (checked 2026-10-24): its prompt was about 20k tokens,
+Ollama cut it to the last ~2k of its 4096 window without a word (`truncating input prompt limit=2050 prompt=20042`),
+and the turn answered nothing. Codex `--oss` (a 24k prompt) described the fix without making it; opencode with an
+Ollama provider sent no request in 5 minutes.
 
 ## Open work
 
@@ -133,8 +136,8 @@ Git folder whose `calc.py` subtracts in `add()`; "add() should return the sum. F
   `session.todos_changed` signal.
 - Bring task events of agents opened as terminals into the native chat.
 - Verify task and tool flows with real CLI versions.
-- Local models: give each a context window its prompt fits in (a sized model per local model), show a thinking
-  model's last reasoning when its answer is empty, find out why opencode's local run stalls.
+- Local models: the canvas's own tools (other agents, panels) through the light loop; a real run on LM Studio and
+  llama.cpp; image input for models that take it.
 - Gemini's permission hook: try it with a real run on a signed-in taksim Gemini account.
 - Widen the inventory of provider features: question flows, plan tools, steering a turn, session branches,
   context meters, sub-agents, image input and provider-specific settings. Judge each against official sources and a

@@ -180,7 +180,8 @@ export class Agent {
 
   view() {
     // how full the context is, as the CLI measured it on the last turn; a new session starts empty
-    return { ...this.toJSON(), permissions: this.permissionModes(), context: this.session ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
+    // (a model taksim talks to itself has no session: its window is what the last turn filled)
+    return { ...this.toJSON(), permissions: this.permissionModes(), context: this.session || pickBackend(this.model).backend?.direct ? this.context ?? null : null, backend: this.backend, status: this.status, queued: this.queue.length,
       waitingOn: [...this.waitingOn], blockedBy: this.blockedBy || [], workingWith: this.orchestration?.working() || [],
       lastError: this.lastError, lastText: this.lastText.slice(0, 280),
       accountName: this.accountName, usageKey: this.usageKey, folder: this.folder,
@@ -557,6 +558,8 @@ export class Agent {
       // CLIs without a permission-prompt tool ask through a pre-tool hook that posts here (src/term/permission-hook.mjs)
       const permissionUrl = `${this.hookUrl}/permission`;
       const opts = { cwd, sandbox: sandbox || undefined, permission: this.permissionMode(), permissionUrl, session, newSession, mcpUrl, effort: this.effort || undefined, lang: canvas.lang, mcp: agentServers(this) };
+      // a model taksim talks to itself keeps no session: it gets the conversation each turn, and a short prompt
+      if (backend.direct) { opts.history = this.historyMessages(1); this.seedHistory = false; }
       let streamed = "";
       // group changes since the last turn, said in the message too: a resumed session may otherwise keep
       // to what it answered before joining (the system prompt alone doesn't override its own history)
@@ -564,7 +567,7 @@ export class Agent {
       const taskSeed = readTranscript(canvas.id, this.id, HISTORY).filter((e) => e.from === this.id && e.tasks?.length).at(-1)?.tasks || [];
       const attempt = () => run(backend, {
         taskSeed: opts.session && !opts.newSession ? taskSeed : [],
-        model, system: this.systemPrompt(), prompt: notices + (guest && !item.guest ? "[taksim: the work you handed out is still under way. For this message you can read and answer, not change files; its results will arrive when it ends.]\n\n" : "")
+        model, system: backend.direct ? this.localSystemPrompt() : this.systemPrompt(), prompt: notices + (guest && !item.guest ? "[taksim: the work you handed out is still under way. For this message you can read and answer, not change files; its results will arrive when it ends.]\n\n" : "")
           + this.prompt(item, sender) + attachmentNote(item.attachments), opts, signal: ac.signal, env: this.env,
         onTasks: (todos) => {
           if (!readOnly(this)) { try { this.tasks.update({ todos }, true); } catch { /* unsupported native payload: preserve last valid progress */ } }
@@ -651,7 +654,7 @@ export class Agent {
     if (this.chatMode === "ask") lines.push("Chat mode: Ask. Search and read the actual codebase to answer questions, trace call sites and architecture, and cite concrete files and lines using ide_open/ide_note. Distinguish evidence from inference. Answer concisely; do not implement, run modifying commands or delegate changes. If the question is ambiguous, use ask_user. Project instructions and rules still apply.");
     if (this.chatMode === "plan") lines.push("Chat mode: Plan. Research the actual codebase first. Use ask_user only for decisions that materially affect scope, architecture or validation; make routine decisions yourself. Identify affected files, dependencies, ordered steps, risks and concrete validation. Publish the finished plan with propose_plan (title and Markdown content) so the user can edit and build it; then give a short handoff without repeating the whole artifact. Do not implement, run modifying commands or delegate implementation. The user must build the reviewed plan using the UI. Do not treat an ordinary chat reply as approval. Project instructions and rules still apply.");
     if ((this.chatMode || "agent") === "agent" && this.sandbox !== "read-only") lines.push("Chat mode: Agent. Investigate, implement and validate the task autonomously. For multi-step work, use your native task tools when available, otherwise update_todos, to publish a short task list early, mark one task in_progress and update it as actual work proceeds. Mark a task completed only after its result was checked; leave unfinished tasks pending or cancel them with a reason. Skip task lists for trivial requests. Read project rules before edits. Make coherent changes across files, run appropriate tests, inspect the result and fix failures. Use ask_user for consequential missing decisions. Report concrete changes and validation, including any limitation; do not claim checks you did not run.");
-    if (modeOf(this) === "agent" && ["copilot", "local"].includes(pickBackend(this.model).backend?.name)) lines.push("For task progress always use the taksim update_todos tool, with stable ids and real statuses, so the person sees your live list. Native SQL todo signals do not expose the list through this CLI connection. Do not rely on them alone.");
+    if (modeOf(this) === "agent" && pickBackend(this.model).backend?.name === "copilot") lines.push("For task progress always use the taksim update_todos tool, with stable ids and real statuses, so the person sees your live list. Native SQL todo signals do not expose the list through this CLI connection. Do not rely on them alone.");
     if (this.role) lines.push(`Your role: ${this.role}`);
     lines.push(this.sandbox === "read-only"
       ? "Your access is read-only: read and analyze, but don't modify files; say what should change instead."
@@ -798,6 +801,26 @@ export class Agent {
     this.seedHistory = false;
     const history = this.historyText(1);
     return history ? `<conversation_history>\n${history}\n</conversation_history>\n\n${message}` : message;
+  }
+
+  // For a model taksim talks to itself (local.mjs): the conversation as chat messages, the one being sent left out
+  historyMessages(skipLast = 1) {
+    const entries = readTranscript(this.canvas.id, this.id, HISTORY + skipLast);
+    return entries.slice(0, entries.length - skipLast)
+      .filter((e) => ["user", "assistant", "tell", "ask", "reply", "job"].includes(e.kind) && e.text && (!this.modeContextSince || (e.ts >= this.modeContextSince && e.mode === this.chatMode)))
+      .map((e) => ({ role: e.from === this.id ? "assistant" : "user", content: e.text }));
+  }
+
+  // A short system prompt for a small local model: who it is, what it may do; the canvas's tools aren't there
+  localSystemPrompt() {
+    const lines = [`You are "${this.name}", an assistant in taksim${this.cwd ? `, working in the project folder ${this.cwd}` : ""}.`];
+    if (this.role) lines.push(`Your role: ${this.role}`);
+    lines.push(modeOf(this) === "agent" && this.sandbox !== "read-only"
+      ? "Use the tools to look at the files before you change them, make the change, and say briefly what you did."
+      : "You may read files but not change them; answer, and say what should change.");
+    lines.push("Keep answers short and concrete.");
+    if (this.system) lines.push(this.system);
+    return lines.join("\n");
   }
 
   // The recent transcript as tagged text; `skipLast` drops entries already being sent as the message.
