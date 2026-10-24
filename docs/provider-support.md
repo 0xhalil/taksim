@@ -31,13 +31,15 @@ double), hover, drag (mouse-following and HTML drag and drop), type, pick from a
 the agent's folder or the temp folder, never credential files), keys with modifiers, iframes including cross-site
 ones, alert/confirm/prompt/leave-page dialogs, and tabs a page opens (they become the agent's active tab).
 `test/browser.test.mjs` covers each of these against a real Chrome.
+On macOS, an already focused tab stays focused between tools without reactivating it, so hover menus remain
+available to the next snapshot and click. Dialogs skip the focus check because they pause JavaScript execution.
 
 | Connection | Status |
 |---|---|
 | Codex | Verified with a real run (2026-10-14): navigated, clicked, saw and described the screenshot |
 | Claude | Verified with a real run (haiku, 2026-10-14): same task, screenshot seen and described |
 | opencode | Verified with a real run (`opencode-go/claude-haiku-5-5`, 2026-10-14): same task, screenshot seen and described; image results depend on the chosen model reading images |
-| Gemini, Copilot, local | Same MCP tools; not yet checked with a real run (no signed-in CLI on the test machine) |
+| Gemini, Copilot, Antigravity, local | Same MCP tools; browser flow not yet checked with a real connection |
 
 ## Computer control
 

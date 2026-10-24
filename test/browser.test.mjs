@@ -74,6 +74,9 @@ test("hover, right click, drag, select, upload, iframes, new tabs and dialogs", 
     // hover opens a menu whose item then shows up as a control
     assert.doesNotMatch(page, /Secret item/);
     page = await call("browser_hover", await at("hov"));
+    assert.match(page, /button "Secret item"/);
+    // Reading the tab again must keep its hover menu open for the next action.
+    page = await call("browser_snapshot");
     page = await call("browser_click", { ref: ref(page, /\[(e\d+)\] button "Secret item"/) });
     assert.match(page, /Title: menu/);
 

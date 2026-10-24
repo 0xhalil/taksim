@@ -155,7 +155,12 @@ export async function tabOf(agentId) {
     tabs.set(agentId, t);
   }
   const page = t.list[t.active];
-  await cdp.send("Target.activateTarget", { targetId: page.targetId }).catch(() => {});
+  // Re-activating a focused tab can clear Chrome's hover state on macOS between actions.
+  // A dialog pauses evaluation; its tab is already in front and must stay answerable.
+  if (!page.dialog) {
+    const focused = await cdp.send("Runtime.evaluate", { expression: "document.hasFocus()", returnByValue: true }, page.sessionId);
+    if (!focused.result.value) await cdp.send("Target.activateTarget", { targetId: page.targetId }).catch(() => {});
+  }
   return handle(cdp, page);
 }
 
