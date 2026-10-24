@@ -15,7 +15,7 @@ struct PlanDocument: View {
     @State private var version = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var agent: Agent? { store.agents[model.agent] }
+    private var agent: Agent? { model.agent(model.agent, store) }
     private var running: Bool { ["running", "waiting"].contains(agent?.status ?? "") }
     private var available: Bool { !running && model.queue.isEmpty && !model.workflowBusy }
 

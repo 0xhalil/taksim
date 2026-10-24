@@ -17,8 +17,8 @@ struct ChatQueue: View {
                 if model.queueBusy { Image(systemName: "ellipsis").foregroundStyle(JB.accent) }
             }
             .font(.system(size: 10.5)).foregroundStyle(JB.muted).padding(.horizontal, 10).frame(height: 24)
-            if isSnapshot { rows }
-            else { ViewThatFits(in: .vertical) { rows; ScrollView { rows } }.frame(maxHeight: 160) }
+            if isSnapshot || model.queue.count <= 3 { rows }
+            else { ScrollView { rows }.frame(maxHeight: 160) }
             Rectangle().fill(JB.line).frame(height: 1)
         }
         .background(JB.panel)

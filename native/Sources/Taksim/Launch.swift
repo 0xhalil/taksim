@@ -56,57 +56,31 @@ struct LaunchView: View {
     var at: Double? = nil
     /// …or the flight to the header at this many seconds
     var flightAt: Double? = nil
-    @State private var start = Date()
     @State private var flying = false
-    @State private var flown = false
-    @State private var flightStart = Date()
 
     var body: some View {
-        GeometryReader { geo in
-            let side = min(Opening.maxSide, min(geo.size.width, geo.size.height) * 0.4)
-            let home = CGRect(x: (geo.size.width - side) / 2, y: (geo.size.height - side) / 2, width: side, height: side)
-            let cross = home.insetBy(dx: side * 0.1, dy: side * 0.1)
-            ZStack {
-                JB.bg.opacity(flown ? 0 : 1).animation(.easeOut(duration: 0.55), value: flown)
-                if flying || flightAt != nil {
-                    TimelineView(.animation) { tl in
-                        Canvas { ctx, _ in drawFlight(&ctx, from: cross, to: target ?? cross, t: flightAt ?? tl.date.timeIntervalSince(flightStart)) }
-                    }
-                } else {
-                    TimelineView(.animation) { tl in
-                        Canvas { ctx, size in draw(&ctx, size: size, home: home, e: at ?? tl.date.timeIntervalSince(start)) }
-                    }
+        if at != nil || flightAt != nil {
+            // a snapshot: the Canvas drawing, standing still at a time
+            GeometryReader { geo in
+                let side = min(Opening.maxSide, min(geo.size.width, geo.size.height) * 0.4)
+                let home = CGRect(x: (geo.size.width - side) / 2, y: (geo.size.height - side) / 2, width: side, height: side)
+                let cross = home.insetBy(dx: side * 0.1, dy: side * 0.1)
+                ZStack {
+                    JB.bg
+                    if let t = flightAt { Canvas { ctx, _ in drawFlight(&ctx, from: cross, to: target ?? cross, t: t) } }
+                    else if let e = at { Canvas { ctx, size in draw(&ctx, size: size, home: home, e: e) } }
                 }
             }
-            .task { if at == nil && flightAt == nil { await run(for: geo.size, side: side) } }
+        } else {
+            // the opening itself: layers built once and played by Core Animation, whatever the app is busy with
+            OpeningStageView(target: target, onFlight: { flying = true }, finish: finish)
+                .allowsHitTesting(!flying)
         }
-        .allowsHitTesting(!flying)
     }
 
-    /// the roads' heads and tails, and when the star comes: seconds from the start
-    private struct Timeline {
-        var lastThrough = 0.0, lastOut = 0.0
-        init(_ roads: [TaksimMark.Road]) {
-            for r in roads {
-                let thr = r.at / 1000 + Opening.pass * r.inside.upperBound
-                lastThrough = max(lastThrough, thr); lastOut = max(lastOut, thr + Opening.tail)
-            }
-        }
-        var starAt: Double { lastThrough + Opening.starPause }
-        var flyAt: Double { max(lastOut, starAt + Opening.starTime) + Opening.settle }
-    }
+    private typealias Timeline = OpeningTimeline
 
     private func far(_ size: CGSize, side: Double) -> Double { 500 - Double(max(size.width, size.height)) / 2 / (side / Opening.board) - 80 }
-
-    private func run(for size: CGSize, side: Double) async {
-        let tl = Timeline(TaksimMark.roads(far: far(size, side: side)))
-        try? await Task.sleep(for: .seconds(max(0, tl.flyAt - Date().timeIntervalSince(start))))
-        flightStart = Date()
-        flying = true
-        withAnimation { flown = true }
-        try? await Task.sleep(for: .seconds(Opening.flight + Opening.glint + 0.1))
-        finish()
-    }
 
     private func draw(_ ctx: inout GraphicsContext, size: CGSize, home: CGRect, e: Double) {
         let k = home.width / Opening.board
@@ -116,18 +90,21 @@ struct LaunchView: View {
         let tl = Timeline(roads)
         let huge = Path { $0.addRect(CGRect(x: -9000, y: -9000, width: 19000, height: 19000)); $0.addPath(Path(TaksimMark.silhouette())) }
         var reveal = Path()
+        var outside: [(Path, Double)] = []
         for r in roads {
             let p = Opening.clamp((e - r.at / 1000) / Opening.pass)
             guard p > 0 else { continue }
             let road = Path(r.path)
             let q = Opening.easeIn(Opening.clamp((e - (r.at / 1000 + Opening.pass * r.inside.upperBound)) / Opening.tail))
-            if q < p {
-                ctx.drawLayer { l in
-                    l.clip(to: huge, style: FillStyle(eoFill: true))   // outside the logo only; the logo itself is drawn below
-                    l.stroke(road.trimmedPath(from: q, to: p), with: .color(JB.accent), style: StrokeStyle(lineWidth: r.width))
-                }
-            }
+            if q < p { outside.append((road.trimmedPath(from: q, to: p), r.width)) }
             reveal.addPath(road.trimmedPath(from: 0, to: p).strokedPath(StrokeStyle(lineWidth: r.width)))
+        }
+        // one layer for all the lines: outside the logo only; the logo itself is drawn below
+        if !outside.isEmpty {
+            ctx.drawLayer { l in
+                l.clip(to: huge, style: FillStyle(eoFill: true))
+                for (path, width) in outside { l.stroke(path, with: .color(JB.accent), style: StrokeStyle(lineWidth: width)) }
+            }
         }
         let star = Opening.pop(Opening.clamp((e - tl.starAt) / Opening.starTime)) * 182
         let logo = Path(TaksimMark.full)

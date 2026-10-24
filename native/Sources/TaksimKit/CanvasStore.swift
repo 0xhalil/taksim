@@ -12,7 +12,20 @@ public final class CanvasStore {
     public private(set) var closedTabs: Set<String> = []
     public var visibleCanvases: [CanvasSummary] { canvases.filter { !closedTabs.contains($0.id) } }
     public private(set) var currentId: String?
-    public private(set) var agents: [String: Agent] = [:]
+    /// the open canvas's agents (kept per canvas in spaces)
+    public internal(set) var agents: [String: Agent] {
+        get { currentId.map { agents(on: $0).all } ?? [:] }
+        set { if let id = currentId { agents(on: id).all = newValue } }
+    }
+    @ObservationIgnored private var spaces: [String: CanvasAgents] = [:]
+    /// one canvas's agents, watched apart from the other canvases': a chat reads its own canvas's, so switching tabs
+    /// or a stream on another canvas doesn't draw it again (SwitchBenchTests)
+    public func agents(on canvas: String) -> CanvasAgents {
+        if let s = spaces[canvas] { return s }
+        let s = CanvasAgents()
+        spaces[canvas] = s
+        return s
+    }
     public private(set) var order: [String] = []        // agent ids in the order they came
     public private(set) var groups: [String: Group] = [:]
     /// agent id -> its computer control (only agents that have it or ask for it)
@@ -32,6 +45,11 @@ public final class CanvasStore {
     @ObservationIgnored public let feeds = PanelFeeds()
     /// a saved tool offered next to an agent that has no panel yet (tool_suggested): drawn as a ghost panel
     public private(set) var ghosts: [String: ToolCard] = [:]
+    /// the open canvas's repos, branch sets and active set (BranchSets.swift); each canvas's last known, kept for its tab
+    public internal(set) var branches: BranchState?
+    public internal(set) var branchSwitching = false
+    public internal(set) var branchError: String?
+    @ObservationIgnored var branchCache: [String: BranchState] = [:]
 
     /// every event after it is applied, for what the view animates (a message pulses along its link)
     @ObservationIgnored public var onEvent: ((ServerEvent) -> Void)?
@@ -137,6 +155,10 @@ public final class CanvasStore {
             canvases = list
             let id = list.contains(where: { $0.id == prefer }) ? prefer! : list[0].id
             await open(id)
+            // the other tabs read ahead, so the first visit to one shows it at once too
+            for c in list where c.id != id && visited[c.id] == nil {
+                if let full = try? await api.get("/v1/canvases/\(c.id)", as: Canvas.self), visited[c.id] == nil { visited[c.id] = full }
+            }
         } catch { self.error = error.localizedDescription }
         startPolling()
     }
@@ -149,13 +171,18 @@ public final class CanvasStore {
         guard id != currentId else { return }
         stream?.cancel()
         panelStream?.cancel()
-        if let cur = currentId { visited[cur] = Canvas(id: cur, name: canvases.first { $0.id == cur }?.name ?? "", agents: currentAgents, links: links, groups: Array(groups.values), seq: nil) }
+        if let cur = currentId {
+            visited[cur] = Canvas(id: cur, name: canvases.first { $0.id == cur }?.name ?? "", agents: currentAgents, links: links, groups: Array(groups.values), seq: nil)
+        }
         if let seen = visited[id] { load(seen) } else { currentId = id; agents = [:]; order = []; groups = [:]; links = [] }
+        branches = branchCache[id]
+        branchError = nil
         do {
             let c: Canvas = try await api.get("/v1/canvases/\(id)", as: Canvas.self)
             guard currentId == id else { return }
             load(c)
             listen(id, since: c.seq ?? 0)
+            refreshBranches()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -168,6 +195,7 @@ public final class CanvasStore {
             guard currentId == id else { return }
             load(c)
             listen(id, since: 0)
+            refreshBranches()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -190,8 +218,10 @@ public final class CanvasStore {
     public func load(_ c: Canvas) {
         closedTabs.remove(c.id)
         currentId = c.id
-        agents = Dictionary(c.agents.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
-        order = c.agents.map(\.id)
+        // the same agents again (a tab shown from what was kept, then the engine's copy) touch nothing on screen
+        let fresh = Dictionary(c.agents.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        if agents != fresh { agents = fresh }
+        if order != c.agents.map(\.id) { order = c.agents.map(\.id) }
         groups = Dictionary((c.groups ?? []).map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         links = c.links ?? []
         computer = c.computer ?? [:]
@@ -262,6 +292,8 @@ public final class CanvasStore {
         switch ev.type {
         case "agent_created", "agent_updated":
             guard let p = decode(AgentPayload.self) else { return }
+            // a new folder, or its branch moved (the folder picker, a terminal): the branch control follows
+            if agents[p.agent.id]?.folder != p.agent.folder { refreshBranches() }
             if agents[p.agent.id] == nil { order.append(p.agent.id) }
             // an update carries the whole view; keep the text streaming in this turn
             agents[p.agent.id] = p.agent
@@ -279,11 +311,15 @@ public final class CanvasStore {
             a.blockedBy = p.blockedBy
             a.lastError = p.lastError
             a.termReady = p.termReady
+            if let f = p.folder, f != a.folder { refreshBranches() }
             a.folder = p.folder ?? a.folder
             if a.status != "running" { streaming[p.id] = nil }
             agents[p.id] = a
+        case "branches_changed":
+            refreshBranches()
         case "agent_removed":
             guard let p = decode(IdPayload.self) else { return }
+            refreshBranches()
             agents[p.id] = nil
             ghosts[p.id] = nil
             feeds.remove(p.id)
@@ -741,4 +777,10 @@ public final class CanvasStore {
 
     /// offers a tool next to an agent, as tool_suggested does (tests, snapshots)
     public func suggest(_ id: String, _ tool: ToolCard) { if agents[id]?.panel == nil { ghosts[id] = tool } }
+}
+
+/// a canvas's agents, observed on their own (CanvasStore.agents(on:))
+@MainActor @Observable
+public final class CanvasAgents {
+    public internal(set) var all: [String: Agent] = [:]
 }

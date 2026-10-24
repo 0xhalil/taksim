@@ -105,9 +105,10 @@ struct CloseButtonStyle: ButtonStyle {
             configuration.label
                 .foregroundStyle(hover ? JB.ink : JB.muted)
                 .frame(width: size, height: size)
+                .contentShape(Rectangle()) // the whole square takes the click, not just the glyph
                 .background(Circle().fill(configuration.isPressed ? JB.line : hover ? JB.panel2 : .clear))
                 .scaleEffect(configuration.isPressed ? 0.86 : 1)
-                .contentShape(Circle())
+                .pointerStyle(.link)
                 .animation(.spring(response: 0.22, dampingFraction: 0.6), value: configuration.isPressed)
                 .animation(.easeOut(duration: 0.12), value: hover)
         }

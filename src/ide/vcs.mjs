@@ -25,11 +25,16 @@ function paths(root, files) {
   });
 }
 
+// Commit with `files` commits just those; without them it commits what is in the index (what was staged).
 export async function commit(root, { files, message, amend = false }) {
   const msg = String(message || "").trim();
   if (!msg) throw httpError(400, "write a commit message");
-  if (amend && (!files || !files.length)) {
-    await git(root, ["commit", "--amend", "-m", msg]);
+  if (!files || !files.length) {
+    if (!amend) {
+      const staged = (await git(root, ["diff", "--cached", "--name-only"])).out.trim();
+      if (!staged) throw httpError(400, "nothing is staged");
+    }
+    await git(root, ["commit", ...(amend ? ["--amend"] : []), "-m", msg]);
   } else {
     const list = paths(root, files);
     await git(root, ["add", "-A", "--", ...list]);
@@ -54,14 +59,79 @@ export async function push(root) {
   return { output: (r.err || r.out).trim() };
 }
 
-// Throws away local changes: tracked files go back to HEAD, new files are deleted.
-export async function rollback(root, files) {
+// Throws away local changes. Default (PyCharm's Rollback): tracked files go back to HEAD, index included, and
+// new files are deleted. With keepIndex (VS Code's Discard Changes) they go back to what is staged.
+export async function rollback(root, files, { keepIndex = false } = {}) {
   const list = paths(root, files);
   const untracked = new Set((await git(root, ["ls-files", "--others", "--exclude-standard", "--", ...list])).out.split("\n").filter(Boolean));
   const tracked = list.filter((p) => !untracked.has(p));
-  if (tracked.length) await git(root, ["restore", "--source=HEAD", "--staged", "--worktree", "--", ...tracked]);
+  let restored = 0;
+  for (const p of tracked) {
+    if (keepIndex) { await git(root, ["restore", "--worktree", "--", p]); restored++; continue; }
+    const inHead = (await git(root, ["cat-file", "-e", `HEAD:./${p}`], { allowFail: true })).ok;
+    if (inHead) await git(root, ["restore", "--source=HEAD", "--staged", "--worktree", "--", p]);
+    else await git(root, ["rm", "-f", "-q", "--", p]); // staged as new: not in HEAD to go back to
+    restored++;
+  }
   for (const p of untracked) rmSync(inside(root, p), { force: true });
-  return { restored: tracked.length, deleted: untracked.size };
+  return { restored, deleted: untracked.size };
+}
+
+export async function fetch(root) {
+  const r = await git(root, ["fetch", "--all", "--prune"], { timeout: 120000 });
+  return { output: (r.err || r.out).trim() };
+}
+
+export async function pull(root) {
+  const r = await git(root, ["pull", "--ff-only"], { timeout: 120000 });
+  return { output: (r.out || r.err).trim() };
+}
+
+// Stash keeps untracked files too; pop brings the newest one back.
+export async function stash(root, { pop = false } = {}) {
+  const r = await git(root, pop ? ["stash", "pop"] : ["stash", "push", "--include-untracked"]);
+  return { output: (r.out || r.err).trim() };
+}
+
+// Takes the last commit back, its changes staying staged (VS Code's "Undo Last Commit").
+export async function uncommit(root) {
+  await git(root, ["reset", "--soft", "HEAD~1"]);
+  const msg = (await git(root, ["log", "-1", "--pretty=format:%B", "ORIG_HEAD"], { allowFail: true })).out.trim();
+  return { message: msg };
+}
+
+export async function branches(root) {
+  const r = await git(root, ["branch", "--format=%(HEAD)|%(refname:short)"]);
+  const list = r.out.split("\n").filter(Boolean).map((l) => l.split("|"));
+  return { current: list.find((b) => b[0] === "*")?.[1] || null, branches: list.map((b) => b[1]) };
+}
+
+export async function checkout(root, { branch, create = false }) {
+  const name = String(branch || "").trim();
+  if (!name || name.startsWith("-") || /[\s~^:?*\[\\]/.test(name)) throw httpError(400, `bad branch name ${name}`);
+  await git(root, create ? ["checkout", "-b", name] : ["checkout", name]);
+  return { branch: name };
+}
+
+// Stage puts the files' changes in the index (new files and deletions too); unstage takes them out again,
+// leaving the files as they are on disk.
+export async function stage(root, files) {
+  await git(root, ["add", "-A", "--", ...paths(root, files)]);
+  return { ok: true };
+}
+
+export async function unstage(root, files) {
+  const list = paths(root, files);
+  const head = await git(root, ["rev-parse", "--verify", "-q", "HEAD"], { allowFail: true });
+  if (head.ok) await git(root, ["restore", "--staged", "--", ...list]);
+  else await git(root, ["rm", "--cached", "-r", "-q", "--", ...list]); // a repository without a first commit
+  return { ok: true };
+}
+
+// Deletes the files from disk (a tracked one then shows as deleted, ready to commit).
+export async function remove(root, files) {
+  for (const p of paths(root, files)) rmSync(inside(root, p), { force: true });
+  return { ok: true };
 }
 
 export async function log(root, n = 100) {
@@ -88,6 +158,11 @@ export async function show(root, hash) {
 
 // A file as of a commit ("" when it didn't exist then); rev "HEAD", a hash, or hash^ for its parent.
 export async function fileAt(root, rev, path) {
+  if (rev === "INDEX") { // what is staged
+    inside(root, path);
+    const r = await git(root, ["show", `:./${path}`], { allowFail: true });
+    return r.ok ? r.out : "";
+  }
   if (!/^(HEAD|[0-9a-f]{4,40})\^?$/i.test(String(rev))) throw httpError(400, "bad revision");
   inside(root, path);
   const r = await git(root, ["show", `${rev}:./${path}`], { allowFail: true });

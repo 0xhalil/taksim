@@ -1053,7 +1053,17 @@ private struct CLIAccounts: View {
 
     /// + Hesap ekle: the name comes filled in and selected; Enter makes the account and starts its sign-in
     @ViewBuilder private var addRow: some View {
-        if adding {
+        if m.installing.contains(backend.name) {
+            // not on this computer: fetching it comes first
+            HStack(spacing: 12) {
+                ProgressView().controlSize(.small).frame(width: 28, height: 28)
+                Text(L("Installing")).font(.system(size: 13)).foregroundStyle(JB.muted)
+                Spacer()
+            }
+            .padding(.horizontal, 12).frame(height: 52)
+        } else if !installed, m.failed.contains(backend.name), let hint = AccountsModel.installHints[backend.name] {
+            installHelp(hint)
+        } else if adding {
             HStack(spacing: 12) {
                 Circle().strokeBorder(JB.accent, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2])).frame(width: 28, height: 28)
                     .overlay(Image(systemName: "plus").font(.system(size: 11, weight: .bold)).foregroundStyle(JB.accent))
@@ -1082,7 +1092,37 @@ private struct CLIAccounts: View {
         }
     }
 
+    /// it could not be installed from here: the command to run and the page to go to, and a way to try again
+    private func installHelp(_ hint: (command: String, url: String)) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(JB.err).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(hint.command).font(.system(size: 12, design: .monospaced)).foregroundStyle(JB.ink).textSelection(.enabled).lineLimit(1)
+                if let why = m.problem[backend.name], !why.isEmpty {
+                    Text(why).font(.system(size: 11)).foregroundStyle(JB.muted).lineLimit(2).truncationMode(.tail)
+                }
+            }
+            Spacer(minLength: 6)
+            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(hint.command, forType: .string) } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(Press()).help(L("Copy"))
+            Button { if let u = URL(string: hint.url) { NSWorkspace.shared.open(u) } } label: { Image(systemName: "arrow.up.right.square") }
+                .buttonStyle(Press()).help(hint.url)
+            Button { Task { if await m.install(backend.name) { nameIt() } } } label: { Image(systemName: "arrow.clockwise") }
+                .buttonStyle(Press()).help(L("Try again"))
+        }
+        .font(.system(size: 12)).padding(.horizontal, 12).frame(minHeight: 52)
+    }
+
+    /// + : a CLI that is here gets its name asked for; one that isn't is installed first, and then asked for
     private func beginAdd() {
+        guard installed else {
+            Task { if await m.install(backend.name) { nameIt() } }
+            return
+        }
+        nameIt()
+    }
+
+    private func nameIt() {
         newName = m.freeName(backend.label)
         adding = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {

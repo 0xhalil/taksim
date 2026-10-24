@@ -26,7 +26,7 @@ struct ChatComposer: View {
     private var agentId: String { model.agent }
     private var text: Binding<String> { Binding(get: { drafts.text[agentId] ?? "" }, set: { v in drafts.text[agentId] = v }) }
     private var chips: [ChatAttachment] { drafts.attachments[agentId] ?? [] }
-    private var agent: Agent? { store.agents[agentId] }
+    private var agent: Agent? { model.agent(agentId, store) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

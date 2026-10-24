@@ -234,7 +234,7 @@ final class AppModel {
                     try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
                 }
             }
-            if let b = ProcessInfo.processInfo.environment["TAKSIM_QUICKADD"] { quickAdd(backend: b.isEmpty ? nil : b) }
+            if let b = ProcessInfo.processInfo.environment["TAKSIM_QUICKADD"] { addAgent(backend: b.isEmpty ? nil : b, folder: folderChoices().first ?? "") }
         } catch {
             failure = error.localizedDescription
         }
@@ -418,7 +418,7 @@ final class AppModel {
                     h.area.cacheDisplay(in: h.area.bounds, to: rep)
                     let img = NSImage(size: h.area.frame.size); img.addRepresentation(rep)
                     ideShots[id] = img
-                    print("ide \(id): panel=\(h.ide.panel.rawValue) left=\(h.ide.showLeft) git=\(h.ide.git?.files.count ?? -1) sel=\(h.ide.commitSel.count) diff=\(h.ide.diff?.path ?? "-") rows=\(h.ide.diff?.rows.count ?? 0) notice=\(h.ide.notice?.text ?? "-") tabs=\(h.ide.tabs) active=\(h.ide.active ?? "-") error=\(h.ide.error ?? "-")"); fflush(stdout)
+                    print("ide \(id): panel=\(h.ide.panel.rawValue) left=\(h.ide.showLeft) git=\(h.ide.git?.files.count ?? -1) staged=\(h.ide.stagedFiles.count) diff=\(h.ide.diff?.path ?? "-") rows=\(h.ide.diff?.rows.count ?? 0) notice=\(h.ide.notice?.text ?? "-") tabs=\(h.ide.tabs) active=\(h.ide.active ?? "-") error=\(h.ide.error ?? "-")"); fflush(stdout)
                 }
             }
             guard let rep = graph.bitmapImageRepForCachingDisplay(in: graph.bounds), let top = tabs.cgImage, let head = header.cgImage else { return }
@@ -588,9 +588,36 @@ final class AppModel {
         }
     }
 
-    /// a new agent without a form: the last model (or the given CLI's default), the folder and account the
-    /// canvas's agents use, in the middle of the view, its native chat ready to type
+    /// the folders this canvas's agents work in, the latest first: what a new agent can be started in with one click
+    func folderChoices() -> [String] {
+        guard let store else { return [] }
+        var seen = Set<String>(), out: [String] = []
+        for a in store.currentAgents.sorted(by: { ($0.createdAt ?? 0) > ($1.createdAt ?? 0) }) {
+            if let cwd = a.cwd, !cwd.isEmpty, seen.insert(cwd).inserted { out.append(cwd) }
+        }
+        return Array(out.prefix(6))
+    }
+
+    /// a new agent without a form, in a folder asked for first (an agent beside it may work elsewhere): the folder
+    /// panel opens on the latest one, and Open starts the agent there
     func quickAdd(backend: String? = nil) {
+        guard store != nil else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = L("Start here")
+        if let last = folderChoices().first { panel.directoryURL = URL(fileURLWithPath: (last as NSString).expandingTildeInPath) }
+        let start: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.addAgent(backend: backend, folder: url.path)
+        }
+        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: start) } else { panel.begin(completionHandler: start) }
+    }
+
+    /// a new agent in the given folder ("" for none): the last model (or the given CLI's default) and the account last
+    /// used with it, in the middle of the view, its native chat ready to type
+    func addAgent(backend: String?, folder: String) {
         guard let store else { return }
         Task {
             // the choices are loaded when the app starts; wait only if they aren't there yet
@@ -602,7 +629,7 @@ final class AppModel {
                     ?? store.models.first { $0.owned_by == backend }?.id ?? m
             }
             var fields: [String: Any] = ["model": m]
-            if let cwd = store.currentAgents.filter({ $0.cwd != nil }).max(by: { ($0.createdAt ?? 0) < ($1.createdAt ?? 0) })?.cwd { fields["cwd"] = cwd }
+            if !folder.isEmpty { fields["cwd"] = folder }
             let acct = UserDefaults.standard.string(forKey: "lastAccount.\(store.backendOf(m))") ?? ""
             if store.accounts.contains(where: { $0.id == acct }) { fields["account"] = acct }
             let at = viewCenter()
@@ -612,7 +639,7 @@ final class AppModel {
                 UserDefaults.standard.set(m, forKey: "lastModel")
                 agentAdded(a)
             } catch {
-                sheet = .add(at: at) // couldn't guess: ask
+                sheet = .add(at: at) // couldn't start it: ask in full
             }
         }
     }

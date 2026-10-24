@@ -524,3 +524,9 @@ final class ChatModel {
         return nil
     }
 }
+
+extension ChatModel {
+    /// an agent of this chat's canvas: watched on that canvas only, so a chat in the background isn't drawn again
+    /// when the tabs switch
+    func agent(_ id: String, _ store: CanvasStore) -> Agent? { store.agents(on: canvas).all[id] }
+}

@@ -44,7 +44,10 @@ final class IDEModel {
     var git: IDEGitStatus?
     /// `git status` has come back at least once (a folder outside a repository has no Commit window)
     var gitLoaded = false
-    var commitSel: Set<String> = []
+    /// a pull, push or fetch is running (the sync button turns)
+    var syncing = false
+    /// the branches there are, for the branch picker
+    var branchList: [String] = []
     var commitMessage = ""
     var amend = false
     var committing = false
@@ -70,7 +73,6 @@ final class IDEModel {
     @ObservationIgnored private var tabSync: Task<Void, Never>?
     @ObservationIgnored private var seenReveal: Double = 0
     @ObservationIgnored private var seenDisk = 0
-    @ObservationIgnored private var commitSeen: Set<String> = []
 
     init(agent: String, client: IDEClient) {
         self.agent = agent
@@ -245,14 +247,6 @@ final class IDEModel {
         do {
             git = try await client.git()
             gitLoaded = true
-            guard let git else { return }
-            let paths = Set(git.files.map(\.path))
-            commitSel.formIntersection(paths)
-            for f in git.files where !commitSeen.contains(f.path) {
-                commitSeen.insert(f.path)
-                // new changes start selected, new files don't (PyCharm's default changelist)
-                if f.status != "untracked" { commitSel.insert(f.path) }
-            }
         } catch {
             git = nil
             gitLoaded = true
@@ -269,33 +263,28 @@ final class IDEModel {
         git?.files.contains { $0.path.hasPrefix(dir + "/") } ?? false
     }
 
-    func toggleCommit(_ path: String) {
-        if commitSel.contains(path) { commitSel.remove(path) } else { commitSel.insert(path) }
-    }
+    /// the index holds these (VS Code's "Staged Changes")
+    var stagedFiles: [IDEGitFile] { git?.files.filter(\.staged) ?? [] }
+    /// the disk holds more of these than the index does (its "Changes", new files too)
+    var changedFiles: [IDEGitFile] { git?.files.filter(\.unstaged) ?? [] }
 
-    func setGroup(_ paths: [String], _ on: Bool) {
-        if on { commitSel.formUnion(paths) } else { commitSel.subtract(paths) }
-    }
-
-    func selectAll(_ on: Bool) {
-        commitSel = on ? Set(git?.files.map(\.path) ?? []) : []
-    }
-
-    /// the chosen files go in with the written message; what is on screen is what is committed
+    /// what goes in is what is staged; with nothing staged the changes are staged first (VS Code's smart commit)
     func commit(andPush: Bool = false) async {
-        let files = commitSel.sorted()
         let message = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { say(L("Write a commit message"), bad: true); return }
-        guard !files.isEmpty || amend else { say(L("Select files to commit"), bad: true); return }
+        guard !stagedFiles.isEmpty || !changedFiles.isEmpty || amend else { say(L("No changes to commit"), bad: true); return }
         committing = true
         defer { committing = false }
-        for p in files where buffers[p]?.dirty == true { await save(p) }
+        for p in (git?.files ?? []).map(\.path) where buffers[p]?.dirty == true { await save(p) }
         do {
-            let r = try await client.commit(files, message: message, amend: amend)
+            if stagedFiles.isEmpty && !amend { try await client.stage(changedFiles.map(\.path)) }
+            let staged = stagedFiles.isEmpty ? changedFiles.count : stagedFiles.count
+            let r = try await client.commit(nil, message: message, amend: amend)
             commitMessage = ""
+            let wasAmend = amend
             amend = false
             closeDiff() // a diff against HEAD is stale now
-            say(files.isEmpty ? L("amend · %@ · %@", r.hash, r.subject) : L("%d files · %@ · %@", files.count, r.hash, r.subject), push: andPush)
+            say(wasAmend ? L("amend · %@ · %@", r.hash, r.subject) : L("%d files · %@ · %@", staged, r.hash, r.subject), push: andPush)
             await refreshGit()
             if andPush { await push() }
         } catch {
@@ -304,23 +293,105 @@ final class IDEModel {
     }
 
     func push() async {
+        syncing = true
+        defer { syncing = false }
         do {
             let out = try await client.push()
             let last = out.split(separator: "\n").last.map(String.init) ?? ""
             say(last.isEmpty ? L("Pushed") : L("Pushed · %@", last))
+            await refreshGit()
         } catch {
             say(L("push: %@", error.localizedDescription), bad: true)
         }
     }
 
-    /// throws the chosen files' changes away (they go back to HEAD; new ones are deleted)
-    func rollback(_ paths: [String]) async {
+    /// VS Code's sync button: pull what is behind, then push what is ahead
+    func sync() async {
+        guard !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        do {
+            if (git?.behind ?? 0) > 0 { try await client.pull() }
+            if (git?.ahead ?? 0) > 0 || git?.upstream == nil { _ = try await client.push() }
+            else if (git?.behind ?? 0) == 0 { try await client.fetch() }
+            say(L("Synced"))
+        } catch {
+            say(error.localizedDescription, bad: true)
+        }
+        await refreshGit()
+    }
+
+    func fetchRemote() async { await run(L("Fetched")) { try await self.client.fetch() } }
+    func pull() async { await run(L("Pulled")) { try await self.client.pull() } }
+    func stash(pop: Bool = false) async { await run(pop ? L("Stash applied") : L("Stashed")) { try await self.client.stash(pop: pop) } }
+
+    private func run(_ done: String, _ work: () async throws -> Void) async {
+        guard !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        do { try await work(); say(done); closeDiff() } catch { say(error.localizedDescription, bad: true) }
+        await refreshGit()
+    }
+
+    /// takes the last commit back; its changes stay staged and its message comes back into the box
+    func undoLastCommit() async {
+        do {
+            let message = try await client.uncommit()
+            if commitMessage.isEmpty { commitMessage = message }
+            closeDiff()
+            say(L("Last commit undone"))
+        } catch {
+            say(error.localizedDescription, bad: true)
+        }
+        await refreshGit()
+    }
+
+    func loadBranches() async {
+        if let r = try? await client.branches() { branchList = r.all }
+    }
+
+    func checkout(_ branch: String, create: Bool = false) async {
+        await run(branch) {
+            try await self.client.checkout(branch, create: create)
+            for p in self.tabs { await self.load(p) } // the files may differ on the other branch
+        }
+    }
+
+    /// throws the files' changes away: back to what is staged (`toHead` false, VS Code's Discard) or to HEAD
+    /// (PyCharm's Rollback; new files are deleted)
+    func rollback(_ paths: [String], toHead: Bool = false) async {
         guard !paths.isEmpty else { return }
         do {
-            try await client.rollback(paths)
-            commitSel.subtract(paths)
+            try await client.rollback(paths, keepIndex: !toHead)
             closeDiff()
             say(L("Discarded %d files", paths.count))
+            await refreshGit()
+            for p in paths where buffers[p] != nil { await load(p) }
+        } catch {
+            say(error.localizedDescription, bad: true)
+        }
+    }
+
+    /// stage / unstage: the index follows the row, the file on disk doesn't change
+    func setStaged(_ paths: [String], _ on: Bool) async {
+        guard !paths.isEmpty else { return }
+        do {
+            if on { try await client.stage(paths) } else { try await client.unstage(paths) }
+            closeDiff()
+            await refreshGit()
+        } catch {
+            say(error.localizedDescription, bad: true)
+        }
+    }
+
+    /// removes the files from disk (open tabs of them close)
+    func deleteFiles(_ paths: [String]) async {
+        guard !paths.isEmpty else { return }
+        do {
+            try await client.delete(paths)
+            for p in paths { buffers[p] = nil; close(p) }
+            closeDiff()
+            say(L("Deleted %d files", paths.count))
             await refreshGit()
         } catch {
             say(error.localizedDescription, bad: true)
@@ -330,7 +401,7 @@ final class IDEModel {
     /// the ✦: a fast model writes the message from the diff of what is going in
     func suggestCommitMessage() async {
         guard !writingMessage else { return }
-        let files = commitSel.isEmpty ? (git?.files.map(\.path) ?? []) : commitSel.sorted()
+        let files = stagedFiles.isEmpty ? (git?.files.map(\.path) ?? []) : stagedFiles.map(\.path)
         guard !files.isEmpty else { return }
         writingMessage = true
         defer { writingMessage = false }
@@ -344,8 +415,8 @@ final class IDEModel {
     /// the file's change, side by side over the editor: HEAD or a checkpoint tree on the left, a turn's
     /// after tree or the disk on the right (nil is the disk)
     func openDiff(_ path: String, old: String? = nil, new: String? = nil) async {
-        guard let left = await diffSide(path, rev: old, label: old == nil ? L("Working copy") : old == "HEAD" ? "HEAD" : L("Before turn")),
-              let right = await diffSide(path, rev: new, label: new == nil ? L("Working copy") : L("After turn")) else { return }
+        guard let left = await diffSide(path, rev: old, label: old == nil ? L("Working copy") : old == "HEAD" ? "HEAD" : old == "INDEX" ? L("Staged") : L("Before turn")),
+              let right = await diffSide(path, rev: new, label: new == nil ? L("Working copy") : new == "INDEX" ? L("Staged") : L("After turn")) else { return }
         guard left.text.utf8.count + right.text.utf8.count <= 2_000_000 else { say(L("File too large for diff"), bad: true); return }
         diff = IDEDiff(path: path, old: left.text, new: right.text, oldLabel: left.label, newLabel: right.label,
                        rows: LineDiff.rows(old: left.text, new: right.text))
@@ -362,6 +433,7 @@ final class IDEModel {
             guard f?.binary != true, f?.tooLarge != true else { say(L("Binary file: no diff available"), bad: true); return nil }
             return (f?.content ?? "", label)
         }
+        if rev == "INDEX" { return ((try? await client.indexFile(path)) ?? "", label) }
         if rev == "HEAD" { return ((try? await client.gitFile(path)) ?? "", label) }
         return ((try? await client.checkpointFile(rev, path)) ?? "", label)
     }

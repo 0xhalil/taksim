@@ -18,7 +18,9 @@ struct TabStrip: View {
 
     var body: some View {
         GeometryReader { geo in
-            let layout = TabLayout(width: geo.size.width, count: tabs.count)
+            // the branch control takes its room from the tabs while the canvas works in a git repo
+            let branchRoom = store.branches?.repos.isEmpty == false ? BranchControl.width : 0
+            let layout = TabLayout(width: geo.size.width - branchRoom, count: tabs.count)
             let hidden = layout.hidden(offset: offset, count: tabs.count)
             ScrollViewReader { proxy in
                 HStack(spacing: 0) {
@@ -57,6 +59,7 @@ struct TabStrip: View {
                     Button { Task { await store.newCanvas() } } label: { AppIcon.plus.frame(width: ChromeMetrics.icon, height: ChromeMetrics.icon) }
                         .buttonStyle(IconButton()).help(L("New canvas  ⌘T")).accessibilityLabel(L("New canvas"))
                     if !layout.overflowing { Spacer(minLength: 0) }
+                    BranchControl(store: store)
                     if !isSnapshot { canvasMenu(proxy: proxy) }
                 }
                 .padding(.horizontal, ChromeMetrics.inset)

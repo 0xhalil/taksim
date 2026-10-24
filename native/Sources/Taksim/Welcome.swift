@@ -69,6 +69,15 @@ final class AccountsModel {
         await signIn(account: a.id, backend: b.name)
     }
 
+    /// how to get a CLI by hand, for when installing it from here didn't work: the command and the page
+    static let installHints: [String: (command: String, url: String)] = [
+        "claude": ("npm install -g @anthropic-ai/claude-code", "https://docs.anthropic.com/en/docs/claude-code"),
+        "codex": ("npm install -g @openai/codex", "https://github.com/openai/codex"),
+        "gemini": ("npm install -g @google/gemini-cli", "https://github.com/google-gemini/gemini-cli"),
+        "copilot": ("npm install -g @github/copilot", "https://github.com/github/copilot-cli"),
+        "opencode": ("npm install -g opencode-ai", "https://opencode.ai"),
+    ]
+
     private struct InstallState: Decodable { var installing: Bool?; var installError: String? }
 
     /// installs a CLI from its official package (the engine does the work) and waits until it is on this computer

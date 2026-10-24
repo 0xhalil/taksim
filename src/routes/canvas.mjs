@@ -13,6 +13,30 @@ import { panelRoutes } from "./panels.mjs";
 import { ideRoutes } from "./ide.mjs";
 import { toolboxRoutes } from "./toolbox.mjs";
 import { computerState, setComputer } from "../computer/access.mjs";
+import { branchState, addSet, updateSet, removeSet, switchBranches, switchToSet } from "../canvas/branch-sets.mjs";
+
+// /v1/canvases/:id/branches (each repo's branch, the sets, the active one; POST {set} or {branches} switches)
+// and /v1/canvases/:id/branch-sets[/:sid]
+async function branchRoutes(req, res, canvas, section, sid) {
+  const method = req.method;
+  const body = ["POST", "PATCH"].includes(method) ? await readJson(req).catch(() => { throw httpError(400, "invalid JSON"); }) : null;
+  if (section === "branches") {
+    if (method === "GET") return sendJson(res, 200, await branchState(canvas));
+    if (method === "POST") {
+      if (body?.set) return sendJson(res, 200, await switchToSet(canvas, body.set));
+      if (body?.branches && typeof body.branches === "object") return sendJson(res, 200, await switchBranches(canvas, body.branches));
+      throw httpError(400, "set or branches is required");
+    }
+    throw httpError(405, "method not allowed");
+  }
+  if (!sid) {
+    if (method === "POST") return sendJson(res, 201, await addSet(canvas, body || {}));
+    throw httpError(405, "method not allowed");
+  }
+  if (method === "PATCH") return sendJson(res, 200, updateSet(canvas, sid, body || {}));
+  if (method === "DELETE") { removeSet(canvas, sid); return sendJson(res, 200, { ok: true }); }
+  throw httpError(405, "method not allowed");
+}
 
 // /v1/canvases/:id/groups[/:gid[/context|/history[/:version]]]
 async function groupRoutes(req, res, canvas, gid, action, version) {
@@ -68,6 +92,13 @@ export async function canvasRoutes(req, res, path) {
     if (!canvas) throw httpError(404, `no canvas ${gm[1]}`);
     canvas.lang = langOf(req);
     return groupRoutes(req, res, canvas, gm[2], gm[3], gm[4]);
+  }
+  const bm = path.match(/^\/v1\/canvases\/([\w-]+)\/(branches|branch-sets)(?:\/([\w-]+))?$/);
+  if (bm && !(bm[2] === "branches" && bm[3])) {
+    const canvas = getCanvas(bm[1]);
+    if (!canvas) throw httpError(404, `no canvas ${bm[1]}`);
+    canvas.lang = langOf(req);
+    return branchRoutes(req, res, canvas, bm[2], bm[3]);
   }
   const m = path.match(/^\/v1\/canvases(?:\/([\w-]+))?(?:\/(events|agents))?(?:\/([\w-]+))?(?:\/(messages|queue|fork|activity|tasks|workflow|job|stop|transcript|terminal|shell|deliver|restore|review|diff|checkpoint|attachments|computer))?$/);
   if (!m) return false;

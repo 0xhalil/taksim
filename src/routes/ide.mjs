@@ -4,7 +4,7 @@
 //   GET|PUT|DELETE …/ide/file?path=   read · save {content, mtime} (409 when it changed on disk) · delete
 //   POST …/ide/mkdir {path} · /move {from, to}   GET …/ide/search?q=&regex=&case=   GET …/ide/git[?path=] status · file at HEAD
 //   DELETE …/ide/notes[?path=|?id=]
-//   POST …/ide/commit {files, message, amend} · /push · /rollback {files}   GET …/ide/log · /show?hash= · /rev?rev=&path=
+//   POST …/ide/commit {files, message, amend} · /push · /rollback {files} · /stage {files} · /unstage {files} · /delete {files}   GET …/ide/log · /show?hash= · /rev?rev=&path=
 //   POST …/ide/commit-message {files}: one message for the change, written by the fast model
 //   POST …/ide/edit {path, from, to, instruction}: ⌘K, the chosen lines rewritten (returned, not written)
 //   POST …/ide/ask {question}: where in the project is it? an answer and file:line hits
@@ -23,7 +23,7 @@ import { editSelection, askCodebase, reviewChanges } from "../ide/ai.mjs";
 import { listRules, ensureRules } from "../ide/rules.mjs";
 
 export async function ideRoutes(req, res, path) {
-  const m = path.match(/^\/v1\/canvases\/([\w-]+)\/agents\/([\w-]+)\/ide(?:\/(tree|files|file|mkdir|move|search|git|notes|commit-message|edit|ask|review|rules|commit|push|rollback|log|show|rev|sessions)(?:\/([\w-]+)(?:\/(debug|stop))?)?)?$/);
+  const m = path.match(/^\/v1\/canvases\/([\w-]+)\/agents\/([\w-]+)\/ide(?:\/(tree|files|file|mkdir|move|search|git|notes|commit-message|edit|ask|review|rules|commit|push|rollback|stage|unstage|delete|fetch|pull|stash|uncommit|branches|checkout|log|show|rev|sessions)(?:\/([\w-]+)(?:\/(debug|stop))?)?)?$/);
   if (!m) return false;
   const canvas = getCanvas(m[1]);
   if (!canvas) throw httpError(404, `no canvas ${m[1]}`);
@@ -88,7 +88,16 @@ export async function ideRoutes(req, res, path) {
       if (method === "POST") return ok({ path: ensureRules(root) });
       break;
     case "push": if (method === "POST") return ok(await vcs.push(root)); break;
-    case "rollback": if (method === "POST") return ok(await vcs.rollback(root, body?.files)); break;
+    case "rollback": if (method === "POST") return ok(await vcs.rollback(root, body?.files, { keepIndex: body?.keepIndex === true })); break;
+    case "stage": if (method === "POST") return ok(await vcs.stage(root, body?.files)); break;
+    case "unstage": if (method === "POST") return ok(await vcs.unstage(root, body?.files)); break;
+    case "delete": if (method === "POST") return ok(await vcs.remove(root, body?.files)); break;
+    case "fetch": if (method === "POST") return ok(await vcs.fetch(root)); break;
+    case "pull": if (method === "POST") return ok(await vcs.pull(root)); break;
+    case "stash": if (method === "POST") return ok(await vcs.stash(root, body || {})); break;
+    case "uncommit": if (method === "POST") return ok(await vcs.uncommit(root)); break;
+    case "branches": if (method === "GET") return ok(await vcs.branches(root)); break;
+    case "checkout": if (method === "POST") return ok(await vcs.checkout(root, body || {})); break;
     case "log": if (method === "GET") return ok({ commits: await vcs.log(root) }); break;
     case "show": if (method === "GET") return ok(await vcs.show(root, q.get("hash"))); break;
     case "rev": if (method === "GET") return ok({ content: await vcs.fileAt(root, q.get("rev") || "HEAD", q.get("path") || "") }); break;

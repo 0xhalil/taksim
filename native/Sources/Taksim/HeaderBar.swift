@@ -130,11 +130,28 @@ struct HeaderBar: View {
             .padding(.trailing, 4)
             // one click: an agent like the last one (model, folder, account), its terminal open; the chevron picks another CLI
             HStack(spacing: 0) {
-                Button { model.quickAdd() } label: {
+                // the folder is asked first: the ones the canvas's agents work in, or another
+                if isSnapshot {
                     HStack(spacing: 5) { AppIcon.plus.frame(width: 12, height: 12); Text(L("Agent")) }
+                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(JB.accentInk).padding(.leading, 9).padding(.trailing, 11).frame(height: 28)
+                } else {
+                    Menu {
+                        let folders = model.folderChoices()
+                        ForEach(folders, id: \.self) { path in
+                            Button { model.addAgent(backend: nil, folder: path) } label: { Label(Self.folderTitle(path, among: folders), systemImage: "folder") }
+                                .help(path)
+                        }
+                        if !folders.isEmpty { Divider() }
+                        Button { model.quickAdd() } label: { Label(L("Choose folder"), systemImage: "folder.badge.plus") }
+                        Button { model.addAgent(backend: nil, folder: "") } label: { Label(L("No folder"), systemImage: "tray") }
+                    } label: {
+                        HStack(spacing: 5) { AppIcon.plus.frame(width: 12, height: 12); Text(L("Agent")) }
+                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(JB.accentInk)
+                            .padding(.leading, 9).padding(.trailing, 11).frame(height: 28).contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .help(L("Add agent"))
                 }
-                .buttonStyle(AddButtonStyle())
-                .help(L("Add agent"))
                 Rectangle().fill(JB.accentInk.opacity(0.22)).frame(width: 1, height: 14)
                 if isSnapshot {
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(JB.accentInk).frame(width: 22, height: 28)
@@ -167,6 +184,13 @@ struct HeaderBar: View {
         .gesture(WindowDragGesture())
         .onAppear { shelf.open = { openTools() } }
         .onTapGesture(count: 2) { NSApp.keyWindow?.performZoom(nil) }
+    }
+
+    /// a folder's name; with its parent too when another one in the list has the same name
+    static func folderTitle(_ path: String, among all: [String]) -> String {
+        let name = (path as NSString).lastPathComponent
+        guard all.filter({ ($0 as NSString).lastPathComponent == name }).count > 1 else { return name }
+        return ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent + "/" + name
     }
 
     /// canvas.html #conn: only a broken connection shows

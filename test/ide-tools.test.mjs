@@ -115,6 +115,21 @@ test("rollback restores tracked files and deletes new ones", async () => {
   assert.equal(existsSync(join(project, "junk.txt")), false);
 });
 
+test("stage and unstage move files in and out of the index; delete removes them from disk", async () => {
+  const { ide } = await setup();
+  writeFileSync(join(project, "a.txt"), "staged edit\n");
+  writeFileSync(join(project, "fresh.txt"), "fresh\n");
+  const staged = async () => Object.fromEntries((await api("GET", ide("/git"))).data.files.map((f) => [f.path, f.staged]));
+  await api("POST", ide("/stage"), { files: ["a.txt", "fresh.txt"] });
+  assert.deepEqual(await staged(), { "a.txt": true, "fresh.txt": true });
+  await api("POST", ide("/unstage"), { files: ["a.txt", "fresh.txt"] });
+  assert.deepEqual(await staged(), { "a.txt": false, "fresh.txt": false });
+  await api("POST", ide("/delete"), { files: ["fresh.txt"] });
+  assert.equal(existsSync(join(project, "fresh.txt")), false);
+  assert.equal((await api("POST", ide("/delete"), { files: ["-rf"] })).status, 400);
+  await api("POST", ide("/rollback"), { files: ["a.txt"] });
+});
+
 test("a terminal runs a shell in the agent's folder; a run session runs the file", async () => {
   const { ide, agent } = await setup();
   const t = (await api("POST", ide("/sessions"), { kind: "terminal" })).data;

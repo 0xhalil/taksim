@@ -79,15 +79,48 @@ public struct WantedDiff: Equatable, Sendable {
     }
 }
 
-/// one changed file from `git status`: modified, added, untracked, deleted or renamed
+/// one changed file from `git status`: what the index holds (`indexStatus`) and what the disk holds beyond it
+/// (`workStatus`); `status` is the one word the file tree colors by
 public struct IDEGitFile: Decodable, Equatable, Sendable {
     public var path: String
     public var status: String
+    public var staged: Bool = false
+    public var unstaged: Bool = true
+    public var indexStatus: String?
+    public var workStatus: String?
+
+    private enum CodingKeys: String, CodingKey { case path, status, staged, unstaged, indexStatus, workStatus }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        path = try c.decode(String.self, forKey: .path)
+        status = try c.decode(String.self, forKey: .status)
+        staged = try c.decodeIfPresent(Bool.self, forKey: .staged) ?? false
+        unstaged = try c.decodeIfPresent(Bool.self, forKey: .unstaged) ?? !staged
+        indexStatus = try c.decodeIfPresent(String.self, forKey: .indexStatus)
+        workStatus = try c.decodeIfPresent(String.self, forKey: .workStatus)
+    }
+    public init(path: String, status: String, staged: Bool = false, unstaged: Bool = true, indexStatus: String? = nil, workStatus: String? = nil) {
+        self.path = path; self.status = status; self.staged = staged; self.unstaged = unstaged
+        self.indexStatus = indexStatus; self.workStatus = workStatus
+    }
 }
 
 public struct IDEGitStatus: Decodable, Equatable, Sendable {
     public var branch: String?
+    public var upstream: String?
+    public var ahead: Int = 0
+    public var behind: Int = 0
     public var files: [IDEGitFile]
+
+    private enum CodingKeys: String, CodingKey { case branch, upstream, ahead, behind, files }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        upstream = try c.decodeIfPresent(String.self, forKey: .upstream)
+        ahead = try c.decodeIfPresent(Int.self, forKey: .ahead) ?? 0
+        behind = try c.decodeIfPresent(Int.self, forKey: .behind) ?? 0
+        files = try c.decode([IDEGitFile].self, forKey: .files)
+    }
 }
 
 public struct IDEGitCommit: Decodable, Equatable, Sendable {
@@ -204,8 +237,34 @@ public struct IDEClient: Sendable {
         return try await api.get("\(agentBase)/checkpoint?at=\(q(tree))&path=\(q(path))", as: R.self).content
     }
 
-    public func commit(_ files: [String], message: String, amend: Bool) async throws -> IDEGitCommit {
-        try await api.post("\(base)/commit", ["files": files, "message": message, "amend": amend], as: IDEGitCommit.self)
+    /// with `files` just those are committed; without them, what is staged
+    public func commit(_ files: [String]?, message: String, amend: Bool) async throws -> IDEGitCommit {
+        var body: [String: Any] = ["message": message, "amend": amend]
+        if let files { body["files"] = files }
+        return try await api.post("\(base)/commit", body, as: IDEGitCommit.self)
+    }
+
+    /// a file as the index holds it (what is staged; "" when it isn't there)
+    public func indexFile(_ path: String) async throws -> String {
+        struct R: Decodable { var content: String }
+        return try await api.get("\(base)/rev?rev=INDEX&path=\(q(path))", as: R.self).content
+    }
+
+    public func fetch() async throws { _ = try await api.post("\(base)/fetch", [:]) }
+    public func pull() async throws { _ = try await api.post("\(base)/pull", [:]) }
+    public func stash(pop: Bool) async throws { _ = try await api.post("\(base)/stash", ["pop": pop]) }
+    /// takes the last commit back, its changes staying staged; the message it had
+    public func uncommit() async throws -> String {
+        struct R: Decodable { var message: String? }
+        return try await api.post("\(base)/uncommit", [:], as: R.self).message ?? ""
+    }
+    public func branches() async throws -> (current: String?, all: [String]) {
+        struct R: Decodable { var current: String?; var branches: [String] }
+        let r = try await api.get("\(base)/branches", as: R.self)
+        return (r.current, r.branches)
+    }
+    public func checkout(_ branch: String, create: Bool = false) async throws {
+        _ = try await api.post("\(base)/checkout", ["branch": branch, "create": create])
     }
 
     /// commits and pushes in one go (the branch's upstream, or the first remote)
@@ -215,9 +274,15 @@ public struct IDEClient: Sendable {
     }
 
     /// throws away the chosen files' changes (tracked go back to HEAD, new ones are deleted)
-    public func rollback(_ files: [String]) async throws {
-        _ = try await api.post("\(base)/rollback", ["files": files])
+    /// `keepIndex`: go back to what is staged, not to HEAD (VS Code's Discard Changes)
+    public func rollback(_ files: [String], keepIndex: Bool = false) async throws {
+        _ = try await api.post("\(base)/rollback", ["files": files, "keepIndex": keepIndex])
     }
+
+    public func stage(_ files: [String]) async throws { _ = try await api.post("\(base)/stage", ["files": files]) }
+    public func unstage(_ files: [String]) async throws { _ = try await api.post("\(base)/unstage", ["files": files]) }
+    /// deletes the files from disk
+    public func delete(_ files: [String]) async throws { _ = try await api.post("\(base)/delete", ["files": files]) }
 
     /// one message for the chosen changes, written by the engine's fast model
     public func commitMessage(_ files: [String]) async throws -> String {

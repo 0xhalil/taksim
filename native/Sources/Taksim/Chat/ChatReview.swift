@@ -37,7 +37,7 @@ struct ChatReviewView: View {
     @State private var commentHunk: String?
     @State private var sent = false
     private var base: String { "/v1/canvases/\(model.canvas)/agents/\(model.agent)" }
-    private var disabled: Bool { busy || loading || ["running", "waiting"].contains(store.agents[model.agent]?.status ?? "") }
+    private var disabled: Bool { busy || loading || ["running", "waiting"].contains(model.agent(model.agent, store)?.status ?? "") }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,7 +80,7 @@ struct ChatReviewView: View {
                                 TextField(L("Fix request"), text: $comment).textFieldStyle(.plain).focused($commentFocused).onSubmit { Task { await requestFix() } }
                                 Button { Task { await requestFix() } } label: { Image(systemName: sent ? "checkmark" : "arrow.up") }
                                     .buttonStyle(Tap()).foregroundStyle(sent ? JB.ok : JB.accent)
-                                    .disabled(disabled || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.agents[model.agent]?.chatMode != "agent")
+                                    .disabled(disabled || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.agent(model.agent, store)?.chatMode != "agent")
                                     .help(L("Ask the agent for a fix"))
                             }.padding(12).background(JB.panel)
                         }
@@ -180,7 +180,7 @@ struct ChatReviewView: View {
         catch { self.error = (error as? APIError)?.message ?? error.localizedDescription }
     }
     private func requestFix() async {
-        guard !disabled, !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, store.agents[model.agent]?.chatMode == "agent", let review else { return }
+        guard !disabled, !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, model.agent(model.agent, store)?.chatMode == "agent", let review else { return }
         let diff = review.hunks.first { $0.id == commentHunk }?.diff ?? review.diff
         busy = true; error = nil; defer { busy = false }
         do {

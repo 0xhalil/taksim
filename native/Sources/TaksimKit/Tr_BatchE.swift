@@ -26,6 +26,8 @@ extension Tr {
         "%d errors": "%d hata",
         "1 file": "1 dosya",
         "1 token": "1 token",
+        "Start here": "Burada başlat",
+        "Try again": "Tekrar dene",
         "Installing": "Kuruluyor",
         "Install and sign in": "Kur ve giriş yap",
         "Could not install": "Kurulamadı",

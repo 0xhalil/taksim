@@ -22,7 +22,7 @@ struct ChatView: View {
     private var matches: [Int] { model.matches(query) }
     private var destination: Int? { matches.indices.contains(match) ? matches[match] : nil }
 
-    private var agent: Agent? { store.agents[model.agent] }
+    private var agent: Agent? { model.agent(model.agent, store) }
     private var running: Bool { ["running", "waiting"].contains(agent?.status ?? "") }
 
     var body: some View {
@@ -151,7 +151,7 @@ struct ChatView: View {
             } else if running && model.question == nil {
                 // its turn hasn't started: another agent is writing in its folder. Who, instead of "Working…".
                 if let holders = agent?.blockedBy, !holders.isEmpty {
-                    ChatBlocked(names: holders.compactMap { store.agents[$0]?.name }) {
+                    ChatBlocked(names: holders.compactMap { model.agent($0, store)?.name }) {
                         if let first = holders.first { NotificationCenter.default.post(name: ChatDrafts.wantsChat, object: first, userInfo: ["reveal": true]) }
                     }
                 } else { ChatWorking() }
@@ -184,7 +184,7 @@ struct ChatView: View {
             list.frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading).clipped()
         } else {
             ScrollViewReader { proxy in
-                ScrollView { list.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
+                ScrollView { list.frame(maxWidth: .infinity, alignment: .leading) } // the node's own width: the composer below spans it too
                     .scrollIndicators(.never) // .hidden still draws the legacy bar when a mouse is connected
                     // the history arriving after the view, a row settling in, an answer growing: stay on the latest
                     .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
@@ -235,7 +235,7 @@ struct ChatView: View {
             }
             .contextMenu { Button(L("Copy"), systemImage: "doc.on.doc") { copyChatText(e.text ?? "") } }
         } else if e.to == model.agent {
-            UserMessage(entry: e, who: e.from == "user" ? nil : store.agents[e.from]?.name ?? e.from,
+            UserMessage(entry: e, who: e.from == "user" ? nil : model.agent(e.from, store)?.name ?? e.from,
                         checkpoint: model.checkpoint(after: i), model: model, store: store, running: running)
         } else if e.from == model.agent {
             HoverRow { hover in
@@ -394,10 +394,7 @@ Text(countText(ch.count, one: "1 file", other: "%d files")).font(.system(size: 1
             ForEach(ch.prefix(expanded ? ch.count : 12)) { c in
                 // the turn's own change, frozen: before ↔ after. A binary file has no diff to show, so it
                 // opens in the editor instead; a turn from before trees were kept falls back to the editor too.
-                Button {
-                    if entry.checkpoint != nil && entry.after != nil { reviewPath = c.path; reviewing = true }
-                    else { openTurnDiff(c) }
-                } label: {
+                Button { openTurnDiff(c) } label: {
                     HStack(spacing: 8) {
                         Text((c.path as NSString).lastPathComponent).font(.system(size: 12)).foregroundStyle(JB.ink).lineLimit(1)
                         Text((c.path as NSString).deletingLastPathComponent).font(.system(size: 11)).foregroundStyle(JB.muted2)
@@ -423,7 +420,8 @@ Text(countText(ch.count, one: "1 file", other: "%d files")).font(.system(size: 1
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JB.line))
         .sheet(isPresented: $reviewing) { ChatReviewView(entry: entry, model: model, store: store, initialPath: reviewPath) }
         .contextMenu {
-            if let checkpoint = entry.checkpoint { Button(L("Revert entire turn")) { model.restore(checkpoint) }.disabled(model.busyRestore != nil || store.agents[model.agent]?.status == "running") }
+            if entry.checkpoint != nil && entry.after != nil { Button(L("Review hunks")) { reviewPath = nil; reviewing = true } }
+            if let checkpoint = entry.checkpoint { Button(L("Revert entire turn")) { model.restore(checkpoint) }.disabled(model.busyRestore != nil || model.agent(model.agent, store)?.status == "running") }
         }
         .animation(reduceMotion || isSnapshot ? nil : .spring(response: 0.35, dampingFraction: 0.9), value: expanded)
     }
@@ -431,7 +429,7 @@ Text(countText(ch.count, one: "1 file", other: "%d files")).font(.system(size: 1
     private func actions(words: Bool) -> some View {
         HStack(spacing: words ? 6 : 10) {
             if entry.checkpoint != nil && entry.after != nil {
-                Button { reviewPath = nil; reviewing = true } label: {
+                Button { if let first = entry.changes?.first { openTurnDiff(first) } } label: {
                     if words { Label(L("Review"), systemImage: "doc.text.magnifyingglass") } else { Image(systemName: "doc.text.magnifyingglass") }
                 }
                 .buttonStyle(Tap()).foregroundStyle(JB.accent).help(L("Review"))
@@ -441,7 +439,7 @@ Text(countText(ch.count, one: "1 file", other: "%d files")).font(.system(size: 1
                     if words { Label(L("Undo"), systemImage: "arrow.uturn.backward") } else { Image(systemName: "arrow.uturn.backward") }
                 }
                 .buttonStyle(Tap()).foregroundStyle(JB.muted)
-                .disabled(model.busyRestore != nil || store.agents[model.agent]?.status == "running")
+                .disabled(model.busyRestore != nil || model.agent(model.agent, store)?.status == "running")
                 .help(L("Revert entire turn"))
             }
         }.fixedSize()

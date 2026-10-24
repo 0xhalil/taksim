@@ -21,6 +21,9 @@ export function branchOf(dir) {
   return branch;
 }
 
+// after a switch made elsewhere (a branch set): the next read asks git again
+export const forgetBranches = () => branches.clear();
+
 // For the folder picker: the repo's local branches, most recently committed first.
 export function repoInfo(dir) {
   const root = repoRoot(dir);

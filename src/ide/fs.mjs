@@ -167,12 +167,22 @@ export async function search(root, { q, regex = false, caseSensitive = false, li
 }
 
 // Changed files: { branch, files: [{ path, status }] }; null when the root isn't in a git repo.
+const WORD = { M: "modified", A: "added", D: "deleted", R: "renamed", C: "added", T: "modified", U: "modified" };
+
+// `git status`, the way a Source Control view needs it: per file what the index holds (indexStatus) and what
+// the disk holds beyond it (workStatus); `status` stays the one word the file tree colors by.
 export async function gitStatus(root) {
   const base = realpathSync(root);
   const top = await run("git", ["rev-parse", "--show-toplevel"], base);
   if (top.err) return null;
   const st = await run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."], base);
   const br = await run("git", ["rev-parse", "--abbrev-ref", "HEAD"], base);
+  const up = await run("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], base);
+  let ahead = 0, behind = 0;
+  if (!up.err) {
+    const n = await run("git", ["rev-list", "--left-right", "--count", "@{u}...HEAD"], base);
+    [behind, ahead] = n.stdout.trim().split(/\s+/).map((x) => Number(x) || 0);
+  }
   const prefix = relative(realpathSync(top.stdout.trim()), base).split(sep).join("/");
   const files = [];
   const parts = st.stdout.split("\0");
@@ -182,10 +192,15 @@ export async function gitStatus(root) {
     const code = p.slice(0, 2), path = p.slice(3);
     if (code[0] === "R" || code[0] === "C") i++; // the old name follows
     const rel = prefix ? path.slice(prefix.length + 1) : path;
-    const status = code === "??" ? "untracked" : /D/.test(code) ? "deleted" : /A/.test(code) ? "added" : /R/.test(code) ? "renamed" : "modified";
-    files.push({ path: rel, status });
+    const untracked = code === "??";
+    const staged = !untracked && code[0] !== " ";
+    const unstaged = untracked || code[1] !== " ";
+    const status = untracked ? "untracked" : /D/.test(code) ? "deleted" : /A/.test(code) ? "added" : /R/.test(code) ? "renamed" : "modified";
+    files.push({ path: rel, status, staged, unstaged,
+      indexStatus: staged ? WORD[code[0]] || "modified" : null,
+      workStatus: untracked ? "untracked" : unstaged ? WORD[code[1]] || "modified" : null });
   }
-  return { branch: br.stdout.trim() || null, files };
+  return { branch: br.stdout.trim() || null, upstream: up.err ? null : up.stdout.trim(), ahead, behind, files };
 }
 
 // A file as committed at HEAD, for the diff view; "" when it's new.

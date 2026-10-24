@@ -37,6 +37,8 @@ export class Canvas {
     this.groups = data.groups || [];
     // groups saved before keepers were elected: a keeper set then was the user's pick
     for (const g of this.groups) g.keeperBy ??= g.maintainer ? "user" : "auto";
+    // branch sets: [{ id, name, branches: { repoRoot: branch } }] (branch-sets.mjs)
+    this.branchSets = data.branchSets || [];
     this.bus = new EventBus();
     this.agents = new Map();
     for (const a of data.agents || []) this.agents.set(a.id, new Agent(this, a));
@@ -49,7 +51,8 @@ export class Canvas {
 
   toJSON() {
     return { id: this.id, name: this.name, vars: this.vars, limits: this.limits, createdAt: this.createdAt,
-      agents: [...this.agents.values()].map((a) => a.toJSON()), links: this.links, groups: this.groups };
+      agents: [...this.agents.values()].map((a) => a.toJSON()), links: this.links, groups: this.groups,
+      branchSets: this.branchSets };
   }
 
   view() {
