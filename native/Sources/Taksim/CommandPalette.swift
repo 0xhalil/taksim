@@ -1,16 +1,17 @@
 import SwiftUI
 import TaksimKit
 
-// Cursor's ⌘K palette in our style: one search over the canvas's agents, its
-// actions and the settings sections. ↑↓ moves, ⏎ opens (⌥⏎ an agent's terminal),
+// Cursor's ⌘K palette in our style: one search over the canvas's agents, the past
+// conversations (by their words too), its actions and the settings sections. ↑↓ moves, ⏎ opens (⌥⏎ an agent's terminal),
 // ⌘[ and ⌘] switch tabs, esc closes.
 struct CommandPalette: View {
     enum Tab: String, CaseIterable {
-        case all, agents, actions, settings
+        case all, agents, history, actions, settings
         var title: String {
             switch self {
             case .all: L("All")
             case .agents: L("Agents")
+            case .history: L("History")
             case .actions: L("Actions")
             case .settings: L("Settings")
             }
@@ -32,6 +33,8 @@ struct CommandPalette: View {
     let goToAgent: (String) -> Void
     let openTerminal: (String) -> Void
     let newAgent: () -> Void
+    /// a past conversation continued on the open canvas
+    let continueConversation: (String) -> Void
     let newCanvas: () -> Void
     let toggleNavigator: () -> Void
     let openSettings: (SettingsSection) -> Void
@@ -40,6 +43,8 @@ struct CommandPalette: View {
     @State private var query = ""
     @State private var tab = Tab.all
     @State private var selected = 0
+    /// the past conversations the engine found for the query (it searches their words, not only titles)
+    @State private var past: [PastConversation] = []
     @FocusState private var focused: Bool
     @Environment(\.isSnapshot) private var isSnapshot
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -52,13 +57,19 @@ struct CommandPalette: View {
                            dot: agent.status.flatMap(JB.status), title: agent.name,
                            hint: agent.model, run: { goToAgent(agent.id) }))
         }
+        // without a query the latest few; with one, what the engine found
+        for c in past.prefix(query.isEmpty && tab == .all ? 5 : 40) {
+            let id = c.id
+            out.append(Row(id: "past-\(c.id)", tab: .history, section: L("History"), symbol: "clock.arrow.circlepath",
+                           dot: nil, title: c.title, hint: PastConversation.when(c.lastAt), run: { continueConversation(id) }))
+        }
         out += [
             Row(id: "new-agent", tab: .actions, section: L("Actions"), symbol: "plus",
                 dot: nil, title: L("New Agent"), hint: nil, run: newAgent),
             Row(id: "new-canvas", tab: .actions, section: L("Actions"), symbol: "rectangle.stack",
                 dot: nil, title: L("New canvas"), hint: "⌘T", run: newCanvas),
             Row(id: "navigator", tab: .actions, section: L("Actions"), symbol: "sidebar.left",
-                dot: nil, title: L("Agent navigator"), hint: "⇧⌘A", run: toggleNavigator),
+                dot: nil, title: L("Sidebar"), hint: "⇧⌘A", run: toggleNavigator),
         ]
         for s in SettingsSection.allCases {
             let section = s
@@ -72,7 +83,7 @@ struct CommandPalette: View {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return rows.filter { r in
             (tab == .all || r.tab == tab) &&
-                (q.isEmpty || r.title.localizedCaseInsensitiveContains(q) ||
+                (q.isEmpty || r.tab == .history || r.title.localizedCaseInsensitiveContains(q) ||
                     (r.tab == .settings ? settingsKeywords(r.id)?.contains { $0.localizedCaseInsensitiveContains(q) } == true : false))
         }
     }
@@ -97,7 +108,7 @@ struct CommandPalette: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").font(.system(size: 13)).foregroundStyle(JB.muted2)
-                TextField(L("Search agents, actions, settings…"), text: $query)
+                TextField(L("Search agents, conversations, settings…"), text: $query)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(JB.ink)
                     .focused($focused)
                     .onKeyPress(.return, phases: .down) { press in
@@ -167,6 +178,11 @@ struct CommandPalette: View {
         .onChange(of: query) { selected = 0 }
         .onChange(of: tab) { selected = 0 }
         .onAppear { if !isSnapshot { focused = true } }
+        .task(id: query) {
+            if !query.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+            guard !Task.isCancelled, let list = try? await store.history(matching: query) else { return }
+            past = list
+        }
         .accessibilityLabel(L("Command palette"))
     }
 

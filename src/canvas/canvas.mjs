@@ -121,6 +121,8 @@ export class Canvas {
     const data = {
       id: shortId(),
       name: this.uniqueName(String(spec.name ?? "").trim() || `${backend.name}-${this.agents.size + 1}`),
+      // no name given: its first request names it (agent.mjs titleFrom)
+      autoName: !String(spec.name ?? "").trim() || null,
       role: spec.role || "",
       system: spec.system || "",
       model,
@@ -188,7 +190,7 @@ export class Canvas {
     let nextEffort = patch.effort !== undefined ? checkEffort(patch.effort, nextModel) : agent.effort || null;
     if (patch.effort === undefined && picked.backend.name !== agent.backend) nextEffort = null;
     if (nextEffort && effortsOf(nextModel) && !effortsOf(nextModel).includes(nextEffort)) nextEffort = null;
-    if (nextName !== agent.name) agent.name = this.uniqueName(nextName, agent);
+    if (nextName !== agent.name) { agent.name = this.uniqueName(nextName, agent); agent.autoName = null; }
     for (const k of ["role", "system"]) if (patch[k] !== undefined) agent[k] = String(patch[k] ?? "");
     // the login changes only when the config folder does: naming this computer's login (or removing that
     // name) keeps the same one, and its session

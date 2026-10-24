@@ -232,8 +232,9 @@ test("Ask and Plan modes are read-only, start fresh context on transition, and r
   agent.seedHistory = true;
   assert.doesNotMatch(agent.prompt({ kind: "user", text: "Implement" }), /The plan/);
   await api("POST", `${path}/messages`, { text: "active" });
+  const named = agent.name; // its first request may have named it
   assert.equal((await api("PATCH", path, { chatMode: "ask", name: "unexpected" })).status, 409);
-  assert.equal(agent.name, a.name);
+  assert.equal(agent.name, named);
   assert.equal(agent.chatMode, "agent");
   await api("DELETE", `/v1/canvases/${c.id}`);
 });
@@ -435,9 +436,10 @@ test("core access transitions reset context atomically and read-only panels cann
     for (const name of ["propose_plan", "update_todos", "save_tool", "add_tool", "update_context"]) assert.ok(!names.includes(name));
     await api("PATCH", path, { model: "fake-slow" });
     await api("POST", `${path}/messages`, { text: "active" });
+    const named = agent.name; // its first request may have named it
     assert.equal((await api("PATCH", path, { sandbox: "workspace-write", name: "must not change" })).status, 409);
     assert.equal(agent.chatMode, "ask");
-    assert.equal(agent.name, a.name);
+    assert.equal(agent.name, named);
   } finally { await api("DELETE", `/v1/canvases/${c.id}`); }
 });
 

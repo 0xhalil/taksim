@@ -35,7 +35,7 @@ struct AgentNavigator: View {
                 Text("\(store.currentAgents.count)").font(.system(size: 10, design: .monospaced)).foregroundStyle(JB.muted)
                 Spacer()
                 Button { model.showNavigator = false } label: { AppIcon.minimize.frame(width: 16, height: 16) }
-                    .buttonStyle(IconButton()).help(L("Hide navigator")).accessibilityLabel(L("Hide navigator"))
+                    .buttonStyle(IconButton()).help(L("Hide sidebar")).accessibilityLabel(L("Hide sidebar"))
             }.padding(.horizontal, 12).frame(height: 34)
             HStack(spacing: 6) {
                 AppIcon.search.frame(width: 14, height: 14).foregroundStyle(JB.muted)
@@ -128,16 +128,9 @@ struct AgentNavigator: View {
 
     /// the conversation comes back as an agent in the middle of the view, its chat ready to type
     private func continueHere(_ c: PastConversation) async {
-        if store.currentId == nil { await store.newCanvas() }
         continuing = c.id
         defer { continuing = nil }
-        do {
-            let a = try await store.continueConversation(c.id, at: model.viewCenter())
-            withAnimation { past.removeAll { $0.id == c.id } }
-            model.agentAdded(a)
-        } catch {
-            store.error = error.localizedDescription
-        }
+        if await model.continueConversation(c.id) { withAnimation { past.removeAll { $0.id == c.id } } }
     }
 
     private func reveal(_ id: String) { selected = id; model.focusAgent(id) }

@@ -10,5 +10,9 @@ extension Tr {
         "Take current branches": "Şimdiki dalları al",
         "History": "Geçmiş",
         "Yesterday": "Dün",
+        "Search agents, conversations, settings…": "Ajan, konuşma, ayar ara…",
+        "Sidebar": "Kenar çubuğu",
+        "Sidebar  ⌘⇧A": "Kenar çubuğu  ⌘⇧A",
+        "Hide sidebar": "Kenar çubuğunu gizle",
     ]
 }

@@ -122,3 +122,20 @@ test("a conversation begun in Claude Code is listed and continued here: same fol
   assert.deepEqual(t.map((e) => [e.from === "user" ? "user" : "agent", e.text]), [["user", "rename the walrus module"], ["agent", "Looking at it.\n\nRenamed."]]);
   assert.equal((await history()).filter((x) => x.id === cc.id).length, 0, "held by an agent now: not listed twice");
 });
+
+test("an agent nobody named is named by its first request; a name given, or changed, stays", async () => {
+  const c = await newCanvas();
+  const a = await addAgent(c.id, { model: "fake-echo" });
+  await say(c.id, a.id, "fix the flaky checkout test on CI please");
+  const view = async (id) => (await api("GET", `/v1/canvases/${c.id}/agents/${id}`)).data;
+  assert.equal((await view(a.id)).name, "Fix the flaky checkout test");
+  await say(c.id, a.id, "and the other one");
+  assert.equal((await view(a.id)).name, "Fix the flaky checkout test", "only the first request names it");
+  const named = await addAgent(c.id, { model: "fake-echo", name: "Reviewer" });
+  await say(c.id, named.id, "look at this");
+  assert.equal((await view(named.id)).name, "Reviewer");
+  const renamed = await addAgent(c.id, { model: "fake-echo" });
+  await api("PATCH", `/v1/canvases/${c.id}/agents/${renamed.id}`, { name: "Mine" });
+  await say(c.id, renamed.id, "something else");
+  assert.equal((await view(renamed.id)).name, "Mine");
+});

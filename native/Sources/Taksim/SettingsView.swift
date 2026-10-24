@@ -1164,7 +1164,7 @@ private struct KeymapPane: View {
     private let keys: [(String, [String])] = [
         (L("Command palette"), ["⌘", "K"]),
         (L("New canvas"), ["⌘", "T"]), (L("Show all"), ["⌘", "0"]), (L("Tab 1–9"), ["⌘", "1…9"]),
-        (L("Agent navigator"), ["⌘", "⇧", "A"]), (L("Group"), ["⌘", "G"]), (L("Select"), ["⌘", L("drag")]),
+        (L("Sidebar"), ["⌘", "⇧", "A"]), (L("Group"), ["⌘", "G"]), (L("Select"), ["⌘", L("drag")]),
         (L("Zoom"), ["⌘", L("scroll")]), (L("Delete"), ["⌫"]), (L("Settings"), ["⌘", ","]),
     ]
     private let chat: [(String, [String])] = [

@@ -32,7 +32,16 @@ import { toolHints, delegates } from "../toolbox/mcp.mjs";
 import { projectRules } from "../ide/rules.mjs";
 
 export const PERSISTED = ["id", "name", "role", "system", "chatOrigin", "forkContext", "chatMode", "chatPlan", "chatReviews", "job", "jobRole", "modeContextSince", "seedHistory", "model", "effort", "delegate", "toolHelp", "chat", "account", "sandbox", "cwd", "session",
-  "pos", "size", "cardSize", "collapsed", "context", "mcp", "parent", "depth", "createdBy", "createdAt", "panel", "autoApprove", "ide", "permission"];
+  "pos", "size", "cardSize", "collapsed", "context", "mcp", "parent", "depth", "createdBy", "createdAt", "panel", "autoApprove", "ide", "permission", "autoName"];
+
+/** a conversation's title from its first request: its first words, without markup, at most five */
+export function titleFrom(text) {
+  const t = String(text || "").replace(/<([\w-]+)[^>]*>[\s\S]*?<\/\1>/g, " ").replace(/```[\s\S]*?```/g, " ")
+    .split(/\n|(?<=[.?!])\s/).map((l) => l.replace(/[`*_#>\[\]]/g, "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
+  const words = t.split(" ").slice(0, 5).join(" ").replace(/[,;:.?!-]+$/, "");
+  const short = words.length > 40 ? words.slice(0, 40).replace(/\s\S*$/, "") : words;
+  return short ? short[0].toLocaleUpperCase() + short.slice(1) : "";
+}
 
 // The node's "helpers" switch: the agent leads and hands work to helper agents on the cheapest model that fits.
 // the tools switch on the node (on unless the user turned it off): what the agent is told
@@ -509,6 +518,12 @@ export class Agent {
     const sender = item.from ? canvas.agents.get(item.from) : null;
 
     this.record({ from: item.from || "user", to: this.id, kind: item.kind, text: item.text, ...(item.attachments?.length ? { attachments: item.attachments } : {}) });
+    // a name the system gave it ("claude-2") becomes what the person first asked, as the Claude app titles a chat
+    if (this.autoName && !item.from && item.kind === "user") {
+      const title = titleFrom(item.text);
+      this.autoName = false;
+      if (title) { this.name = canvas.uniqueName(title, this); canvas.bus.emit("agent_updated", { agent: this.view() }); canvas.save(); }
+    }
     if (sender) canvas.ensureLink(sender.id, this.id, "message", item.about);
     this.lastError = null;
     this.setStatus("running");

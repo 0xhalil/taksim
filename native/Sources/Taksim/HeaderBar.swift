@@ -68,7 +68,7 @@ struct HeaderBar: View {
                 .compactMap { $0 }.joined(separator: " · "))
             Button { model.showNavigator.toggle() } label: { AppIcon.navigator }
                 .buttonStyle(HeaderIconStyle(on: model.showNavigator))
-                .help(L("Agent navigator  ⌘⇧A")).accessibilityLabel(L("Agent navigator"))
+                .help(L("Sidebar  ⌘⇧A")).accessibilityLabel(L("Sidebar"))
             Spacer(minLength: 8)
             // the engine runs older code than the checkout (a server left running across an update): one click
             // starts it again from the code on disk

@@ -65,7 +65,7 @@ struct TaksimApp: App {
             }
             CommandMenu(L("Canvas")) {
                 Button(L("Command palette")) { model.paletteOpen = true }.keyboardShortcut("k", modifiers: .command)
-                Button(L("Agent navigator")) { model.showNavigator.toggle() }.keyboardShortcut("a", modifiers: [.command, .shift])
+                Button(L("Sidebar")) { model.showNavigator.toggle() }.keyboardShortcut("a", modifiers: [.command, .shift])
                 Button(L("Show all")) { model.fitRequest += 1 }.keyboardShortcut("0")
                 Divider()
                 ForEach(1..<10) { n in
@@ -90,7 +90,10 @@ struct TaksimApp: App {
 final class AppModel {
     var store: CanvasStore?
     var failure: String?
-    var showNavigator = false
+    /// the sidebar (agents and past conversations): open until closed, as the Claude app's; remembered
+    var showNavigator = UserDefaults.standard.object(forKey: "showSidebar") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showNavigator, forKey: "showSidebar") }
+    }
     /// the opening plays on top of the window until the logo has landed in the header
     var showLaunch = Opening.plays
     var paletteOpen = false
@@ -552,7 +555,7 @@ final class AppModel {
     func snapshotPalette(_ s: CanvasStore, _ path: String) {
         let env = ProcessInfo.processInfo.environment
         let host = NSHostingView(rootView: CommandPalette(store: s, goToAgent: { _ in }, openTerminal: { _ in },
-                                                           newAgent: {}, newCanvas: {}, toggleNavigator: {}, openSettings: { _ in }, close: {})
+                                                           newAgent: {}, continueConversation: { _ in }, newCanvas: {}, toggleNavigator: {}, openSettings: { _ in }, close: {})
             .environment(\.colorScheme, env["TAKSIM_SNAPSHOT_DARK"] == "1" ? .dark : .light).environment(\.isSnapshot, true)
             .frame(width: 640))
         let w = NSWindow(contentRect: NSRect(x: -3000, y: 0, width: 640, height: 480), styleMask: [.borderless], backing: .buffered, defer: false)
@@ -671,6 +674,19 @@ final class AppModel {
             } catch {
                 sheet = .add(at: at) // couldn't start it: ask in full
             }
+        }
+    }
+
+    /// a past conversation (the sidebar, ⌘K) back on the open canvas, in the middle of the view, its chat ready to type
+    @discardableResult func continueConversation(_ id: String) async -> Bool {
+        guard let store else { return false }
+        if store.currentId == nil { await store.newCanvas() }
+        do {
+            agentAdded(try await store.continueConversation(id, at: viewCenter()))
+            return true
+        } catch {
+            store.error = error.localizedDescription
+            return false
         }
     }
 

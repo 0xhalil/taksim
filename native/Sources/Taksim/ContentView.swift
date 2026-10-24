@@ -57,6 +57,7 @@ struct ContentView: View {
                                goToAgent: { model.focusAgent($0) },
                                openTerminal: { model.openTerminal($0, false) },
                                newAgent: { model.sheet = .add(at: .zero) },
+                               continueConversation: { id in Task { await model.continueConversation(id) } },
                                newCanvas: { Task { await store.newCanvas() } },
                                toggleNavigator: { model.showNavigator.toggle() },
                                openSettings: { model.settingsSection = $0; openSettings() },
