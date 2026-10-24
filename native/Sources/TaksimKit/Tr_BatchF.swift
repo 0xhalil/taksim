@@ -25,5 +25,11 @@ extension Tr {
         "Group and sort": "Grupla ve sırala",
         "Sign-in didn't finish": "Giriş tamamlanmadı",
         "More": "Diğer",
+        "Install Ollama": "Ollama'yı kur",
+        "Get Ollama": "Ollama'yı indir",
+        "Start Ollama": "Ollama'yı başlat",
+        "Download": "İndir",
+        "Downloading %d%%": "İndiriliyor %%%d",
+        "Starting": "Başlatılıyor",
     ]
 }

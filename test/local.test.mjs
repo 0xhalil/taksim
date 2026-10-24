@@ -46,6 +46,13 @@ const ollama = createServer(async (req, res) => {
     return res.end(JSON.stringify({ capabilities: ["completion", ...(m.tools ? ["tools"] : [])], model_info: { "qwen3.context_length": 40960 } }));
   }
   if (req.url === "/api/ps") return res.end(JSON.stringify({ models: Object.entries(MODELS).map(([name, m]) => ({ name, model: name, context_length: m.window })) }));
+  if (req.url === "/api/pull") {
+    // streamed as Ollama does: the manifest, a layer's bytes coming in, then success; the model is there afterwards
+    const lines = [{ status: "pulling manifest" }, { status: "pulling abc", total: 1000, completed: 0 }, { status: "pulling abc", total: 1000, completed: 600 },
+      { status: "pulling abc", total: 1000, completed: 1000 }, { status: "verifying sha256 digest" }, { status: "success" }];
+    MODELS[body.model] = { tools: true, window: 4096 };
+    return res.end(lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  }
   if (req.url === "/api/chat") {
     requests.push(body);
     const r = reply(body);
@@ -66,6 +73,7 @@ const project = mkdtempSync(join(tmpdir(), "taksim-local-"));
 process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_QUIET = "1";
 process.env.TAKSIM_LOCAL_URL = `http://127.0.0.1:${ollama.address().port}/v1`;
+process.env.TAKSIM_OLLAMA_URL = `http://127.0.0.1:${ollama.address().port}`;
 process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
 
 const { startServer } = await import("../src/server.mjs");
@@ -171,4 +179,28 @@ test("small models' slips: offset 0 and limit -1 read the whole file, line numbe
   assert.equal(readFileSync(join(project, "two.py"), "utf8"), "def add(a, b):\n    return a + b\n\n\ndef mul(a, b):\n    return a * b * 1\n", "indentation kept");
   assert.match(await runTool("write_file", { path: "two.py", content: "x" }, o), /already exists; change it with edit_file/);
   assert.match(await runTool("write_file", { path: "new/three.py", content: "x = 1\n" }, o), /^created/);
+});
+
+test("the Local tile's state: Ollama running, a model for this Mac's memory, and a pull with progress that adds it", async () => {
+  const { recommend } = await import("../src/local-setup.mjs");
+  assert.equal(recommend(8).model, "qwen3:1.7b");
+  assert.equal(recommend(16).model, "qwen3:4b");
+  assert.equal(recommend(32).model, "qwen3:8b");
+  assert.equal(recommend(128).model, "qwen3:14b");
+  const st = (await api("GET", "/v1/local")).data;
+  assert.equal(st.ollama.running, true);
+  assert.ok(st.models.includes("local:coder"));
+  assert.match(st.recommended.model, /^qwen3:/);
+  assert.equal((await api("POST", "/v1/local/start", {})).data.running, true, "already running: nothing to do");
+  assert.equal((await api("POST", "/v1/local/pull", { model: "bad name!" })).status, 400);
+  const started = await api("POST", "/v1/local/pull", { model: "qwen3:0.6b" });
+  assert.equal(started.status, 202);
+  let pull;
+  for (let i = 0; i < 50; i++) {
+    pull = (await api("GET", "/v1/local")).data.pull;
+    if (!pull.running) break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.deepEqual([pull.done, pull.error], [true, null]);
+  assert.ok((await api("GET", "/v1/local")).data.models.includes("local:qwen3:0.6b"), "pulled: on the list at once");
 });

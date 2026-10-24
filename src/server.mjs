@@ -20,6 +20,7 @@ import { anthropicMessages } from "./compat/anthropic.mjs";
 import { canvasRoutes, historyRoutes } from "./routes/canvas.mjs";
 import { listOutsideSessions } from "./canvas/cli-sessions.mjs";
 import { accountRoutes, usageRoutes } from "./routes/accounts.mjs";
+import { localRoutes } from "./local-setup.mjs";
 import { connectionRoutes } from "./routes/connections.mjs";
 import { toolboxRoutes } from "./routes/toolbox.mjs";
 import { stopAllLogins, cleanDrafts } from "./accounts.mjs";
@@ -141,6 +142,14 @@ async function handle(req, res) {
   if (path.startsWith("/v1/connections")) {
     try {
       if (await connectionRoutes(req, res, path) !== false) return;
+    } catch (e) {
+      return sendJson(res, e.status || 500, { error: { message: e.message } });
+    }
+  }
+
+  if (path === "/v1/local" || path.startsWith("/v1/local/")) {
+    try {
+      if (await localRoutes(req, res, path, { readJson, sendJson }) !== false) return;
     } catch (e) {
       return sendJson(res, e.status || 500, { error: { message: e.message } });
     }

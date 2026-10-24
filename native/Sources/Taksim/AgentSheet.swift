@@ -41,6 +41,8 @@ struct AgentSheet: View {
     /// the chosen login is signed out (or its CLI isn't here): the one action signs it in, then creates
     @State private var signedOut = false
     @State private var signer: AccountsModel?
+    /// getting a local model going (the Local tile with none there yet): Ollama, then a model for this Mac
+    @State private var local: LocalState?
     @FocusState private var nameFocused: Bool
 
     private var editing: Agent? { if case .edit(let id) = context { return store.agents[id] }; return nil }
@@ -52,9 +54,10 @@ struct AgentSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 cliTiles
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
-                    row("cpu", "Model") { modelPicker }
+                    row("cpu", "Model") { if needsLocal { localWell } else { modelPicker } }
                     if let levels = currentModel?.efforts, !levels.isEmpty { row("brain", L("Thinking")) { effortMeter(levels) } }
-                    row(signedOut ? "person.crop.circle.badge.exclamationmark" : "person.crop.circle", L("Account"), tint: signedOut ? JB.warn : JB.muted) { accountPicker }
+                    // a local model has no account: it runs on this Mac
+                    if backend != "local" { row(signedOut ? "person.crop.circle.badge.exclamationmark" : "person.crop.circle", L("Account"), tint: signedOut ? JB.warn : JB.muted) { accountPicker } }
                     row("folder", L("Folder")) { folderWell }
                     if let git, git.repo != nil { row("arrow.triangle.branch", "Branch") { branchField(git) } }
                     row("lock", L("Access")) { accessPicker }
@@ -74,6 +77,14 @@ struct AgentSheet: View {
         .tint(JB.accent)
         .task { await setup() }
         .task(id: "\(backend)|\(account)") { await checkSignIn() }
+        .task(id: backend) {
+            // the Local tile: watched while a model is being got (fast while something runs), to pick it once there
+            while backend == "local", !Task.isCancelled {
+                await refreshLocal()
+                if !needsLocal { break }
+                try? await Task.sleep(for: .seconds(local?.step == .busy ? 0.7 : 3))
+            }
+        }
         .onDisappear { signer?.cancel() }
         .task(id: cwd) { try? await Task.sleep(for: .milliseconds(300)); await loadBranches() }
         .onExitCommand { onDone(nil) }
@@ -106,7 +117,7 @@ struct AgentSheet: View {
     /// the CLIs as tiles; picking one picks its usual model
     private var cliTiles: some View {
         HStack(spacing: 8) {
-            ForEach(store.backends.filter { $0 != "fake" || store.backends.count == 1 || backend == "fake" || ProcessInfo.processInfo.environment["TAKSIM_URL"] != nil }, id: \.self) { b in
+            ForEach(tileBackends, id: \.self) { b in
                 let on = b == backend
                 Button { pick(backend: b) } label: {
                     VStack(spacing: 6) {
@@ -122,6 +133,80 @@ struct AgentSheet: View {
                 .buttonStyle(Press())
                 .animation(.spring(response: 0.3, dampingFraction: 0.75), value: on)
             }
+        }
+    }
+
+    /// the CLIs to pick from; Local is there before any local model is, so one can be got from here
+    private var tileBackends: [String] {
+        var list = store.backends.filter { $0 != "fake" || store.backends.count == 1 || backend == "fake" || ProcessInfo.processInfo.environment["TAKSIM_URL"] != nil }
+        if !list.contains("local") { list.insert("local", at: list.firstIndex(of: "fake") ?? list.endIndex) }
+        return list
+    }
+
+    /// Local is picked and no local model is there yet
+    private var needsLocal: Bool { backend == "local" && modelsForBackend.isEmpty }
+
+    /// in the model's place while none is there: Ollama's state, or the model this Mac gets and its download
+    private var localWell: some View {
+        WellLabel(opens: false) {
+            if let st = local {
+                switch st.step {
+                case .install, .download, .start:
+                    Circle().fill(st.ollama.installed ? JB.muted2 : JB.err).frame(width: 6, height: 6)
+                    Text("Ollama").foregroundStyle(JB.ink)
+                default:
+                    Image(systemName: "arrow.down.circle").foregroundStyle(JB.muted)
+                    Text(st.pull?.model ?? st.recommended.model).foregroundStyle(JB.ink)
+                    Text(String(format: "%.1f GB", st.recommended.gb)).foregroundStyle(JB.muted2).monospacedDigit()
+                    if let f = st.pull?.fraction, st.pull?.running == true {
+                        ProgressView(value: f).progressViewStyle(.linear).tint(JB.accent).frame(maxWidth: 120)
+                    }
+                }
+            } else {
+                ProgressView().controlSize(.mini)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: local?.pull?.completed)
+    }
+
+    /// the footer's key while a local model is being got: what the next step is called
+    private var localKey: String {
+        guard let st = local else { return "…" }
+        switch st.step {
+        case .install: return L("Install Ollama")
+        case .download: return L("Get Ollama")
+        case .start: return L("Start Ollama")
+        case .pull: return L("Download")
+        case .ready: return L("Create")
+        case .busy:
+            if st.pull?.running == true { return L("Downloading %d%%", Int(((st.pull?.fraction ?? 0) * 100).rounded())) }
+            return st.install?.running == true ? L("Installing") : L("Starting")
+        }
+    }
+
+    /// the next step: install Ollama (or open its download page without Homebrew), start it, pull the model
+    private func localStep() async {
+        guard let st = local else { return }
+        error = nil
+        do {
+            switch st.step {
+            case .install: try await store.installOllama()
+            case .download: if let u = URL(string: "https://ollama.com/download") { NSWorkspace.shared.open(u) }
+            case .start: try await store.startOllama()
+            case .pull(let m): try await store.pullLocalModel(m)
+            case .ready, .busy: break
+            }
+        } catch { self.error = error.localizedDescription }
+        await refreshLocal()
+    }
+
+    /// reads where it stands; once a model is there it is picked
+    private func refreshLocal() async {
+        guard let st = try? await store.localState() else { return }
+        local = st
+        if st.step == .ready, modelsForBackend.isEmpty {
+            await store.loadChoices()
+            if backend == "local", model.isEmpty || !modelsForBackend.contains(model) { pick(model: Self.usualModel("local", in: store.models) ?? "") }
         }
     }
 
@@ -357,30 +442,32 @@ struct AgentSheet: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            if let error {
+            if let shown = error ?? (needsLocal ? local?.problem : nil) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(JB.err)
-                Text(error).font(.system(size: 12)).foregroundStyle(JB.err).lineLimit(2)
+                Text(shown).font(.system(size: 12)).foregroundStyle(JB.err).lineLimit(2)
             }
             Spacer()
-            // signed out: the same key signs the CLI in where it stands, then creates
-            let signing = signer?.login != nil || signer?.installing.contains(backend) == true
-            Button { Task { await (signedOut ? signInThenSubmit() : submit()) } } label: {
+            // signed out: the same key signs the CLI in where it stands, then creates; for Local with no model yet it
+            // takes the next step of getting one (install, start, download)
+            let signing = signer?.login != nil || signer?.installing.contains(backend) == true || (needsLocal && local?.step == .busy)
+            Button { Task { await (needsLocal ? localStep() : signedOut ? signInThenSubmit() : submit()) } } label: {
                 HStack(spacing: 7) {
-                    if signedOut {
+                    if signedOut || needsLocal {
                         if signing { ProgressView().controlSize(.mini) } else { BackendTile(backend: backend, size: 16) }
                     }
-                    Text(signedOut ? (signing ? L("Signing in") : L("Sign in")) : editing == nil ? L("Create") : L("Save"))
+                    Text(needsLocal ? localKey : signedOut ? (signing ? L("Signing in") : L("Sign in")) : editing == nil ? L("Create") : L("Save"))
+                        .monospacedDigit()
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(JB.accentInk)
                 .padding(.horizontal, 16).frame(height: 30)
                 .background(RoundedRectangle(cornerRadius: 6).fill(JB.accent))
-                .opacity(busy || signing || model.isEmpty ? 0.5 : 1)
+                .opacity(busy || signing || (model.isEmpty && !needsLocal) ? 0.5 : 1)
                 .contentTransition(.opacity)
             }
             .buttonStyle(Press())
             .keyboardShortcut(.defaultAction)
-            .disabled(busy || signing || model.isEmpty)
+            .disabled(busy || signing || (model.isEmpty && !needsLocal))
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: signedOut)
         }
         .padding(.horizontal, 20).frame(height: 56)
@@ -546,12 +633,14 @@ private struct Well: ViewModifier {
 
 /// a menu's face as a well: what is chosen, and the up-down chevron at the end
 private struct WellLabel<C: View>: View {
+    /// the ⌃⌄ that says a list opens; a well that only shows something has none
+    var opens = true
     @ViewBuilder let content: C
     var body: some View {
         HStack(spacing: 8) {
             content.lineLimit(1)
             Spacer(minLength: 4)
-            Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(JB.muted)
+            if opens { Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(JB.muted) }
         }
         .modifier(Well())
     }

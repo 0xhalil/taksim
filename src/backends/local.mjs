@@ -245,6 +245,8 @@ const backend = {
     this.models = await discover();
     setInterval(async () => { this.models = await discover(); }, REFRESH_MS).unref();
   },
+  /** looks again now (a server just started, a model just pulled) */
+  async refresh() { this.models = await discover(); return this.models; },
 
   checkModel(model) {
     const id = model.slice(PREFIX.length);
