@@ -17,7 +17,8 @@ import { readJson, sendJson, httpError } from "./http.mjs";
 import { optsFrom, validateOpts } from "./compat/common.mjs";
 import { openaiChat } from "./compat/openai.mjs";
 import { anthropicMessages } from "./compat/anthropic.mjs";
-import { canvasRoutes } from "./routes/canvas.mjs";
+import { canvasRoutes, historyRoutes } from "./routes/canvas.mjs";
+import { listClaudeSessions } from "./canvas/claude-sessions.mjs";
 import { accountRoutes, usageRoutes } from "./routes/accounts.mjs";
 import { connectionRoutes } from "./routes/connections.mjs";
 import { toolboxRoutes } from "./routes/toolbox.mjs";
@@ -193,6 +194,14 @@ async function handle(req, res) {
     }
   }
 
+  if (path.startsWith("/v1/history")) {
+    try {
+      if (await historyRoutes(req, res, path) !== false) return;
+    } catch (e) {
+      return sendJson(res, e.status || 500, { error: { message: e.message } });
+    }
+  }
+
   if (path.startsWith("/v1/canvases")) {
     try {
       if (await canvasRoutes(req, res, path) !== false) return;
@@ -249,6 +258,8 @@ export async function startServer({ host = cfg.host, port = cfg.port } = {}) {
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(port, host, resolve); });
   cfg.port = server.address().port;
   server.on("upgrade", handleUpgrade);
+  // Claude Code's sessions read once in the background, so the first look at the history is instant
+  if (!process.env.TAKSIM_QUIET) setTimeout(() => listClaudeSessions().catch(() => {}), 4000).unref();
   server.on("close", () => { closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); });
   await initBackends();
   refreshModelDetails(); // in the background: the CLIs take a few seconds to list their models

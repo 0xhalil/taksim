@@ -56,6 +56,8 @@ export function readTranscript(canvasId, agentId, limit = 500) {
   return out;
 }
 
+export const transcriptFile = (canvasId, agentId) => join(dir(safeId(canvasId)), "agents", `${safeId(agentId)}.jsonl`);
+
 export function deleteTranscript(canvasId, agentId) {
   rmSync(join(dir(safeId(canvasId)), "agents", `${safeId(agentId)}.jsonl`), { force: true });
 }

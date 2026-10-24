@@ -7,12 +7,14 @@ import { restore, fileDiff, fileInTree, repoTop } from "../canvas/checkpoint.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { listCanvases, getCanvas, createCanvas, removeCanvas } from "../canvas/canvas.mjs";
+import { listCanvases, getCanvas, createCanvas, removeCanvas, allCanvases } from "../canvas/canvas.mjs";
 import { langOf, T } from "../lang.mjs";
 import { panelRoutes } from "./panels.mjs";
 import { ideRoutes } from "./ide.mjs";
 import { toolboxRoutes } from "./toolbox.mjs";
 import { computerState, setComputer } from "../computer/access.mjs";
+import { listHistory, forgetHistory, heldSessions } from "../canvas/history.mjs";
+import { listClaudeSessions } from "../canvas/claude-sessions.mjs";
 import { branchState, addSet, updateSet, removeSet, switchBranches, switchToSet } from "../canvas/branch-sets.mjs";
 
 // /v1/canvases/:id/branches (each repo's branch, the sets, the active one; POST {set} or {branches} switches)
@@ -76,7 +78,35 @@ async function groupRoutes(req, res, canvas, gid, action, version) {
   throw httpError(405, "method not allowed");
 }
 
+// GET /v1/history[?q=]: past conversations, newest first · DELETE /v1/history/:id: gone for good
+// POST /v1/canvases/:id/history/:hid {pos}: that conversation continued on this canvas
+export async function historyRoutes(req, res, path) {
+  const m = path.match(/^\/v1\/history(?:\/([\w-]+))?$/);
+  if (!m) return false;
+  if (!m[1] && req.method === "GET") {
+    const q = new URL(req.url, "http://x").searchParams;
+    const query = q.get("q") || "", limit = Number(q.get("limit") || 200);
+    // Claude Code's own sessions join in, except those taksim's agents hold (on a canvas or kept here)
+    const owned = new Set([...heldSessions(), ...allCanvases().flatMap((c) => [...c.agents.values()].map((a) => a.session))].filter(Boolean));
+    const all = [...listHistory({ q: query, limit }), ...await listClaudeSessions({ q: query, owned })];
+    return sendJson(res, 200, { conversations: all.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, limit) });
+  }
+  if (m[1] && req.method === "DELETE") {
+    if (!forgetHistory(m[1])) throw httpError(404, `no past conversation ${m[1]}`);
+    return sendJson(res, 200, { ok: true });
+  }
+  throw httpError(405, "method not allowed");
+}
+
 export async function canvasRoutes(req, res, path) {
+  const hm = path.match(/^\/v1\/canvases\/([\w-]+)\/history\/([\w-]+)$/);
+  if (hm) {
+    if (req.method !== "POST") throw httpError(405, "method not allowed");
+    const canvas = getCanvas(hm[1]);
+    if (!canvas) throw httpError(404, `no canvas ${hm[1]}`);
+    const body = await readJson(req).catch(() => ({}));
+    return sendJson(res, 201, (await canvas.continueConversation(hm[2], body?.pos, typeof body?.model === "string" ? body.model : null)).view());
+  }
   if (/\/agents\/[\w-]+\/(tool|panel\/save)$/.test(path)) return toolboxRoutes(req, res, path);
   if (path.includes("/panel")) {
     const handled = await panelRoutes(req, res, path);

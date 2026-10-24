@@ -14,6 +14,8 @@ import { EventBus } from "./events.mjs";
 import { CHAT_MODES, modeOf, readOnly } from "./chat-modes.mjs";
 import { Agent } from "./agent.mjs";
 import * as store from "./store.mjs";
+import { archiveAgent, takeFromHistory } from "./history.mjs";
+import { PREFIX as CLAUDE_CODE, readClaudeSession } from "./claude-sessions.mjs";
 import { effortsOf } from "../backends/models.mjs";
 import { attribute, entriesOf, joinMemory } from "./memory.mjs";
 
@@ -240,10 +242,54 @@ export class Canvas {
     this.agents.delete(agent.id);
     this.links = this.links.filter((l) => l.from !== agent.id && l.to !== agent.id);
     for (const a of this.agents.values()) if (a.parent === agent.id) a.parent = null;
+    // what was said is kept as a past conversation (history.mjs); an agent nobody talked to leaves nothing
+    try { archiveAgent(this, agent); } catch { /* the history folder can't be written: removing still goes on */ }
     store.deleteTranscript(this.id, agent.id);
     this.bus.emit("agent_removed", { id: agent.id });
     this.settleGroups();
     this.save();
+  }
+
+  // A past conversation continued here (history.mjs): the agent as it was, on this canvas near `pos`, its
+  // transcript with it and its CLI session resumed (one run in another canvas's scratch folder is seeded instead).
+  async continueConversation(id, pos, model) {
+    if (this.agents.size >= this.limits.max_agents) {
+      throw httpError(409, `canvas is full (${this.limits.max_agents} agents); remove one or raise limits.max_agents`);
+    }
+    if (id.startsWith(CLAUDE_CODE)) return await this.continueClaudeSession(id, pos, model);
+    const newId = this.agents.has(id) ? shortId() : id;
+    const m = takeFromHistory(id, this.id, newId);
+    if (!m) throw httpError(404, `no past conversation ${id}`);
+    const data = { ...m.agent, id: newId, name: this.uniqueName(m.agent.name || "agent"), pos: this.placeNear(null, toPos(pos)) };
+    // its folder may be gone since: it then works in this canvas's own, the conversation seeded into a new session
+    if (data.cwd) { try { data.cwd = checkDir(data.cwd); } catch { data.cwd = null; data.session = null; data.seedHistory = true; } }
+    if (data.account && !findAccount(data.account)) data.account = null;
+    const agent = new Agent(this, data);
+    this.agents.set(agent.id, agent);
+    this.bus.emit("agent_created", { agent: agent.view() });
+    this.settleGroups();
+    this.save();
+    return agent;
+  }
+
+  // A conversation begun in Claude Code or the Claude app (claude-sessions.mjs): an agent in its folder resumes
+  // the same session, its chat filled from the session file. Without its folder the conversation seeds a new one.
+  async continueClaudeSession(id, pos, model) {
+    const s = await readClaudeSession(id, "pending");
+    if (!s) throw httpError(404, `no Claude Code session ${id.slice(CLAUDE_CODE.length)}`);
+    // the Claude model last used here, when the app names one
+    const m = model && pickBackend(model).backend.name === "claude" ? model : "sonnet";
+    const agent = this.addAgent({ model: m, name: "Claude Code", pos, chat: true });
+    for (const e of s.entries) { if (e.from === "pending") e.from = agent.id; if (e.to === "pending") e.to = agent.id; }
+    let cwd = null;
+    try { cwd = s.cwd ? checkDir(s.cwd) : null; } catch { /* a system folder or one that is gone */ }
+    agent.cwd = cwd;
+    if (cwd) agent.session = s.session; else agent.seedHistory = true;
+    agent.name = this.uniqueName(s.title.split(/\s+/).slice(0, 5).join(" ").slice(0, 40) || "Claude Code", agent);
+    for (const e of s.entries) store.appendTranscript(this.id, agent.id, e);
+    this.bus.emit("agent_updated", { agent: agent.view() });
+    this.save();
+    return agent;
   }
 
   // A link between two agents; `label` (a few words from the agent: why it made the other one, what it handed it
@@ -594,6 +640,8 @@ export function createCanvas({ name, vars, limits } = {}) {
 
 export function removeCanvas(c) {
   c.close();
+  // its conversations stay findable (history.mjs) after the canvas and its files are gone
+  for (const a of c.agents.values()) { try { archiveAgent(c, a); } catch { /* not writable: the canvas still goes */ } }
   canvases.delete(c.id);
   store.deleteCanvas(c.id);
 }

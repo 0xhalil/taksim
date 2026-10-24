@@ -273,6 +273,16 @@ final class AppModel {
             let header = ImageRenderer(content: HeaderBar(model: self).frame(width: 1200, height: 40)
                 .environment(\.colorScheme, dark ? .dark : .light).environment(\.isSnapshot, true))
             header.scale = 2
+            // TAKSIM_SNAPSHOT_SIDEBAR=/file.png: the sidebar with this canvas's agents and the past conversations
+            if let f = env["TAKSIM_SNAPSHOT_SIDEBAR"] {
+                let past = (try? await s.history()) ?? []
+                let r = ImageRenderer(content: AgentNavigator(model: self, store: s, past: past).frame(height: 620)
+                    .environment(\.colorScheme, dark ? .dark : .light).environment(\.isSnapshot, true))
+                r.scale = 2
+                if let img = r.nsImage, let t = img.tiffRepresentation, let png = NSBitmapImageRep(data: t)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: f))
+                }
+            }
             // TAKSIM_SNAPSHOT_USAGE=/file.png: the header gauges' popover (a popover itself can't be drawn)
             if let f = env["TAKSIM_SNAPSHOT_USAGE"] {
                 await s.loadChoices()

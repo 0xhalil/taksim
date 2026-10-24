@@ -8,7 +8,7 @@ public final class CanvasStore {
     public let api: APIClient
     public private(set) var canvases: [CanvasSummary] = []
     public private(set) var lockedTabs: Set<String>
-    @ObservationIgnored private let preferences: UserDefaults
+    @ObservationIgnored let preferences: UserDefaults
     public private(set) var closedTabs: Set<String> = []
     public var visibleCanvases: [CanvasSummary] { canvases.filter { !closedTabs.contains($0.id) } }
     public private(set) var currentId: String?
@@ -26,7 +26,7 @@ public final class CanvasStore {
         spaces[canvas] = s
         return s
     }
-    public private(set) var order: [String] = []        // agent ids in the order they came
+    public internal(set) var order: [String] = []        // agent ids in the order they came
     public private(set) var groups: [String: Group] = [:]
     /// agent id -> its computer control (only agents that have it or ask for it)
     public private(set) var computer: [String: ComputerControl] = [:]

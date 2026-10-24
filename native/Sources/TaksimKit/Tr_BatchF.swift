@@ -8,5 +8,7 @@ extension Tr {
         "Uncommitted changes": "Commit edilmemiş değişiklikler",
         "Sets": "Setler",
         "Take current branches": "Şimdiki dalları al",
+        "History": "Geçmiş",
+        "Yesterday": "Dün",
     ]
 }
