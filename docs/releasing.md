@@ -46,6 +46,9 @@ agent answers in its chat, a real terminal opens in a node, and closing the wind
 `desktop-publish` job adds the files to the release the macOS job created. The `test` workflow packages and runs
 the Linux and Windows app the same way on every push.
 
+If only the Linux or Windows part failed, fix it on main and run *Actions › release › Run workflow* with the same
+version, *publish* and *desktop_only* ticked: the files join the existing release without rebuilding the Mac app.
+
 Locally: `npm run desktop:dist` packages for this machine into `dist/desktop` (a Mac build is a folder, only for
 trying the package). The Windows installer is not signed yet: SmartScreen asks once (More info › Run anyway).
 

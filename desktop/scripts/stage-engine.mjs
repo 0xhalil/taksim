@@ -72,8 +72,10 @@ async function download(dest) {
   }
   const unpack = join(cache, name.replace(/\.(zip|tar\.xz|tar\.gz)$/, ''));
   rmSync(unpack, { recursive: true, force: true });
-  // bsdtar (macOS, Windows 10+) reads zip and xz alike; GNU tar reads the tarballs
-  execFileSync('tar', ['-xf', file, '-C', cache]);
+  // bsdtar (macOS, Windows 10+) reads zip and xz alike; GNU tar reads the tarballs. On Windows it is the system's
+  // own tar.exe: Git's GNU tar on PATH there reads D:\… as a remote host
+  const tar = process.platform === 'win32' ? join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+  execFileSync(tar, ['-xf', file, '-C', cache]);
   copyFileSync(join(unpack, platform === 'win32' ? 'node.exe' : 'bin/node'), dest);
   if (existsSync(join(unpack, 'LICENSE'))) copyFileSync(join(unpack, 'LICENSE'), join(dirname(dest), 'LICENSE'));
 }

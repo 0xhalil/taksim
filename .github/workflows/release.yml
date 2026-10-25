@@ -21,6 +21,10 @@ on:
         description: Publish the release (otherwise a dry run that only builds)
         type: boolean
         default: false
+      desktop_only:
+        description: Only the Linux and Windows app, added to the existing release of this version
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -54,7 +58,7 @@ jobs:
 
   release:
     needs: tested
-    if: ${{ !cancelled() && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
+    if: ${{ !cancelled() && !inputs.desktop_only && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
     runs-on: macos-26
     timeout-minutes: 240
     steps:
@@ -150,7 +154,7 @@ jobs:
     needs: tested
     if: ${{ !cancelled() && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - { os: ubuntu-24.04, target: linux, arch: x64, unpacked: linux-unpacked/taksim }
@@ -223,7 +227,7 @@ jobs:
   # the Linux and Windows files join the release the macOS job created; latest*.yml is what installed apps update from
   desktop-publish:
     needs: [release, desktop]
-    if: ${{ !cancelled() && needs.release.result == 'success' && needs.desktop.result == 'success' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ !cancelled() && (needs.release.result == 'success' || inputs.desktop_only) && needs.desktop.result == 'success' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
