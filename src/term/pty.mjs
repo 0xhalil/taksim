@@ -67,6 +67,8 @@ export class Terminal {
       for (const ws of this.clients) ws.close(1000, "terminal exited");
       this.clients.clear();
       onExit?.({ exitCode, signal });
+      // Windows: node-pty keeps the finished program's console (and its thread) open until told to let go
+      if (process.platform === "win32") setImmediate(() => { try { this.proc.kill(); } catch { /* gone */ } });
     });
   }
 
