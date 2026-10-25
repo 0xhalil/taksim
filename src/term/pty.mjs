@@ -4,7 +4,7 @@
 import { createRequire } from "node:module";
 import { chmodSync, existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveCommand, killTree, normalizeEnv } from "../platform.mjs";
+import { resolveCommand, normalizeEnv } from "../platform.mjs";
 
 const require = createRequire(import.meta.url);
 const SCROLLBACK = 1024 * 1024;
@@ -68,7 +68,7 @@ export class Terminal {
       this.clients.clear();
       onExit?.({ exitCode, signal });
       // Windows: node-pty keeps the finished program's console (and its thread) open until told to let go
-      if (process.platform === "win32") setImmediate(() => { try { this.proc.kill(); } catch { /* gone */ } });
+      if (process.platform === "win32") setImmediate(() => this.#release());
     });
   }
 
@@ -132,10 +132,18 @@ export class Terminal {
     this.proc.resize(cols, rows);
   }
 
+  // node-pty's kill on Windows, once: a second one on the same console corrupts its memory and ends the engine
+  #released = false;
+  #release() {
+    if (this.#released) return;
+    this.#released = true;
+    try { this.proc.kill(); } catch { /* gone */ }
+  }
+
   kill() {
     if (this.exited) return;
-    // Windows: the tree first (no process groups), then node-pty lets go of its console
-    if (process.platform === "win32") { killTree({ pid: this.pid }); try { this.proc.kill(); } catch { /* gone */ } return; }
+    // Windows: node-pty ends what runs in the console and lets go of it
+    if (process.platform === "win32") { this.#release(); return; }
     try { process.kill(-this.pid, "SIGHUP"); } catch { this.proc.kill("SIGHUP"); }
     setTimeout(() => { try { process.kill(-this.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
   }

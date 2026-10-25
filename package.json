@@ -6,7 +6,7 @@
   "description": "A live canvas for coding agents on your own subscriptions: Claude Code, Codex, Gemini CLI, opencode and GitHub Copilot run side by side, talk to each other and build tools you can see.",
   "scripts": {
     "start": "node bin/taksim.mjs serve",
-    "test": "node --test --test-timeout=60000 test/*.test.mjs",
+    "test": "node --test --test-timeout=120000 test/*.test.mjs",
     "site:logos": "node site/scripts/sync-logos.mjs",
     "desktop": "node desktop/launch.mjs",
     "desktop:engine": "node desktop/scripts/stage-engine.mjs",

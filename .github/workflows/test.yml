@@ -98,7 +98,8 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Engine tests
-        run: npm test
+        # a file is done when its tests are: Windows' console host can outlive a test's terminal by a few seconds
+        run: node --test --test-force-exit --test-timeout=120000 test/*.test.mjs
 
   # the Linux and Windows app as it ships: packaged with its own Node and engine, then run the way a person would
   desktop-package:

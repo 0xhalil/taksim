@@ -65,10 +65,19 @@ async function start() {
   rmSync(join(profile, "DevToolsActivePort"), { force: true });
   const proc = spawn(bin, [`--user-data-dir=${profile}`, "--remote-debugging-port=0", "--no-first-run", "--no-default-browser-check",
     "--disable-features=Translate", "--window-size=1280,900", "about:blank"], { stdio: "ignore", detached: false });
+  // Chrome writes its port and path once it listens; a first start on a slow machine takes a while, and the file can
+  // be read half written, so it counts once both lines are there
   const portFile = join(profile, "DevToolsActivePort");
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await new Promise((r) => setTimeout(r, 100));
-  if (!existsSync(portFile)) { proc.kill(); throw new Error("the browser did not start"); }
-  const [port, path] = readFileSync(portFile, "utf8").trim().split("\n");
+  let exited = false;
+  proc.once("exit", () => { exited = true; });
+  let port, path;
+  for (let i = 0; i < 300 && !exited; i++) {
+    try { [port, path] = readFileSync(portFile, "utf8").split("\n").map((l) => l.trim()); } catch { /* not yet */ }
+    if (/^\d+$/.test(port || "") && path?.startsWith("/")) break;
+    port = path = undefined;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (!port) { proc.kill(); throw new Error(exited ? "the browser closed as it started" : "the browser did not start"); }
   const cdp = new Cdp(`ws://127.0.0.1:${port}${path}`);
   await cdp.ready;
   const reset = () => { tabs.clear(); owners.clear(); };

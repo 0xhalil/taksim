@@ -47,6 +47,19 @@ linux:
   artifactName: Taksim-${version}-${arch}.${ext}
 deb:
   packageName: taksim
+  # electron-builder's list leaves out ALSA, which Electron loads at start; Ubuntu 24.04 renamed some to …t64
+  depends:
+    - libgtk-3-0 | libgtk-3-0t64
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0 | libatspi2.0-0t64
+    - libuuid1
+    - libsecret-1-0
+    - libasound2 | libasound2t64
+    - libgbm1
 mac:
   target: dir
   icon: native/Resources/AppIcon.icns

@@ -207,6 +207,14 @@ jobs:
           else
             node desktop/test/package-smoke.mjs "dist/desktop/${{ matrix.unpacked }}"
           fi
+      - name: The .deb installs on a bare Debian and Ubuntu with everything the app loads
+        if: matrix.target == 'linux'
+        run: |
+          for image in debian:bookworm-slim ubuntu:24.04; do
+            docker run --rm -v "$PWD/dist/desktop":/d "$image" bash -c \
+              'apt-get update -qq && apt-get install -y -qq /d/*.deb > /dev/null && ! ldd /opt/taksim/taksim | grep "not found"' \
+              || { echo "the .deb is missing a dependency on $image" >&2; exit 1; }
+          done
       - name: Checksums
         shell: bash
         run: |

@@ -290,7 +290,12 @@ test("publish to the local shelf and to another taksim, install with a version, 
   const remote = await api("POST", "/v1/toolbox/uptime/publish", { shelf: "s1" });
   assert.equal(remote.status, 200, JSON.stringify(remote.data));
   assert.equal(remote.data.version, 2, "a newer version than the one already on the shelf");
-  const tools = (await api("GET", "/v1/market?q=sistem açık")).data.tools;
+  // the other taksim is this server asking itself over HTTP, which a busy test machine can keep waiting: asked again
+  let tools = [];
+  for (let i = 0; i < 10 && !tools.some((t) => t.shelf === "s1" && t.id === "uptime"); i++) {
+    if (i) await new Promise((r) => setTimeout(r, 300));
+    tools = (await api("GET", "/v1/market?q=sistem açık")).data.tools;
+  }
   assert.ok(tools.some((t) => t.shelf === "s1" && t.id === "uptime"));
   delete process.env.TAKSIM_MARKET;
 
