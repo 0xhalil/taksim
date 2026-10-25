@@ -2,7 +2,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
@@ -25,8 +26,8 @@ test('web client assets are local and traversal does not expose engine source', 
     const r = await fetch(base + path); assert.equal(r.status, 200, path);
   }
   // every module the client loads is served, and imports only local files
-  for (const file of modules(appDir.pathname)) {
-    const rel = relative(appDir.pathname, file);
+  for (const file of modules(fileURLToPath(appDir))) {
+    const rel = relative(fileURLToPath(appDir), file).split(sep).join('/');
     const r = await fetch(`${base}/ui/app/${rel}`);
     assert.equal(r.status, 200, rel);
     for (const m of readFileSync(file, 'utf8').matchAll(/^import [^'"]*['"]([^'"]+)['"]/gm)) assert.match(m[1], /^\.\.?\//, `${rel} imports ${m[1]}`);

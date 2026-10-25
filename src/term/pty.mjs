@@ -132,7 +132,8 @@ export class Terminal {
 
   kill() {
     if (this.exited) return;
-    if (process.platform === "win32") { killTree({ pid: this.pid }); return; }
+    // Windows: the tree first (no process groups), then node-pty lets go of its console
+    if (process.platform === "win32") { killTree({ pid: this.pid }); try { this.proc.kill(); } catch { /* gone */ } return; }
     try { process.kill(-this.pid, "SIGHUP"); } catch { this.proc.kill("SIGHUP"); }
     setTimeout(() => { try { process.kill(-this.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
   }

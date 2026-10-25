@@ -4,8 +4,8 @@ import { closeTab } from "../browser/browser.mjs";
 import { computerView, forgetComputer } from "../computer/access.mjs";
 import { randomUUID } from "node:crypto";
 import { realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { basename, join, isAbsolute, parse, sep } from "node:path";
 import { pickBackend, BACKENDS } from "../backends/index.mjs";
 import { SANDBOXES, NODE_PERMISSIONS } from "../config.mjs";
 import { httpError, SSE_HEADERS } from "../http.mjs";
@@ -611,19 +611,24 @@ function toSize(p, [minW, minH]) {
 // An agent's directory: absolute (or ~/...), existing, and not the whole home folder, a system folder or
 // where logins and keys live.
 const HOME_DIR = homedir();
-const OFF_LIMITS = ["/System", "/usr", "/bin", "/sbin", "/etc", "/private/etc", "/var", "/private/var/db", "/Library",
+const OFF_LIMITS = [
+  ...(process.platform === "win32"
+    ? [process.env.SystemRoot || "C:\\Windows", process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.ProgramData, join(HOME_DIR, "AppData")].filter(Boolean)
+    : ["/System", "/usr", "/bin", "/sbin", "/etc", "/private/etc", "/var", "/private/var/db", "/Library"]),
   ...[".ssh", ".aws", ".gnupg", ".claude", ".codex", ".taksim/accounts", ".config/gcloud", "Library"].map((d) => join(HOME_DIR, d))];
 export function checkDir(p) {
   if (p === null || p === "") return null;
   if (typeof p !== "string") throw httpError(400, "directories must be absolute paths");
-  if (p === "~" || p.startsWith("~/")) p = join(HOME_DIR, p.slice(1));
-  if (!p.startsWith("/")) throw httpError(400, "directories must be absolute paths");
+  if (p === "~" || p.startsWith("~/") || p.startsWith("~\\")) p = join(HOME_DIR, p.slice(1));
+  if (!isAbsolute(p)) throw httpError(400, "directories must be absolute paths");
   let real;
   try { real = realpathSync(p); } catch { throw httpError(400, `no such directory: ${p}`); }
   if (!statSync(real).isDirectory()) throw httpError(400, `not a directory: ${p}`);
-  const tmp = realpathSync(process.env.TMPDIR || "/tmp");
-  const under = (d) => real === d || real.startsWith(d + "/");
-  if (real === "/" || real === HOME_DIR || (OFF_LIMITS.some(under) && !under(tmp))) {
+  const tmp = realpathSync(process.env.TMPDIR || (process.platform === "win32" ? tmpdir() : "/tmp"));
+  // Windows paths compare without case, as the file system does
+  const same = process.platform === "win32" ? (a, b) => a.toLowerCase() === b.toLowerCase() : (a, b) => a === b;
+  const under = (d) => same(real, d) || (process.platform === "win32" ? real.toLowerCase().startsWith(d.toLowerCase() + sep) : real.startsWith(d + sep));
+  if (real === parse(real).root || same(real, HOME_DIR) || (OFF_LIMITS.some(under) && !under(tmp))) {
     throw httpError(400, `${p} can't be an agent's directory; pick a project folder`);
   }
   // NOTE: the resolved path — callers lock and spawn on this, so two spellings of one
