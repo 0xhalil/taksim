@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Download taksim</title>
-<meta name="description" content="Download taksim for macOS: the disk image, Homebrew or GitHub. Signed and notarized, Apple silicon.">
+<meta name="description" content="Download taksim for macOS, Windows or Linux: the disk image, Homebrew, the Windows installer, the AppImage or the .deb.">
 <meta name="theme-color" content="#1E1F22">
 <meta property="og:title" content="Download taksim">
-<meta property="og:description" content="taksim for macOS. Signed and notarized, Apple silicon.">
+<meta property="og:description" content="taksim for macOS, Windows and Linux.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 1000 1000%22 style=%22color:%233574F0%22%3E%3Cmask id=%22m%22%3E%3Cpath d=%22M500 100 L630 230 V370 H770 L900 500 L770 630 H630 V770 L500 900 L370 770 V630 H230 L100 500 L230 370 H370 V230 Z%22 fill=%22%23fff%22/%3E%3Cg fill=%22none%22 stroke=%22%23000%22 stroke-width=%2234%22%3E%3Cg transform=%22rotate%280 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%2890 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28180 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3Cg transform=%22rotate%28270 500 500%29%22%3E%3Cpath d=%22M500 40 V330 A170 170 0 0 1 330 500 H40%22/%3E%3Cpath d=%22M500 40 V330%22/%3E%3C/g%3E%3C/g%3E%3C/mask%3E%3Crect width=%221000%22 height=%221000%22 fill=%22currentColor%22 mask=%22url%28%23m%29%22/%3E%3C/svg%3E">
 <style>
 :root {
@@ -77,6 +77,7 @@ h1 { margin: 22px 0 0; font: 650 clamp(40px, 8vw, 64px)/1 var(--ui); letter-spac
 .way svg.i { color: var(--muted); }
 button.way { text-align: left; max-width: 100%; }
 button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.way .muted { color: var(--muted); }
 .way .swap { position: relative; width: 14px; height: 14px; flex: none; }
 .way .swap svg { position: absolute; inset: 0; transition: transform .3s var(--spring), opacity .2s; }
 .way .swap .ck { opacity: 0; transform: scale(.4); color: var(--ok); }
@@ -84,6 +85,10 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
 .way.done .swap .ck { opacity: 1; transform: none; }
 .way.done { border-color: var(--ok); }
 
+.oses { margin-top: 18px; display: inline-flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); }
+.oses button { border: 0; border-radius: 6px; height: 28px; padding: 0 12px; background: transparent; color: var(--muted); font: 500 12.5px/1 var(--ui); cursor: pointer; transition: background .2s, color .2s; }
+.oses button:hover { color: var(--ink); }
+.oses button.on { background: var(--panel2); color: var(--ink); }
 .lid { margin: 26px 0 0; display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; font-size: 12.5px; color: var(--muted); }
 .lid a { text-decoration: none; }
 .lid a:hover { color: var(--ink); }
@@ -109,7 +114,10 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
   <a id="dl" class="rise glow" style="--n:3" href="https://github.com/0xhalil/taksim/releases/latest">
     <svg class="i" viewBox="0 0 16 16"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg><span data-t="Download">Download</span>
   </a>
-  <p class="req rise" id="req" style="--n:4" data-t="Apple silicon · macOS 15+">Apple silicon · macOS 15+</p>
+  <p class="req rise" id="req" style="--n:4">Apple silicon · macOS 15+</p>
+  <div class="oses rise" id="oses" style="--n:4" role="tablist">
+    <button type="button" data-os="mac" role="tab">macOS</button><button type="button" data-os="win" role="tab">Windows</button><button type="button" data-os="linux" role="tab">Linux</button>
+  </div>
 
   <div class="ways rise" style="--n:5">
     <button id="brew" class="way" type="button" aria-label="Copy the Homebrew command">
@@ -117,6 +125,7 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
       <code>brew install --cask 0xhalil/taksim/taksim</code>
       <span class="swap"><svg class="i cp" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1.5"/></svg><svg class="i ck" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></svg></span>
     </button>
+    <a class="way" id="deb" href="https://github.com/0xhalil/taksim/releases/latest" hidden><svg class="i" viewBox="0 0 16 16"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg><span>.deb</span><span class="muted" data-t="Debian and Ubuntu">Debian and Ubuntu</span></a>
     <a class="way" href="https://github.com/0xhalil/taksim/releases"><svg class="i" viewBox="0 0 16 16" style="stroke:none;fill:currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span><svg class="i" viewBox="0 0 16 16"><path d="M5.5 3H13v7.5M13 3 3.5 12.5"/></svg></a>
   </div>
 
@@ -131,45 +140,62 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  var ZH = { "Download": "下载", "Apple silicon · macOS 15+": "Apple 芯片 · macOS 15+", "macOS only": "仅支持 macOS",
-    "Release notes": "更新说明", "All versions": "所有版本", "Copy the Homebrew command": "复制 Homebrew 命令" };
+  var ZH = { "Download": "下载", "Release notes": "更新说明", "All versions": "所有版本", "Copy the Homebrew command": "复制 Homebrew 命令",
+    "Apple silicon · macOS 15+": "Apple 芯片 · macOS 15+", "Windows 10+ · x64 and Arm": "Windows 10+ · x64 与 Arm",
+    "AppImage · x64 and arm64": "AppImage · x64 与 arm64", "Debian and Ubuntu": "Debian 和 Ubuntu" };
+  var REQ = { mac: 'Apple silicon · macOS 15+', win: 'Windows 10+ · x64 and Arm', linux: 'AppImage · x64 and arm64' };
   var lang = 'en';
   try { lang = localStorage.getItem('lang') || ''; } catch (e) { lang = ''; }
   if (lang !== 'en' && lang !== 'zh') lang = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
-  var isMac = /Mac/i.test(navigator.platform || '') && !/iPhone|iPad/i.test(navigator.userAgent || '');
+  // the visitor's system picks the file; the switch shows the others
+  var plat = navigator.platform || '', ua = navigator.userAgent || '';
+  var os = /Win/i.test(plat) ? 'win' : /Linux|X11/i.test(plat) && !/Android/i.test(ua) ? 'linux' : 'mac';
+  var arm = /aarch64|arm64|armv8/i.test(plat + ' ' + ua);
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(['architecture']).then(function (v) { arm = v.architecture === 'arm'; show(); }).catch(function () {});
+  }
   function t(s) { return lang === 'zh' && ZH[s] ? ZH[s] : s; }
-  var rel = null;
+  var assets = [], rel = null, ALL = 'https://github.com/0xhalil/taksim/releases/latest';
+  function find(re) { for (var i = 0; i < assets.length; i++) if (re.test(assets[i].name)) return assets[i]; return null; }
+  function pick(ext) { return find(new RegExp((arm ? '(arm64|aarch64)' : '(x86_64|x64|amd64)') + '.*\\' + ext + '$', 'i')) || (!arm && find(new RegExp('^(?!.*(arm64|aarch64)).*\\' + ext + '$', 'i'))) || null; }
+  function main() { return os === 'win' ? find(/Setup\.exe$/i) || find(/\.exe$/i) : os === 'linux' ? pick('.AppImage') : find(/\.dmg$/i) || find(/\.zip$/i); }
+  function sumOf(a) { return a ? find(new RegExp(a.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.sha256$')) : null; }
+  function show() {
+    var m = main(), zip = find(/\.zip$/i), deb = os === 'linux' ? pick('.deb') : null, sum = sumOf(m);
+    $('#dl').href = m ? m.browser_download_url : ALL;
+    $('#req').textContent = t(REQ[os]);
+    $('#brew').hidden = os !== 'mac';
+    $('#deb').hidden = os !== 'linux';
+    $('#deb').href = deb ? deb.browser_download_url : ALL;
+    $('#zip').hidden = os !== 'mac';
+    if (zip) $('#zip').href = zip.browser_download_url;
+    $('#sha').href = sum ? sum.browser_download_url : ALL;
+    [].forEach.call(document.querySelectorAll('#oses button'), function (b) { b.classList.toggle('on', b.dataset.os === os); b.setAttribute('aria-selected', b.dataset.os === os); });
+    if (!rel) return;
+    var d = new Date(rel.published_at), when = isNaN(d) ? '' : d.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', year: 'numeric' });
+    var bits = [rel.tag_name.replace(/^v/, ''), m ? Math.round(m.size / 1048576) + ' MB' : '', when].filter(Boolean);
+    $('#ver').innerHTML = bits.map(function (b) { return '<span>' + b.replace(/[<&]/g, '') + '</span>'; }).join('<i></i>');
+  }
   function texts() {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
     [].forEach.call(document.querySelectorAll('[data-t]'), function (e) { e.textContent = t(e.dataset.t); });
-    $('#req').textContent = t(isMac ? 'Apple silicon · macOS 15+' : 'macOS only');
     $('#lang').textContent = lang === 'zh' ? 'EN' : '中文';
     $('#lang').setAttribute('aria-label', lang === 'zh' ? 'English' : '中文');
     $('#brew').setAttribute('aria-label', t('Copy the Homebrew command'));
-    meta();
+    show();
   }
   // the newest release, read from GitHub's public API; without it the button goes to the releases page
-  function meta() {
-    if (!rel) return;
-    var d = new Date(rel.published_at), when = isNaN(d) ? '' : d.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', year: 'numeric' });
-    var dmg = rel.dmg ? Math.round(rel.dmg.size / 1048576) + ' MB' : '';
-    var bits = [rel.tag_name.replace(/^v/, ''), dmg, when].filter(Boolean);
-    $('#ver').innerHTML = bits.map(function (b) { return '<span>' + b.replace(/[<&]/g, '') + '</span>'; }).join('<i></i>');
-  }
-  function find(assets, re) { for (var i = 0; i < assets.length; i++) if (re.test(assets[i].name)) return assets[i]; return null; }
   fetch('https://api.github.com/repos/0xhalil/taksim/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
     .then(function (r) {
-      var a = r.assets || [], dmg = find(a, /\.dmg$/), zip = find(a, /\.zip$/);
-      var main = dmg || zip; if (!main) return;
-      $('#dl').href = main.browser_download_url;
-      if (zip) $('#zip').href = zip.browser_download_url;
-      var sum = find(a, new RegExp(main.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.sha256$'));
-      if (sum) $('#sha').href = sum.browser_download_url;
+      assets = r.assets || [];
       $('#notes').href = r.html_url;
-      rel = { tag_name: r.tag_name, published_at: r.published_at, dmg: main };
-      meta();
+      rel = { tag_name: r.tag_name, published_at: r.published_at };
+      show();
     }).catch(function () {});
+  [].forEach.call(document.querySelectorAll('#oses button'), function (b) {
+    b.addEventListener('click', function () { os = b.dataset.os; show(); });
+  });
   $('#lang').addEventListener('click', function () {
     lang = lang === 'zh' ? 'en' : 'zh';
     try { localStorage.setItem('lang', lang); } catch (e) {}
