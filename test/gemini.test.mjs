@@ -22,7 +22,7 @@ const { accountEnv, findAccount } = await import("../src/accounts.mjs");
 
 let server, base;
 before(async () => { server = await startServer({ host: "127.0.0.1", port: 0 }); base = `http://127.0.0.1:${server.address().port}`; });
-after(() => { server.close(); if (shellCredentials) process.env.GOOGLE_APPLICATION_CREDENTIALS = shellCredentials; rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); if (shellCredentials) process.env.GOOGLE_APPLICATION_CREDENTIALS = shellCredentials; rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, data: await r.json().catch(() => null) };
@@ -111,6 +111,6 @@ test("a service account in the shell doesn't take over the Google login; Vertex 
     mkdirSync(join(dir, ".gemini"));
     writeFileSync(join(dir, ".gemini", "settings.json"), JSON.stringify({ security: { auth: { selectedType: "vertex-ai" } } }));
     assert.deepEqual(googleLoginEnv(dir), {});
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   } finally { delete process.env.GOOGLE_APPLICATION_CREDENTIALS; }
 });

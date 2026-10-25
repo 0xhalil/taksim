@@ -4,6 +4,8 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
+import { tmpdir } from "node:os";
+import { realpathSync } from "node:fs";
 
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
@@ -101,9 +103,9 @@ test("history is flattened into one prompt", async () => {
 
 test("agent mode runs in x-agent-cwd and resumes sessions", async () => {
   const d = await (await post("/v1/chat/completions", { model: "fake-args", messages: userMsg("x") },
-    { "x-agent-cwd": "/tmp", "x-agent-session": "abc-1" })).json();
+    { "x-agent-cwd": realpathSync.native(tmpdir()), "x-agent-session": "abc-1" })).json();
   const out = JSON.parse(d.choices[0].message.content);
-  assert.match(out.cwd, /\/tmp$/);
+  assert.equal(out.cwd, realpathSync.native(tmpdir()));
   assert.deepEqual(out.argv.slice(out.argv.indexOf("--session"), out.argv.indexOf("--session") + 2), ["--session", "abc-1"]);
 });
 

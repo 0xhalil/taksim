@@ -13,7 +13,7 @@ process.env.TAKSIM_QUIET = "1";
 
 const { connect, disconnect, listConnections, fetchConnector, checkConnector, readToken, _forget } = await import("../src/connectors.mjs");
 const { validate, reach, catalog } = await import("../src/bricks/catalog.mjs");
-after(() => rmSync(home, { recursive: true, force: true }));
+after(() => rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
 
 // Slack's Web API, as far as these tests need it
 const realFetch = globalThis.fetch;
@@ -62,7 +62,7 @@ test("a token is checked with the service, kept only for the user, and never lis
   assert.deepEqual([c.connected, c.who], [true, "bot · Acme"]);
   assert.ok(!JSON.stringify(listConnections()).includes("xoxb-good"));
   assert.ok(!readFileSync(join(home, "connections.json"), "utf8").includes("xoxb-good"));
-  assert.equal(statSync(join(home, "connections", "slack")).mode & 0o077, 0, "only the user can read the token file");
+  if (process.platform !== "win32") assert.equal(statSync(join(home, "connections", "slack")).mode & 0o077, 0, "only the user can read the token file");
   _forget();
   assert.equal(await readToken("slack"), "xoxb-good");
   assert.deepEqual(catalog().connected, ["slack"]);

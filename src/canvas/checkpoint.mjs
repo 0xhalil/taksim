@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fromGit } from "../platform.mjs";
 
 const run = promisify(execFile);
 // async, so a big repository never holds up the engine
@@ -16,7 +17,7 @@ const git = async (dir, args, env) => (await run("git", ["-C", dir, ...args], {
   env: { ...process.env, ...env, GIT_OPTIONAL_LOCKS: "0" } })).stdout;
 
 async function root(dir) {
-  try { return (await git(dir, ["rev-parse", "--show-toplevel"])).trim(); } catch { return null; }
+  try { return fromGit((await git(dir, ["rev-parse", "--show-toplevel"])).trim()); } catch { return null; }
 }
 // Exported for the restore route's scope check: two agents in one repo share one tree.
 export const repoTop = (dir) => root(dir);

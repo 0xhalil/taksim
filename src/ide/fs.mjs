@@ -1,25 +1,26 @@
 // Files for the IDE dock: everything is relative to one root (the agent's working directory) and stays
 // inside it. Symlinks that lead out, credential files and .git internals are refused.
 
-import { readdirSync, readFileSync, writeFileSync, statSync, realpathSync, mkdirSync, renameSync, rmSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, statSync, mkdirSync, renameSync, rmSync, existsSync } from "node:fs";
 import { join, resolve, relative, dirname, sep, isAbsolute } from "node:path";
 import { execFile } from "node:child_process";
 import { httpError } from "../http.mjs";
 import { isSecretPath } from "../bricks/catalog.mjs";
+import { realPath, isUnder } from "../platform.mjs";
 
 const MAX_READ = 2 * 1024 * 1024;
 // shown in the tree (dimmed, like PyCharm's excluded folders) but never walked by search
 export const SKIP = new Set([".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache", ".pytest_cache", ".idea", "dist", "build", ".next", ".tox", "target", ".gradle"]);
 
-const under = (p, dir) => p === dir || p.startsWith(dir.endsWith(sep) ? dir : dir + sep);
+const under = (p, dir) => isUnder(p, dir);
 
 // Re-check a resolved path just before use: the CLI in the same folder can swap a
 // symlink between inside()'s check and the write, so confirm the parent still resolves inside.
 export function recheck(root, abs, rel) {
-  const realRoot = realpathSync(root);
+  const realRoot = realPath(root);
   let probe = abs;
   while (!existsSync(probe)) probe = dirname(probe);
-  const cur = join(realpathSync(probe), relative(probe, abs));
+  const cur = join(realPath(probe), relative(probe, abs));
   if (!under(cur, realRoot)) throw httpError(400, `${rel} is outside the project (${realRoot})`);
   if (isSecretPath(cur)) throw httpError(403, `${rel} holds credentials`);
   return cur;
@@ -28,13 +29,13 @@ export function recheck(root, abs, rel) {
 // A path inside root, as a real absolute path. `rel` is relative to root ("" is root itself), or absolute
 // within it. Symlinks are followed, so one that leads out is outside too.
 export function inside(root, rel = "") {
-  const realRoot = realpathSync(root);
+  const realRoot = realPath(root);
   const s = String(rel);
   const asked = isAbsolute(s) ? resolve(s) : resolve(realRoot, s);
   // the deepest existing ancestor decides where the path really is
   let probe = asked;
   while (!existsSync(probe)) probe = dirname(probe);
-  const abs = join(realpathSync(probe), relative(probe, asked));
+  const abs = join(realPath(probe), relative(probe, asked));
   if (!under(abs, realRoot)) throw httpError(400, `${rel} is outside the project (${realRoot})`);
   if (isSecretPath(abs)) throw httpError(403, `${rel} holds credentials`);
   return abs;
@@ -43,7 +44,7 @@ export function inside(root, rel = "") {
 // The project-relative form of a path ("src/app.py"), however it was given.
 export const relPath = (root, p) => relOf(root, inside(root, p));
 
-const relOf = (root, abs) => relative(realpathSync(root), abs).split(sep).join("/");
+const relOf = (root, abs) => relative(realPath(root), abs).split(sep).join("/");
 
 export function list(root, rel = "") {
   const dir = inside(root, rel);
@@ -110,7 +111,7 @@ const fileCache = new Map();
 export function allFiles(root, limit = 20000) {
   const hit = fileCache.get(root);
   if (hit && Date.now() - hit.at < 5000) return hit.files;
-  const base = realpathSync(root), files = [];
+  const base = realPath(root), files = [];
   const walk = (dir) => {
     let entries;
     try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -134,7 +135,7 @@ const run = (cmd, args, cwd, max = 8 * 1024 * 1024) => new Promise((ok) => {
 // Find in files: ripgrep when installed, otherwise a plain walk. { path, line, col, text }[]
 export async function search(root, { q, regex = false, caseSensitive = false, limit = 500 }) {
   if (!q) return [];
-  const base = realpathSync(root);
+  const base = realPath(root);
   const rg = await run("rg", ["--json", "--max-columns", "300", "--max-count", "50", ...(regex ? [] : ["--fixed-strings"]),
     ...(caseSensitive ? ["--case-sensitive"] : ["--ignore-case"]), ...[...SKIP].flatMap((d) => ["--glob", `!${d}`]), "--", q, "."], base);
   if (!rg.err || rg.err.code === 1) { // 1: no matches
@@ -172,7 +173,7 @@ const WORD = { M: "modified", A: "added", D: "deleted", R: "renamed", C: "added"
 // `git status`, the way a Source Control view needs it: per file what the index holds (indexStatus) and what
 // the disk holds beyond it (workStatus); `status` stays the one word the file tree colors by.
 export async function gitStatus(root) {
-  const base = realpathSync(root);
+  const base = realPath(root);
   const top = await run("git", ["rev-parse", "--show-toplevel"], base);
   if (top.err) return null;
   const st = await run("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--", "."], base);
@@ -183,7 +184,7 @@ export async function gitStatus(root) {
     const n = await run("git", ["rev-list", "--left-right", "--count", "@{u}...HEAD"], base);
     [behind, ahead] = n.stdout.trim().split(/\s+/).map((x) => Number(x) || 0);
   }
-  const prefix = relative(realpathSync(top.stdout.trim()), base).split(sep).join("/");
+  const prefix = relative(realPath(top.stdout.trim()), base).split(sep).join("/");
   const files = [];
   const parts = st.stdout.split("\0");
   for (let i = 0; i < parts.length; i++) {
@@ -206,7 +207,7 @@ export async function gitStatus(root) {
 // A file as committed at HEAD, for the diff view; "" when it's new.
 export async function gitHead(root, rel) {
   inside(root, rel);
-  const base = realpathSync(root);
+  const base = realPath(root);
   const r = await run("git", ["show", `HEAD:./${rel}`], base);
   return r.err ? "" : r.stdout;
 }

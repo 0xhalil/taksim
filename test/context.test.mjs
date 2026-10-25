@@ -31,5 +31,5 @@ test("Codex: the context comes from the session's own log", () => {
     const none = { session: "missing" };
     codex.afterRun(none, { CODEX_HOME: home });
     assert.equal(none.context, undefined);
-  } finally { rmSync(home, { recursive: true, force: true }); }
+  } finally { rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 });

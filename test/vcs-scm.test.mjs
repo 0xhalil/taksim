@@ -9,7 +9,7 @@ import { execFileSync } from "node:child_process";
 import * as vcs from "../src/ide/vcs.mjs";
 import { gitStatus } from "../src/ide/fs.mjs";
 
-const root = realpathSync(mkdtempSync(join(tmpdir(), "taksim-scm-")));
+const root = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-scm-")));
 const g = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: root }).toString();
 const w = (n, t) => writeFileSync(join(root, n), t);
 g("init", "-q", "-b", "main");
@@ -61,5 +61,5 @@ test("branches, checkout, stash and undo last commit", async () => {
   const r = await vcs.uncommit(root);
   assert.equal(r.message, "second");
   assert.equal((await by())["b.txt"].indexStatus, "modified");
-  rmSync(root, { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });

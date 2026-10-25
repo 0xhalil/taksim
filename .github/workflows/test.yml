@@ -89,6 +89,8 @@ jobs:
     timeout-minutes: 30
     continue-on-error: true
     steps:
+      # the tests' own repositories compare file text exactly; the runner's Git would write CRLF into them
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

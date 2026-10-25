@@ -24,7 +24,7 @@ before(async () => {
   port = server.address().port;
   base = `http://127.0.0.1:${port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -220,7 +220,7 @@ test("every CLI is offered, and an account's environment points only that CLI at
   const env = (backend) => accountEnv({ backend, dir: "/x" });
   assert.deepEqual(env("claude"), { CLAUDE_CONFIG_DIR: "/x" });
   assert.deepEqual(env("codex"), { CODEX_HOME: "/x" });
-  assert.deepEqual(env("opencode"), { XDG_DATA_HOME: "/x/data" });
+  assert.deepEqual(env("opencode"), { XDG_DATA_HOME: join("/x", "data") });
   assert.deepEqual(env("copilot"), { COPILOT_HOME: "/x" });
   assert.deepEqual(env("gemini"), { GEMINI_CLI_HOME: "/x", GEMINI_FORCE_FILE_STORAGE: "true" });
   assert.deepEqual(accountEnv({ backend: "gemini", dir: null }), {}, "the machine login changes nothing");
@@ -256,7 +256,7 @@ test("who is signed in is read from each CLI's own files, without exposing secre
     last_logged_in_user: { host: "https://github.com", login: "octocat" }, logged_in_users: [{ host: "https://github.com", login: "octocat" }] }));
   const cp = await _KINDS.copilot.status({ dir });
   assert.deepEqual([cp.loggedIn, cp.email, cp.plan], [true, "octocat", "Copilot"]);
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("a new Gemini account keeps its settings in its own folder and never self-updates", async () => {

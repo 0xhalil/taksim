@@ -3,7 +3,7 @@
 import { closeTab } from "../browser/browser.mjs";
 import { computerView, forgetComputer } from "../computer/access.mjs";
 import { randomUUID } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, isAbsolute, parse, sep } from "node:path";
 import { pickBackend, BACKENDS } from "../backends/index.mjs";
@@ -18,6 +18,7 @@ import { archiveAgent, takeFromHistory } from "./history.mjs";
 import { isOutside, readOutsideSession } from "./cli-sessions.mjs";
 import { effortsOf } from "../backends/models.mjs";
 import { attribute, entriesOf, joinMemory } from "./memory.mjs";
+import { realPath } from "../platform.mjs";
 
 const DEFAULT_LIMITS = { max_agents: 12, max_depth: 3, max_terminals: 6 };
 // node geometry, matching the UI (ui/canvas/graph.mjs)
@@ -622,9 +623,9 @@ export function checkDir(p) {
   if (p === "~" || p.startsWith("~/") || p.startsWith("~\\")) p = join(HOME_DIR, p.slice(1));
   if (!isAbsolute(p)) throw httpError(400, "directories must be absolute paths");
   let real;
-  try { real = realpathSync(p); } catch { throw httpError(400, `no such directory: ${p}`); }
+  try { real = realPath(p); } catch { throw httpError(400, `no such directory: ${p}`); }
   if (!statSync(real).isDirectory()) throw httpError(400, `not a directory: ${p}`);
-  const tmp = realpathSync(process.env.TMPDIR || (process.platform === "win32" ? tmpdir() : "/tmp"));
+  const tmp = realPath(process.env.TMPDIR || (process.platform === "win32" ? tmpdir() : "/tmp"));
   // Windows paths compare without case, as the file system does
   const same = process.platform === "win32" ? (a, b) => a.toLowerCase() === b.toLowerCase() : (a, b) => a === b;
   const under = (d) => same(real, d) || (process.platform === "win32" ? real.toLowerCase().startsWith(d.toLowerCase() + sep) : real.startsWith(d + sep));

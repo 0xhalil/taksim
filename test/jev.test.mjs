@@ -44,7 +44,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); jev.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); jev.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 const api = async (method, path, body) => {
   const r = await fetch(base + path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });

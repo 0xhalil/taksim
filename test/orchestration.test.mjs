@@ -22,7 +22,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -129,7 +129,7 @@ test("done is checked, not said: the engine runs the checks and a reviewer reads
   const { message } = await t.told();
   assert.match(message, /Checks failed: grep -q NOPE a\.txt\. The work is not done until they pass[\s\S]*The reviewer found problems/);
   await t.done();
-  rmSync(repo, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("cancelled or answered otherwise: no agents, and the orchestrator is told not to go around it", async () => {
@@ -266,7 +266,7 @@ test("it shows who works with whom: the orchestrator with its parts, and an agen
   assert.deepEqual([after.blockedBy, after.status], [[], "idle"]);
   assert.deepEqual((await api("GET", t.path)).data.workingWith, []);
   await t.done();
-  rmSync(folder, { recursive: true, force: true });
+  rmSync(folder, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("a job that was stopped, or cut off by a restart, goes on where it left off when the person resumes it", async () => {
@@ -352,13 +352,13 @@ test("the evaluation runner: one task, both ways, judged by the task's own check
   const { writeFileSync, mkdtempSync } = await import("node:fs");
   const repo = mkdtempSync(join(tmpdir(), "taksim-evalrepo-"));
   writeFileSync(join(repo, "a.txt"), "one\n");
-  const task = { id: "t1", repo, prompt: "say hi", checks: ["test -f a.txt", "grep -q one a.txt"] };
+  const task = { id: "t1", repo, prompt: "say hi", checks: [`node -e "require('fs').statSync('a.txt')"`, `node -e "process.exit(require('fs').readFileSync('a.txt', 'utf8').includes('one') ? 0 : 1)"`] };
   const results = [await runTask(base, task, { model: "fake-echo", mode: "single" }), await runTask(base, task, { model: "fake-echo", mode: "orchestrated" }),
-    await runTask(base, { ...task, checks: ["grep -q NOPE a.txt"] }, { model: "fake-echo", mode: "single" })];
+    await runTask(base, { ...task, checks: [`node -e "process.exit(require('fs').readFileSync('a.txt', 'utf8').includes('NOPE') ? 0 : 1)"`] }, { model: "fake-echo", mode: "single" })];
   assert.deepEqual(results.map((r) => [r.mode, r.passed, r.split, r.agents, r.error]), [["single", true, false, 1, null], ["orchestrated", true, false, 1, null], ["single", false, false, 1, null]]);
   assert.ok(results[0].tokens > 0 && results[0].checks.every((c) => c.passed));
   assert.deepEqual(summarize(results).map((r) => [r.mode, r.tasks, r.passed]), [["single", 2, 1], ["orchestrated", 1, 1]]);
   assert.equal(readFileSync(join(repo, "a.txt"), "utf8"), "one\n", "the task's own repository is untouched");
   assert.equal((await api("GET", "/v1/canvases")).data.canvases.filter((c) => c.name.startsWith("eval ")).length, 0, "its canvases are gone");
-  rmSync(repo, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });

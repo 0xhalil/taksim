@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { PARSERS } from "./data.mjs";
 import { validateScene, SHAPES, VERBS, COLORS } from "./scene.mjs";
 import { validateInputs, validateActions, checkUses, INPUTS_DESC } from "./inputs.mjs";
+import { isUnder } from "../platform.mjs";
 
 export const LIMITS = { sources: 8, views: 16, min_every_s: 2, rows: 1000 };
 
@@ -308,7 +309,7 @@ export function resolvePath(p, workDir) {
   if (s === "~" || s.startsWith("~/")) s = homedir() + s.slice(1);
   return isAbsolute(s) ? resolve(s) : resolve(workDir, s);
 }
-const under = (p, dir) => p === dir || p.startsWith(dir.replace(/\/+$/, "") + "/");
+const under = (p, dir) => isUnder(p, dir);
 
 function isLocalUrl(u) {
   try { return ["localhost", "127.0.0.1", "[::1]"].includes(new URL(u).hostname); } catch { return false; }

@@ -24,7 +24,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(tools, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(tools, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 const api = async (method, path) => {
   const r = await fetch(base + path, { method, ...(method === "POST" ? { headers: { "content-type": "application/json" }, body: "{}" } : {}) });
   return { status: r.status, data: await r.json().catch(() => null) };
@@ -32,7 +32,7 @@ const api = async (method, path) => {
 const standIn = (body) => { writeFileSync(join(tools, "npm"), `#!/bin/sh\n${body}\n`); chmodSync(join(tools, "npm"), 0o755); };
 const codex = async () => (await api("GET", "/v1/accounts")).data.backends.find((b) => b.name === "codex");
 
-test("installing a missing CLI: one click, progress in the list, the CLI found afterwards", async () => {
+test("installing a missing CLI: one click, progress in the list, the CLI found afterwards", { skip: process.platform === "win32" && "the stand-in npm is a POSIX shell script" }, async () => {
   assert.equal((await codex()).installed, false);
   // npm gets the official package and installs under taksim's own folder (no -g into the system)
   standIn(`echo "$@" > "${join(tools, "args")}"; P=""; while [ $# -gt 0 ]; do [ "$1" = "--prefix" ] && P="$2"; shift; done
@@ -56,8 +56,8 @@ sleep 0.4; mkdir -p "$P/bin"; printf '#!/bin/sh\\nexit 0\\n' > "$P/bin/codex"; c
   assert.equal((await api("POST", "/v1/accounts/backends/codex/install")).data.installing, false);
 });
 
-test("a failed install says why and can be tried again; unknown and unsupported CLIs are refused", async () => {
-  rmSync(join(home, "cli"), { recursive: true, force: true });
+test("a failed install says why and can be tried again; unknown and unsupported CLIs are refused", { skip: process.platform === "win32" && "the stand-in npm is a POSIX shell script" }, async () => {
+  rmSync(join(home, "cli"), { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
   standIn(`echo "npm error 404 not found" >&2; exit 1`);
   await api("POST", "/v1/accounts/backends/gemini/install");
   let b;

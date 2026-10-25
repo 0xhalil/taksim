@@ -15,7 +15,7 @@ process.env.TAKSIM_QUIET = "1";
 const { default: agy, parseAgyModels, mcpDir } = await import("../src/backends/antigravity.mjs");
 const { pickBackend } = await import("../src/backends/index.mjs");
 const { activityOf } = await import("../src/backends/activity.mjs");
-after(() => rmSync(home, { recursive: true, force: true }));
+after(() => rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
 
 const LISTED = `Fetching available models...
 gemini-4-argon-medium\tGemini 4 Argon (Medium)
@@ -49,7 +49,8 @@ test("headless: stream-json, the model and level as flags, read-only plans, a fo
   const dir = a[a.indexOf("--add-dir") + 1];
   const file = join(dir, ".agents", "mcp_config.json");
   assert.deepEqual(JSON.parse(readFileSync(file, "utf8")).mcpServers.taksim, { serverUrl: "http://127.0.0.1:1/mcp/tok" });
-  assert.equal(statSync(file).mode & 0o077, 0, "the token url is the person's alone");
+  // Windows keeps a user's files to that user by its own ACLs; POSIX modes say nothing there
+  if (process.platform !== "win32") assert.equal(statSync(file).mode & 0o077, 0, "the token url is the person's alone");
   const rw = agy.build({ model: "agy", prompt: "hi", opts: { cwd: "/tmp" } }).args;
   assert.ok(rw.includes("--dangerously-skip-permissions") && !rw.includes("--model"), "the CLI's own model; a writer may act");
   assert.equal(mcpDir("http://x/mcp/a"), mcpDir("http://x/mcp/a"), "the same servers share a folder");

@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, writeFileSync, rmSync, chmodSync, lstatSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fromGit } from '../platform.mjs';
 import { join, dirname, isAbsolute } from 'node:path';
 import { snapshot } from './checkpoint.mjs';
 import { inside } from '../ide/fs.mjs';
@@ -26,7 +27,7 @@ async function entry(root, tree, path) {
 }
 export async function turnReview(agent, from, to, path) {
   if (![from, to].every((s) => /^[0-9a-f]{40,64}$/.test(s || '')) || typeof path !== 'string' || !path) throw httpError(400, 'Geçersiz değişiklik');
-  const root = (await git(agent.workDir(), ['rev-parse', '--show-toplevel'])).trim();
+  const root = fromGit((await git(agent.workDir(), ['rev-parse', '--show-toplevel'])).trim());
   if (isAbsolute(path) || path.split('/').some((p) => ['..', '.git', ''].includes(p)) || path.includes('\0')) throw httpError(400, 'Geçersiz dosya yolu');
   inside(root, path);
   const patch = await git(root, ['diff', '--binary', '--no-ext-diff', '--no-textconv', '--no-renames', from, to, '--', literal(path)]);

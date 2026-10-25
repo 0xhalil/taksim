@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
-const work = realpathSync(mkdtempSync(join(tmpdir(), "taksim-repos-")));
+const work = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-repos-")));
 process.env.TAKSIM_HOME = home;
 process.env.TAKSIM_FAKE = "1";
 process.env.TAKSIM_QUIET = "1";
@@ -40,7 +40,7 @@ before(async () => {
   await api("POST", `/v1/canvases/${canvas}/agents`, { name: "gw", cwd: B.dir });
   await api("POST", `/v1/canvases/${canvas}/agents`, { name: "gw2", cwd: join(B.dir, "sub") });
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(work, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });

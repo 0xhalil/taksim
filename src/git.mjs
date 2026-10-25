@@ -3,12 +3,13 @@
 
 import { execFileSync } from "node:child_process";
 import { httpError } from "./http.mjs";
+import { fromGit } from "./platform.mjs";
 
 const git = (dir, ...args) =>
   execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const tryGit = (dir, ...args) => { try { return git(dir, ...args); } catch { return null; } };
 
-export const repoRoot = (dir) => tryGit(dir, "rev-parse", "--show-toplevel");
+export const repoRoot = (dir) => fromGit(tryGit(dir, "rev-parse", "--show-toplevel"));
 
 // The checked-out branch (or short commit when detached) of the repo around `dir`; null outside git.
 // Cached briefly: views and status events ask often.

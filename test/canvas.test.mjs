@@ -4,7 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
@@ -22,7 +22,7 @@ const start = async () => {
   base = `http://127.0.0.1:${server.address().port}`;
 };
 before(start);
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(project, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -96,7 +96,7 @@ test("agent-mode turns run in the project dir and resume the CLI session", async
   const c = await newCanvas({ vars: { project_dir: project } });
   const a = await addAgent(c.id, { model: "fake-args", mode: "agent" });
   const first = JSON.parse((await say(c.id, a.id, "one")).data.text);
-  assert.ok(first.cwd.endsWith(project.split("/").pop()));
+  assert.ok(first.cwd.endsWith(basename(project)));
   const session = (await api("GET", `/v1/canvases/${c.id}/agents/${a.id}`)).data.session;
   assert.equal(first.argv[first.argv.indexOf("--session") + 1], session);
   const second = JSON.parse((await say(c.id, a.id, "two")).data.text);
@@ -150,7 +150,7 @@ test("agents work in the canvas project dir when it is set, and agents' agents s
   const c = await newCanvas({ vars: { project_dir: project } });
   const a = await addAgent(c.id, { model: "fake-args" });
   assert.equal(a.sandbox, null, "user-created agents can edit");
-  assert.ok(JSON.parse((await say(c.id, a.id, "x")).data.text).cwd.endsWith(project.split("/").pop()));
+  assert.ok(JSON.parse((await say(c.id, a.id, "x")).data.text).cwd.endsWith(basename(project)));
 });
 
 test("validation and limits", async () => {
@@ -248,16 +248,16 @@ test("a chosen folder shows its name and checked-out branch; system and credenti
   const { realpathSync } = await import("node:fs");
   const repo = mkdtempSync(join(tmpdir(), "taksim-repo-"));
   execFileSync("git", ["init", "-q", "-b", "feature/x", repo]);
-  const real = realpathSync(repo);
+  const real = realpathSync.native(repo);
   const c = await newCanvas();
   const a = await addAgent(c.id, { model: "fake-args", cwd: repo });
-  assert.deepEqual(a.folder, { path: real, name: real.split("/").pop(), branch: "feature/x" });
-  assert.ok(JSON.parse((await say(c.id, a.id, "x")).data.text).cwd.endsWith(repo.split("/").pop()));
+  assert.deepEqual(a.folder, { path: real, name: basename(real), branch: "feature/x" });
+  assert.ok(JSON.parse((await say(c.id, a.id, "x")).data.text).cwd.endsWith(basename(repo)));
   assert.equal((await addAgent(c.id, { model: "fake-echo" })).folder, null, "no folder chosen, nothing shown");
   for (const bad of ["/etc", homedir(), join(homedir(), ".ssh"), "/nonexistent/dir"]) {
     assert.equal((await api("POST", `/v1/canvases/${c.id}/agents`, { model: "fake-echo", cwd: bad })).status, 400, bad);
   }
-  rmSync(repo, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("an agent works on whatever branch its folder has; picking another branch checks the folder out", async () => {
@@ -293,7 +293,7 @@ test("an agent works on whatever branch its folder has; picking another branch c
   writeFileSync(join(repo, "src", "x.txt"), "edited\n");
   assert.equal((await api("POST", "/v1/git/checkout", { dir: repo, branch: "src" })).data.branch, "src");
   assert.equal(readFileSync(join(repo, "src", "x.txt"), "utf8"), "edited\n", "uncommitted work stays");
-  rmSync(repo, { recursive: true, force: true });
+  rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("a rejected change leaves the agent as it was; unknown models and levels are refused; helpers get no more access than their creator", async () => {

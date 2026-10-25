@@ -23,7 +23,7 @@ before(async () => {
   port = server.address().port;
   base = `http://127.0.0.1:${port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -93,7 +93,8 @@ test("an ask to a terminal agent is pasted into its TUI and answered through the
     { text: call("ask_agent", { agent: "worker", message: "are you there?" }), wait: true });
   assert.match(r.data.text, /^ask_agent: tui: are you there\?$/);
   // the paste kept the header and the message together as one prompt
-  assert.match(t.out, /\[Message from agent "lead"[\s\S]*are you there\?/);
+  // as text: Windows' console redraws with cursor and title sequences between the characters
+  assert.match(t.out.replace(/\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -\/]*[@-~]/g, ""), /\[Message from agent "lead"[\s\S]*are you there\?/);
   const tr = await transcript(c.id, a.id);
   assert.deepEqual(tr.map((e) => [e.kind, e.from === lead.id ? "lead" : e.from === a.id ? "worker" : e.from]),
     [["ask", "lead"], ["assistant", "worker"]]);

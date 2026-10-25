@@ -3,10 +3,11 @@
 // it as a picture. Iframes (cross-site ones too), pages a link opens in a new tab and alert/confirm/prompt dialogs
 // are handled.
 
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { tabOf, browserPath, listTabs, switchTab, newTab, closeTabAt } from "./browser.mjs";
 import { resolvePath, isSecretPath } from "../bricks/catalog.mjs";
+import { realPath, isUnder } from "../platform.mjs";
 
 const REF_HINT = "Refs come from browser_snapshot (e12 in the page, f1e3 inside its first iframe) and change when the page does; take a new snapshot after acting.";
 const target = { ref: { type: "string" }, x: { type: "number" }, y: { type: "number" } };
@@ -291,13 +292,13 @@ async function guarded(tab, action) {
 /** files an agent may hand to a page: in its folder or the temp folder, existing, never where keys live */
 function uploadable(self, paths) {
   const work = self.workDir?.() || process.cwd();
-  const roots = [work, tmpdir(), "/tmp"].map((d) => { try { return realpathSync(d); } catch { return d; } });
+  const roots = [work, tmpdir(), "/tmp"].map((d) => { try { return realPath(d); } catch { return d; } });
   return paths.map((p) => {
     const abs = resolvePath(String(p), work);
     if (!existsSync(abs) || !statSync(abs).isFile()) throw new Error(`no such file: ${p}`);
-    const real = realpathSync(abs);
+    const real = realPath(abs);
     if (isSecretPath(real)) throw new Error(`${p} holds credentials; it can't be uploaded`);
-    if (!roots.some((r) => real === r || real.startsWith(r + "/"))) throw new Error(`${p} is outside your folder; only files in it (or the temp folder) can be uploaded`);
+    if (!roots.some((r) => isUnder(real, r))) throw new Error(`${p} is outside your folder; only files in it (or the temp folder) can be uploaded`);
     return real;
   });
 }

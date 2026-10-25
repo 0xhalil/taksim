@@ -10,9 +10,9 @@
 // Logins run the CLI's own sign-in in a terminal; taksim never sees or stores passwords or tokens. It
 // reads only who is signed in (email, plan) from the CLI's status output or its credential files.
 
-import { spawn, findProgram } from "./platform.mjs";
+import { spawn, findProgram, realPath, isUnder } from "./platform.mjs";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, symlinkSync, rmSync, renameSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, symlinkSync, rmSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { HOME } from "./canvas/store.mjs";
@@ -274,7 +274,7 @@ export function carryOver(ref) {
   if (a.backend === "claude") prepareClaude(a);
 }
 
-function realpathOr(p) { try { return realpathSync(p); } catch { return p; } }
+function realpathOr(p) { try { return realPath(p); } catch { return p; } }
 
 function readJson(f) { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return {}; } }
 function writeJson(f, data) {
@@ -293,7 +293,7 @@ function prepareClaude(account, trustDir) {
   if (existsSync(stateFile) && !Object.keys(state).length) return; // unreadable: leave it to Claude
   let changed = false;
   if (!state.hasCompletedOnboarding) { state.hasCompletedOnboarding = true; changed = true; }
-  if (trustDir && trustDir.startsWith(HOME + "/")) {
+  if (trustDir && isUnder(trustDir, HOME) && trustDir !== HOME) {
     state.projects ||= {};
     // Claude keys projects by the real path (e.g. /private/var/... for /var/...)
     for (const key of new Set([trustDir, realpathOr(trustDir)])) {
@@ -339,7 +339,7 @@ export function removeAccount(ref) {
   save();
   // its CLIs (the login, agents' terminals) were just stopped and may still write on their way out
   const drop = () => rmSync(a.dir, { recursive: true, force: true });
-  if (a.dir && a.dir.startsWith(ROOT_DIR + "/")) { drop(); setTimeout(drop, 3000).unref?.(); }
+  if (a.dir && isUnder(a.dir, ROOT_DIR) && a.dir !== ROOT_DIR) { drop(); setTimeout(drop, 3000).unref?.(); }
   statusCache.delete(a.id);
   lastLogin.delete(a.id);
   return a;

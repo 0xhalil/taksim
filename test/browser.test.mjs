@@ -128,7 +128,7 @@ test("hover, right click, drag, select, upload, iframes, new tabs and dialogs", 
     assert.match(tabs, /\* \[1\] Form/);
     page = await call("browser_tabs", { action: "switch", index: 0 });
     assert.match(await call("browser_snapshot"), /Title: hello Ada/);
-  } finally { await closeServer(server); rmSync(work, { recursive: true, force: true }); }
+  } finally { await closeServer(server); rmSync(work, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 });
 
 test("browser tools are only answered for their own names", async () => {

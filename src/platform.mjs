@@ -1,6 +1,6 @@
 // OS choices shared by the engine's terminal surfaces. Keep UI code out of this module.
 import { spawn as nodeSpawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 
 export function terminalShell(env = process.env, platform = process.platform) {
   if (platform === "win32") return env.ComSpec || env.COMSPEC || "cmd.exe";
@@ -114,4 +114,19 @@ export function killTree(child, signal = "SIGTERM") {
     return;
   }
   try { process.kill(-child.pid, signal); } catch { try { child.kill(signal); } catch { /* gone */ } }
+}
+
+/** a path with its links followed; on Windows also its 8.3 short names spelled out (RUNNER~1 → runneradmin), as git
+ *  and the CLIs write them, so paths from either side compare equal */
+export const realPath = process.platform === "win32" ? (p) => realpathSync.native(p) : (p) => realpathSync(p);
+
+/** a path git printed (`rev-parse --show-toplevel` writes C:/Users/… on Windows) in the OS's own spelling */
+export const fromGit = (p) => (p && process.platform === "win32" ? p.replace(/\//g, "\\") : p);
+
+/** `p` is `dir` or inside it, by the OS's separator (and, on Windows, without case) */
+export function isUnder(p, dir, platform = process.platform) {
+  if (typeof p !== "string" || typeof dir !== "string" || !dir) return false;
+  const win = platform === "win32", norm = (s) => (win ? s.replace(/\//g, "\\").toLowerCase() : s);
+  const a = norm(p), d = norm(dir).replace(win ? /\\+$/ : /\/+$/, "");
+  return a === d || a.startsWith(d + (win ? "\\" : "/"));
 }

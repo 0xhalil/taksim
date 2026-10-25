@@ -51,7 +51,7 @@ test("sqlite end to end, when sqlite3 is installed", { skip: (() => { try { exec
   assert.deepEqual(rows, [{ status: "open", n: 1 }, { status: "paid", n: 2 }]);
   // the client itself refuses writes too
   assert.throws(() => execFileSync("sqlite3", ["-readonly", db, "INSERT INTO orders VALUES ('x')"], { stdio: "pipe" }));
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("schema mode: validation, per-engine statements, hostile table names", () => {
@@ -89,5 +89,5 @@ test("schema mode lists tables and columns, when sqlite3 is installed", { skip: 
   const filled = fillInputs({ brick: "sql", engine: "sqlite", db: "app.db", schema: "columns", table: "{{in.t}}" }, { t: "orders" }).value;
   assert.deepEqual(run(filled).map((c) => c.name), ["status"]);
   assert.throws(() => sqlCommand({ engine: "sqlite", db: "app.db", schema: "columns", table: fillInputs({ brick: "sql", engine: "sqlite", db: "a", schema: "columns", table: "{{in.t}}" }, { t: "x; SELECT" }).value.table }, (p) => p), /bad table name/);
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });

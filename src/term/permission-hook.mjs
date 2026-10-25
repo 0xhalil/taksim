@@ -9,7 +9,7 @@
 // opencode loads permission-plugin.mjs instead, which calls decide() below in-process.
 
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { ADAPTERS } from "./permission-adapters.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,4 +55,5 @@ async function main() {
   adapter.write(answer, process.stdout);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// run as a program, not imported (a file URL compares on every OS: C:\ paths are file:///C:/ there)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

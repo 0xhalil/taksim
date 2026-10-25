@@ -23,7 +23,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -214,7 +214,7 @@ test("an agent waiting on another shares its directory lock with it", async () =
   // both are writable agents in the same dir; without lock sharing this would hang until the ask timeout
   const out = await say(c.id, lead.id, call("ask_agent", { agent: "coder", message: "implement", timeout_s: 5 }));
   assert.match(out.text, /^ask_agent: \{"start"/);
-  rmSync(project, { recursive: true, force: true });
+  rmSync(project, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });
 
 test("agents created by agents start read-only unless asked for editing access", async () => {
@@ -236,9 +236,9 @@ test("create_agent can put the new agent in another folder", async () => {
   const lead = await addAgent(c.id, { name: "lead", model: "fake-delegate" });
   await say(c.id, lead.id, call("create_agent", { name: "elsewhere", role: "r", model: "fake-echo", cwd: other }));
   const created = (await api("GET", `/v1/canvases/${c.id}`)).data.agents.find((a) => a.name === "elsewhere");
-  assert.equal(created.cwd, realpathSync(other));
+  assert.equal(created.cwd, realpathSync.native(other));
   assert.equal(created.sandbox, "read-only", "still read-only unless asked");
-  const bad = await say(c.id, lead.id, call("create_agent", { name: "x", role: "r", model: "fake-echo", cwd: "/etc" }));
+  const bad = await say(c.id, lead.id, call("create_agent", { name: "x", role: "r", model: "fake-echo", cwd: process.platform === "win32" ? process.env.SystemRoot || "C:\\Windows" : "/etc" }));
   assert.match(bad.text, /ERROR .*can't be an agent's directory/);
-  rmSync(other, { recursive: true, force: true });
+  rmSync(other, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });

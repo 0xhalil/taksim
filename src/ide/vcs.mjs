@@ -2,12 +2,13 @@
 // subfolder of the repository); git runs there and is told to keep paths relative to it.
 
 import { execFile } from "node:child_process";
-import { readFileSync, realpathSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { httpError } from "../http.mjs";
 import { inside } from "./fs.mjs";
+import { realPath } from "../platform.mjs";
 
 const git = (root, args, { timeout = 30000, allowFail = false } = {}) => new Promise((resolve, reject) => {
-  execFile("git", args, { cwd: realpathSync(root), maxBuffer: 16 * 1024 * 1024, timeout,
+  execFile("git", args, { cwd: realPath(root), maxBuffer: 16 * 1024 * 1024, timeout,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" } }, (err, stdout, stderr) => {
     if (err && !allowFail) return reject(httpError(400, (String(stderr).trim() || err.message).split("\n").slice(-6).join("\n")));
     resolve({ ok: !err, out: String(stdout), err: String(stderr) });

@@ -18,8 +18,8 @@ process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
 const { startServer } = await import("../src/server.mjs");
 const { getCanvas } = await import("../src/canvas/canvas.mjs");
 
-const project = realpathSync(mkdtempSync(join(tmpdir(), "taksim-ide-")));
-const outside = realpathSync(mkdtempSync(join(tmpdir(), "taksim-out-")));
+const project = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-ide-")));
+const outside = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-out-")));
 mkdirSync(join(project, "src"));
 mkdirSync(join(project, "node_modules", "dep"), { recursive: true });
 writeFileSync(join(project, "src", "app.py"), "def main():\n    return compute(41)\n\n\ndef compute(x):\n    return x + 1\n");
@@ -36,7 +36,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); for (const d of [home, project, outside]) rmSync(d, { recursive: true, force: true }); });
+after(() => { server.close(); for (const d of [home, project, outside]) rmSync(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -321,7 +321,7 @@ test("review: findings on changed files become notes, a rerun replaces them", as
 test("project rules: cursor and taksim files are listed and reach the agent's system prompt", async () => {
   const { c, a, ide } = await setup();
   const rules = await import("../src/ide/rules.mjs");
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "taksim-rules-")));
+  const dir = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-rules-")));
   try {
     assert.equal(rules.projectRules(dir), "");
     writeFileSync(join(dir, ".cursorrules"), "Always use tabs.\n");
@@ -336,10 +336,10 @@ test("project rules: cursor and taksim files are listed and reach the agent's sy
     assert.doesNotMatch(text, /Use REST/); // a scoped rule is named, not pasted
     assert.match(text, /api\.mdc: API style \(files: src\/api\/\*\*\)/);
     assert.equal(rules.ensureRules(dir), ".cursorrules");
-    const fresh = realpathSync(mkdtempSync(join(tmpdir(), "taksim-rules2-")));
+    const fresh = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-rules2-")));
     assert.equal(rules.ensureRules(fresh), ".taksimrules");
-    rmSync(fresh, { recursive: true, force: true });
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+    rmSync(fresh, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } finally { rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
   const g = await api("GET", ide("/rules"));
   assert.deepEqual(g.data.rules, []);
   assert.equal((await api("POST", ide("/rules"), {})).data.path, ".taksimrules");

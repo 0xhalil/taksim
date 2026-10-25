@@ -5,7 +5,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 
 const home = mkdtempSync(join(tmpdir(), "taksim-home-"));
 const project = mkdtempSync(join(tmpdir(), "taksim-project-"));
@@ -29,8 +29,8 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(project, { recursive: true, force: true }); rmSync(claudeHome, { recursive: true, force: true });
-  for (const d of Object.values(cliHomes)) rmSync(d, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(project, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(claudeHome, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  for (const d of Object.values(cliHomes)) rmSync(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -57,7 +57,7 @@ test("a removed agent's conversation is kept, found by its words, and continued 
   assert.equal(kept.id, a.id);
   assert.equal(kept.title, "plan the pelican migration");
   assert.equal(kept.name, "Planner");
-  assert.equal(kept.folder, project.split("/").pop());
+  assert.equal(kept.folder, basename(project));
   assert.equal((await history("pelican")).length, 1, "found by its title");
   assert.equal((await history("echo:")).length, 1, "found by what was answered");
   assert.equal((await history("albatross")).length, 0);
@@ -66,7 +66,7 @@ test("a removed agent's conversation is kept, found by its words, and continued 
   const back = await api("POST", `/v1/canvases/${other.id}/history/${a.id}`, { pos: [100, 100] });
   assert.equal(back.status, 201);
   assert.equal(back.data.name, "Planner");
-  assert.equal(back.data.cwd, realpathSync(project));
+  assert.equal(back.data.cwd, realpathSync.native(project));
   assert.ok((await transcript(other.id, back.data.id)).some((e) => e.text === "plan the pelican migration"), "its conversation came with it");
   assert.equal((await say(other.id, back.data.id, "go on")).status, 200);
   assert.equal((await history()).filter((c) => c.id === a.id).length, 0, "continued: no longer in the history");
@@ -124,7 +124,7 @@ test("a conversation begun in Claude Code is listed and continued here: same fol
   const back = await api("POST", `/v1/canvases/${c.id}/history/${cc.id}`, {});
   assert.equal(back.status, 201);
   assert.equal(back.data.session, "5e55-1011");
-  assert.equal(back.data.cwd, realpathSync(project));
+  assert.equal(back.data.cwd, realpathSync.native(project));
   const t = await transcript(c.id, back.data.id);
   assert.deepEqual(t.map((e) => [e.from === "user" ? "user" : "agent", e.text]), [["user", "rename the walrus module"], ["agent", "Looking at it.\n\nRenamed."]]);
   assert.equal((await history()).filter((x) => x.id === cc.id).length, 0, "held by an agent now: not listed twice");
@@ -153,15 +153,15 @@ test("a canvas the system named takes its first request's folder, else its words
   const a = await addAgent(auto.id, { model: "fake-echo", cwd: own, name: "Worker" });
   await say(auto.id, a.id, "tidy up the build scripts");
   const nameOf = async (id) => (await api("GET", `/v1/canvases/${id}`)).data.name;
-  assert.equal(await nameOf(auto.id), own.split("/").pop(), "the project it works in");
+  assert.equal(await nameOf(auto.id), basename(own), "the project it works in");
   await say(auto.id, a.id, "and something else");
-  assert.equal(await nameOf(auto.id), own.split("/").pop(), "only once");
+  assert.equal(await nameOf(auto.id), basename(own), "only once");
   // another canvas on the same project: its name would repeat a tab, so its words name it
   const twin = (await api("POST", "/v1/canvases", {})).data;
   const t = await addAgent(twin.id, { model: "fake-echo", cwd: own });
   await say(twin.id, t.id, "review the checkout flow");
   assert.equal(await nameOf(twin.id), "Review the checkout flow");
-  rmSync(own, { recursive: true, force: true });
+  rmSync(own, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 
   const loose = (await api("POST", "/v1/canvases", { name: "canvas 5", autoName: true })).data;
   const b = await addAgent(loose.id, { model: "fake-echo" });
@@ -209,7 +209,7 @@ test("Codex, Copilot and Gemini sessions in a folder are listed with Claude's, a
   writeFileSync(join(gm, "chats", "session-2026-10-20T09-00-9e9e.json"), JSON.stringify({ sessionId: "9e9e-0003", startTime: ts, messages: [
     { type: "info", content: "update available" }, { type: "user", content: "summarise the open issues" }, { type: "gemini", content: "Three are open." }] }));
 
-  const shared = (await history()).filter((c) => c.cwd === realpathSync(proj));
+  const shared = (await history()).filter((c) => c.cwd === realpathSync.native(proj));
   assert.deepEqual(shared.map((c) => [c.source, c.title]).sort(), [["codex", "port the parser to rust"], ["copilot", "add a dark mode toggle"], ["gemini", "summarise the open issues"]]);
   assert.equal((await history("Three are open")).filter((c) => c.source === "gemini").length, 1, "found by an answer's words");
 
@@ -218,7 +218,7 @@ test("Codex, Copilot and Gemini sessions in a folder are listed with Claude's, a
   const back = (await api("POST", `/v1/canvases/${c.id}/history/${codex.id}`, {})).data;
   assert.equal(back.backend, "codex");
   assert.equal(back.session, "0c0de000-0000-0000-0000-000000000001", "the same Codex thread");
-  assert.equal(back.cwd, realpathSync(proj));
+  assert.equal(back.cwd, realpathSync.native(proj));
   assert.deepEqual((await transcript(c.id, back.id)).map((e) => e.text), ["port the parser to rust", "Ported."]);
   const gem = shared.find((x) => x.source === "gemini");
   const g = (await api("POST", `/v1/canvases/${c.id}/history/${gem.id}`, {})).data;
@@ -226,5 +226,5 @@ test("Codex, Copilot and Gemini sessions in a folder are listed with Claude's, a
   assert.equal(g.session, null, "Gemini's session lives in its own home: the conversation seeds a new one");
   assert.equal(g.seedHistory, true);
   assert.equal((await history()).filter((x) => x.id === codex.id).length, 0, "held by an agent now");
-  rmSync(proj, { recursive: true, force: true });
+  rmSync(proj, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
 });

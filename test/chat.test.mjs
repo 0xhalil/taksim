@@ -29,7 +29,7 @@ before(async () => {
   writeFileSync(join(repo, ".gitignore"), "secret.env\n");
   git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); rmSync(repo, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); rmSync(repo, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, data: await r.json().catch(() => null) };
@@ -552,5 +552,5 @@ test('turn review reverses individual hunks and files, persists decisions, and p
     assert.equal((await api('GET', `${path}?from=${from}&to=${to}`)).data.files.find((v) => v.path === 'a.txt').status, 'kept');
     assert.equal((await get('../escape')).status, 404);
     assert.equal((await change('revert', 'unknown')).status, 409);
-  } finally { await api('DELETE', `/v1/canvases/${c.id}`); rmSync(dir, { recursive: true, force: true }); }
+  } finally { await api('DELETE', `/v1/canvases/${c.id}`); rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); }
 });

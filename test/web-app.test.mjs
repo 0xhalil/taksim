@@ -95,9 +95,20 @@ test('web client adds an agent, chats, answers a question, drags, and runs a rea
   await until("!document.querySelector('.question') && document.querySelector('.chat .composer')");
   // the card drags by its title bar, and the move is saved
   const oldPos = [...agent.pos];
-  const point = await evaluate(`(() => { const g = taksim.graph, a = taksim.store.agents.get(${JSON.stringify(agentId)}), r = g.rectOf(a), p = g.toScreen({ x: r.x + 60, y: r.y + 15 }), b = g.canvas.getBoundingClientRect(); return { x: b.left + p.x, y: b.top + p.y, k: g.scale }; })()`);
+  // pressed once the view has settled (a new agent is panned into view) on the card's own title bar, nothing over it
+  const where = `(() => { const g = taksim.graph, a = taksim.store.agents.get(${JSON.stringify(agentId)}), r = g.rectOf(a), p = g.toScreen({ x: r.x + 60, y: r.y + 15 }), b = g.canvas.getBoundingClientRect(), x = b.left + p.x, y = b.top + p.y;
+    return { x, y, k: g.scale, ok: g.agentAt(g.toGraph(p))?.id === ${JSON.stringify(agentId)} && document.elementFromPoint(x, y) === g.canvas }; })()`;
+  let point = await evaluate(where);
+  for (let i = 0; i < 50; i++) {
+    await sleep(150);
+    const next = await evaluate(where);
+    const still = Math.abs(next.x - point.x) < 0.5 && Math.abs(next.y - point.y) < 0.5 && next.k === point.k;
+    point = next;
+    if (still && next.ok) break;
+  }
+  assert.ok(point.ok, 'the card\'s title bar is under the pointer');
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x + 60, y: point.y + 40, button: 'left', buttons: 1 });
+  for (const f of [0.25, 0.5, 0.75, 1]) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x + 60 * f, y: point.y + 40 * f, button: 'left', buttons: 1 });
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x + 60, y: point.y + 40, button: 'left', clickCount: 1 });
   for (let i = 0; i < 50 && agent.pos[0] === oldPos[0]; i++) await sleep(100);
   assert.ok(Math.abs(agent.pos[0] - (oldPos[0] + 60 / point.k)) < 2 && Math.abs(agent.pos[1] - (oldPos[1] + 40 / point.k)) < 2, `moved to ${agent.pos} from ${oldPos}`);

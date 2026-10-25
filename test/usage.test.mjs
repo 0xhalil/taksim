@@ -13,7 +13,7 @@ process.env.TAKSIM_QUIET = "1";
 
 const { fromClaude, fromCodex, lastCodexLimits, readCodex, noteClaudeLimits, usageView, usageKey, onUsage, refreshUsage, _resetUsage } =
   await import("../src/usage.mjs");
-after(() => rmSync(home, { recursive: true, force: true }));
+after(() => rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }));
 
 const later = Math.floor(Date.now() / 1000) + 3600;
 

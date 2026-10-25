@@ -18,8 +18,8 @@ process.env.TAKSIM_OPENCODE_BIN = "/nonexistent/opencode";
 const { startServer } = await import("../src/server.mjs");
 const { getCanvas } = await import("../src/canvas/canvas.mjs");
 
-const project = realpathSync(mkdtempSync(join(tmpdir(), "taksim-vcs-")));
-const remote = realpathSync(mkdtempSync(join(tmpdir(), "taksim-remote-")));
+const project = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-vcs-")));
+const remote = realpathSync.native(mkdtempSync(join(tmpdir(), "taksim-remote-")));
 const g = (...args) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: project }).toString();
 mkdirSync(join(project, "pkg"));
 writeFileSync(join(project, "a.txt"), "one\n");
@@ -50,7 +50,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); for (const d of [home, project, remote]) rmSync(d, { recursive: true, force: true }); });
+after(() => { server.close(); for (const d of [home, project, remote]) rmSync(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });

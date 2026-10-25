@@ -9,18 +9,19 @@
 //   Copilot      ~/.copilot/session-state/<session>/{workspace.yaml, events.jsonl}
 //   Gemini       ~/.gemini/tmp/<project>/chats/session-….json, the folder in <project>/.project_root
 
-import { existsSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { HOME } from "./store.mjs";
+import { realPath, isUnder } from "../platform.mjs";
 
 const home = (env, dir) => process.env[env] || join(homedir(), dir);
 const NEWEST = 150; // sessions looked at per CLI, newest first
-const real = (p) => { if (!p) return null; try { return realpathSync(p); } catch { return p; } };
+const real = (p) => { if (!p) return null; try { return realPath(p); } catch { return p; } };
 // throwaway folders (the system's temporary ones, where taksim's own chats and test runs work): not a project
 const TEMP = [...new Set([tmpdir(), "/tmp", "/private/tmp"].map(real).filter(Boolean))];
-const throwaway = (cwd) => !process.env.TAKSIM_HISTORY_TEMP && TEMP.some((t) => cwd === t || cwd.startsWith(t + "/"));
+const throwaway = (cwd) => !process.env.TAKSIM_HISTORY_TEMP && TEMP.some((t) => isUnder(cwd, t));
 // the CLIs' markup around commands, reminders and context: not part of what was asked
 const clean = (t) => String(t || "").replace(/<([\w-]+)[^>]*>[\s\S]*?<\/\1>/g, " ").replace(/\s+/g, " ").trim();
 
@@ -43,7 +44,8 @@ async function filesUnder(dir, keep) {
   if (!existsSync(dir)) return [];
   let names = [];
   try { names = await readdir(dir, { recursive: true }); } catch { return []; }
-  return names.filter(keep).map((n) => join(dir, n));
+  // names are matched with / on every OS (readdir gives Windows' \ there)
+  return names.filter((n) => keep(n.split(sep).join("/"))).map((n) => join(dir, n));
 }
 
 // ---------- each CLI: where its sessions are, and one read as { session, cwd, title?, createdAt?, turns } ----------

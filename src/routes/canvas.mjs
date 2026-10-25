@@ -16,6 +16,7 @@ import { computerState, setComputer } from "../computer/access.mjs";
 import { listHistory, forgetHistory, heldSessions } from "../canvas/history.mjs";
 import { listOutsideSessions } from "../canvas/cli-sessions.mjs";
 import { branchState, addSet, updateSet, removeSet, switchBranches, switchToSet } from "../canvas/branch-sets.mjs";
+import { isUnder } from "../platform.mjs";
 
 // /v1/canvases/:id/branches (each repo's branch, the sets, the active one; POST {set} or {branches} switches)
 // and /v1/canvases/:id/branch-sets[/:sid]
@@ -325,7 +326,7 @@ export async function canvasRoutes(req, res, path) {
       if (a === agent || a.status !== "running") return false;
       if (a.workDir() === dir) return true;
       if (!top) return false;
-      return a.workDir() === top || a.workDir().startsWith(top + "/");
+      return isUnder(a.workDir(), top);
     });
     if (busy) throw httpError(409, canvas.lang === "tr" ? `"${busy.name}" aynı klasörde çalışıyor; önce onu durdurun` : `"${busy.name}" is working in the same folder; stop it first`);
     const r = await restore(agent.workDir(), body?.checkpoint).catch((e) => { throw httpError(400, e.message); });

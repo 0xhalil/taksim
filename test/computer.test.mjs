@@ -52,7 +52,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { stopHelper(); server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { stopHelper(); server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -74,7 +74,7 @@ async function setup(spec = {}) {
   return { c, a, agent, token: agent.token, path: `/v1/canvases/${c.id}/agents/${a.id}/computer` };
 }
 
-test("the first computer call waits for the person's one click, then runs; the allowance stays", async () => {
+test("the first computer call waits for the person's one click, then runs; the allowance stays", { skip: process.platform !== "darwin" && "computer control is macOS only" }, async () => {
   const { c, agent, token, path } = await setup();
   const events = [];
   agent.canvas.bus.subs.add((ev) => { if (ev.type === "computer") events.push(ev.data.computer?.state ?? null); });
@@ -114,7 +114,7 @@ test("declining or not answering ends the wait with a clear answer", async () =>
   assert.equal((await api("GET", path)).data.computer, null);
 });
 
-test("coordinates are the screenshot's pixels; refs from reading an app are clickable", async () => {
+test("coordinates are the screenshot's pixels; refs from reading an app are clickable", { skip: process.platform !== "darwin" && "computer control is macOS only" }, async () => {
   const { agent, token, path } = await setup();
   await api("POST", path, { allow: true });
   forgetComputerView(agent.id);
@@ -162,7 +162,7 @@ test("Ask and Plan agents only look; their tool list has no hands", async () => 
   assert.equal(agent.status !== "waiting", true);
 });
 
-test("what macOS hasn't allowed yet is explained and shown on the node", async () => {
+test("what macOS hasn't allowed yet is explained and shown on the node", { skip: process.platform !== "darwin" && "computer control is macOS only" }, async () => {
   const { c, agent, token, path } = await setup();
   await api("POST", path, { allow: true });
   writeFileSync(deny, "screen-recording");

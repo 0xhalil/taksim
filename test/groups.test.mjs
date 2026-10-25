@@ -23,7 +23,7 @@ before(async () => {
   port = server.address().port;
   base = `http://127.0.0.1:${port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true }); });
+after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {
@@ -111,7 +111,8 @@ test("terminal members get one-line notices for context updates and group moves"
   await api("PUT", `/v1/canvases/${c.id}/groups/${inner.id}/context`, { content: "yeni karar" });
   await api("POST", `/v1/canvases/${c.id}/agents/${agent.id}/messages`, { text: "first" });
   await until(() => out.includes("tui: first"));
-  assert.match(out, /\[Group "backend" context updated to v1; call get_context/);
+  // as text: Windows' console redraws with cursor and title sequences between the characters
+  assert.match(out.replace(/\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -\/]*[@-~]/g, ""), /\[Group "backend" context updated to v1; call get_context/);
   await api("PATCH", `/v1/canvases/${c.id}/agents/${agent.id}`, { pos: [1200, 700] }); // out of backend, still in proje
   await api("POST", `/v1/canvases/${c.id}/agents/${agent.id}/messages`, { text: "second" });
   await until(() => out.includes("tui: second"));
