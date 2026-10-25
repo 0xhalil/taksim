@@ -149,7 +149,7 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
   if (lang !== 'en' && lang !== 'zh') lang = /^zh/i.test(navigator.language || '') ? 'zh' : 'en';
   // the visitor's system picks the file; the switch shows the others
   var plat = navigator.platform || '', ua = navigator.userAgent || '';
-  var os = /Win/i.test(plat) ? 'win' : /Linux|X11/i.test(plat) && !/Android/i.test(ua) ? 'linux' : 'mac';
+  var os = /Win/i.test(plat) ? 'win' : /Linux|X11/i.test(plat) && !/Android/i.test(ua) ? 'linux' : 'mac', own = os;
   var arm = /aarch64|arm64|armv8/i.test(plat + ' ' + ua);
   if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
     navigator.userAgentData.getHighEntropyValues(['architecture']).then(function (v) { arm = v.architecture === 'arm'; show(); }).catch(function () {});
@@ -157,7 +157,8 @@ button.way code { font: 12.5px/1.2 var(--mono); color: var(--text); overflow-wra
   function t(s) { return lang === 'zh' && ZH[s] ? ZH[s] : s; }
   var assets = [], rel = null, ALL = 'https://github.com/0xhalil/taksim/releases/latest';
   function find(re) { for (var i = 0; i < assets.length; i++) if (re.test(assets[i].name)) return assets[i]; return null; }
-  function pick(ext) { return find(new RegExp((arm ? '(arm64|aarch64)' : '(x86_64|x64|amd64)') + '.*\\' + ext + '$', 'i')) || (!arm && find(new RegExp('^(?!.*(arm64|aarch64)).*\\' + ext + '$', 'i'))) || null; }
+  // Arm only for the visitor's own system: someone on an Apple silicon Mac looking at Linux gets the x64 file
+  function pick(ext) { var a = arm && os === own; return find(new RegExp((a ? '(arm64|aarch64)' : '(x86_64|x64|amd64)') + '.*\\' + ext + '$', 'i')) || (!a && find(new RegExp('^(?!.*(arm64|aarch64)).*\\' + ext + '$', 'i'))) || null; }
   function main() { return os === 'win' ? find(/Setup\.exe$/i) || find(/\.exe$/i) : os === 'linux' ? pick('.AppImage') : find(/\.dmg$/i) || find(/\.zip$/i); }
   function sumOf(a) { return a ? find(new RegExp(a.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.sha256$')) : null; }
   function show() {
