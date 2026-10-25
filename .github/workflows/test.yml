@@ -83,11 +83,10 @@ jobs:
       - name: Platform, web assets and real terminal smoke tests (not the full engine suite)
         run: node --test --test-timeout=60000 test/platform.test.mjs test/web-app.test.mjs
 
-  # the engine suite on Windows: shown, not yet required (some tests still assume a POSIX shell)
+  # the engine suite on Windows (macOS-only tests skip themselves)
   windows-engine:
     runs-on: windows-2022
     timeout-minutes: 30
-    continue-on-error: true
     steps:
       # the tests' own repositories compare file text exactly; the runner's Git would write CRLF into them
       - run: git config --global core.autocrlf false

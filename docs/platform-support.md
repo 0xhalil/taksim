@@ -32,7 +32,7 @@ is not decided; local CLI and filesystem access still require the local engine.
 | Area | macOS | Linux | Windows |
 |---|---|---|---|
 | Desktop interface | Existing native app | `/app` web client ported from native; OS browser verification pending | `/app` web client ported from native; OS browser verification pending |
-| Engine CI | Existing macOS workflow | Full engine job added; remote run pending | Platform selection and real PTY smoke job added; remote run pending |
+| Engine CI | Existing macOS workflow | Full engine suite, required | Full engine suite, required |
 | Browser discovery | macOS paths present | Some Linux paths present; not verified by this audit | Not verified |
 | Computer control | Existing native helper | No verified implementation | No verified implementation |
 | Packaging and updates | Existing Mac scripts | AppImage and .deb (x64, arm64), electron-updater; CI runs the package | NSIS installer (x64, Arm), electron-updater; CI runs the package |
@@ -150,11 +150,13 @@ script with the engine's Node (Node cannot start a `.cmd` without a shell); othe
 with `taskkill /T` (Windows has no process groups); `/bin/sh -c` commands use `cmd.exe` there; a merged
 environment keeps one `PATH`.
 
-Verified: the packaged macOS arm64 app passes `package-smoke.mjs` (engine from the bundled Node, chat, real
-terminal, quit), and killing the app stops its engine. The Linux (x64, arm64) and Windows (x64) packages are built
-and run by CI; until those runs are green they are unverified. Real providers on Linux and Windows (signing in,
-running Claude Code, Codex, Gemini) still need a person on those systems; the Windows engine suite runs in CI but
-is not yet required to pass.
+Verified (2026-10-26): every package passes `package-smoke.mjs` (engine from the bundled Node, chat, real
+terminal, quit) on its own system in CI before it ships: Linux x64 and arm64, Windows x64; the macOS arm64 build
+locally. The released `.deb` and AppImage were installed from GitHub on a bare Debian and run the same way, which
+found the `.deb` missing ALSA (fixed in 0.2.1; the release now installs the `.deb` on bare Debian and Ubuntu 24.04
+and checks every library loads). The whole engine suite passes on Windows in CI and is required (macOS-only tests
+skip). Still unverified: real providers on Linux and Windows (signing in, running Claude Code, Codex, Gemini) and
+Windows on Arm, which no runner starts.
 
 Electron now integrates native window controls into the existing 40px app toolbar: macOS traffic
 lights on the left and Windows/Linux title-bar overlay on the right. Empty toolbar space is draggable;
