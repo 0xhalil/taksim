@@ -24,7 +24,7 @@ before(async () => {
   port = server.address().port;
   base = `http://127.0.0.1:${port}`;
 });
-after(() => { server.close(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
+after(async () => { await server.shutdown(); rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, {

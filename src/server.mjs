@@ -277,7 +277,15 @@ export async function startServer({ host = cfg.host, port = cfg.port } = {}) {
   cleanDrafts().catch(() => {});
   // the CLIs' own sessions read once in the background, so the first look at the history is instant
   if (!process.env.TAKSIM_QUIET) setTimeout(() => listOutsideSessions().catch(() => {}), 4000).unref();
-  server.on("close", () => { closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); });
+  let stopped = false;
+  const stopAll = () => { if (stopped) return; stopped = true; closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); };
+  server.on("close", stopAll);
+  // stops what it started now ("close" waits for open terminal sockets), then a moment for Windows to end the
+  // process trees (taskkill runs on its own) before a caller removes their folders
+  server.shutdown = async () => {
+    stopAll(); server.closeAllConnections?.(); server.close();
+    await new Promise((r) => setTimeout(r, process.platform === "win32" ? 1500 : 50));
+  };
   await initBackends();
   refreshModelDetails(); // in the background: the CLIs take a few seconds to list their models
   return server;

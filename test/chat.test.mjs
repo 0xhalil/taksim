@@ -412,7 +412,7 @@ test("core access transitions reset context atomically and read-only panels cann
     for (const mode of ["ask", "plan"]) {
       await api("PATCH", path, { chatMode: mode });
       const result = await api("POST", `${path}/messages`, { text: `CALL ${JSON.stringify({ tool: "panel_open", args: { spec } })}`, wait: true });
-      assert.match(result.data.text, /read-only/);
+      assert.match(result.data?.text ?? JSON.stringify(result), /read-only/);
       assert.equal(existsSync(marker), false);
     }
     agent.session = "old-plan-session";

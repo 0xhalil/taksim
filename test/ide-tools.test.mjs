@@ -5,7 +5,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 
@@ -50,7 +50,7 @@ before(async () => {
   server = await startServer({ host: "127.0.0.1", port: 0 });
   base = `http://127.0.0.1:${server.address().port}`;
 });
-after(() => { server.close(); for (const d of [home, project, remote]) rmSync(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
+after(async () => { await server.shutdown(); for (const d of [home, project, remote]) rmSync(d, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); });
 
 async function api(method, path, body) {
   const r = await fetch(base + path, { method, headers: method === "GET" ? {} : { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -138,8 +138,9 @@ test("a terminal runs a shell in the agent's folder; a run session runs the file
   const t = (await api("POST", ide("/sessions"), { kind: "terminal" })).data;
   assert.equal(t.kind, "terminal");
   const term = agent.ide.sessions.list.get(t.id).term;
-  term.input("echo here-$((40+2)) && pwd\r");
-  await until(() => term.tail.includes("here-42") && term.tail.includes(project));
+  // the host shell: cmd.exe on Windows prints its folder with `cd`
+  term.input(process.platform === "win32" ? "echo here-42 && cd\r" : "echo here-$((40+2)) && pwd\r");
+  await until(() => term.tail.includes("here-42") && term.tail.includes(basename(project)));
 
   const r = (await api("POST", ide("/sessions"), { kind: "run", path: "pkg/calc.py" })).data;
   assert.equal(r.title, "calc.py");

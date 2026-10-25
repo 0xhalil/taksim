@@ -129,7 +129,8 @@ export class Ide {
         if (!name) return;
         const rel = String(name).split(/[\\/]/);
         // a commit, checkout or stage (by the agent or in a terminal) changes which files the page colors as changed
-        if (rel[0] === ".git") { if (!/^(index|HEAD|refs)$/.test(rel[1] || "")) return; git = true; }
+        // (Windows reports a change inside .git as the folder itself, or as its logs)
+        if (rel[0] === ".git") { if (rel.length > 1 && !/^(index|HEAD|ORIG_HEAD|refs|logs|packed-refs)$/.test(rel[1])) return; git = true; }
         else if (rel.some((part) => SKIP.has(part))) return;
         else pending.add(rel.join("/"));
         clearTimeout(timer);

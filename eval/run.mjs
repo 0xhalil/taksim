@@ -71,7 +71,8 @@ export async function runTask(server, task, { model, mode, timeoutMs = 30 * 60 *
   out.seconds = Math.round((Date.now() - started) / 1000);
   // the task's checks decide, not what any agent said
   for (const command of task.checks || []) {
-    const r = spawnSync("/bin/sh", ["-c", command], { cwd: work, encoding: "utf8", timeout: 10 * 60 * 1000, env: { ...process.env, CI: "1" } });
+    // the OS shell: /bin/sh, or cmd.exe on Windows
+    const r = spawnSync(command, { shell: true, cwd: work, encoding: "utf8", timeout: 10 * 60 * 1000, env: { ...process.env, CI: "1" }, windowsHide: true });
     out.checks.push({ command, passed: r.status === 0, output: ((r.stdout || "") + (r.stderr || "")).slice(-1500) });
   }
   out.passed = !out.error && out.checks.length > 0 && out.checks.every((c) => c.passed);
