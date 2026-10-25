@@ -2,6 +2,7 @@
 # The tagged commit must already have a passing `test` run, then native/scripts/release.sh builds, signs and
 # notarizes Taksim-<version>.zip, creates the GitHub release that
 # installed apps look for (Updater.swift) and updates the Homebrew cask in 0xhalil/homebrew-taksim.
+# The same tag builds the Linux and Windows app (desktop/), runs each package, and adds it to that release.
 # Run by hand ("Run workflow") it builds only and leaves the zip as a downloadable artifact, unless "publish" is ticked.
 name: release
 
@@ -143,3 +144,101 @@ jobs:
           name: Taksim-${{ steps.v.outputs.version }}
           path: native/build/release/*
           retention-days: 7
+
+  # the Linux and Windows app, built on each system (node-pty is compiled for Linux there) and run before it ships
+  desktop:
+    needs: tested
+    if: ${{ !cancelled() && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: ubuntu-24.04, target: linux, arch: x64, unpacked: linux-unpacked/taksim }
+          - { os: ubuntu-24.04-arm, target: linux, arch: arm64, unpacked: linux-arm64-unpacked/taksim }
+          # one installer for x64 and Arm: the Arm engine gets Node for Arm from nodejs.org, node-pty ships both
+          - { os: windows-2022, target: win, arch: x64, unpacked: win-unpacked/taksim.exe }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - name: Version
+        id: v
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = push ]; then VERSION="${TAG#v}"; else VERSION="$INPUT_VERSION"; fi
+          case "$VERSION" in [0-9]*.[0-9]*) ;; *) echo "not a version: $VERSION" >&2; exit 1 ;; esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Stage the engine with its Node
+        shell: bash
+        run: |
+          node desktop/scripts/stage-engine.mjs
+          if [ "${{ matrix.target }}" = win ]; then node desktop/scripts/stage-engine.mjs --platform win32 --arch arm64; fi
+      - name: Package
+        shell: bash
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          arch=""; [ "${{ matrix.target }}" = linux ] && arch="--${{ matrix.arch }}"
+          npx electron-builder --config desktop/electron-builder.yml --${{ matrix.target }} $arch --publish never -c.extraMetadata.version="$VERSION"
+      - name: The package starts its engine, chats, opens a terminal and stops on quit
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = linux ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+            xvfb-run -a node desktop/test/package-smoke.mjs "dist/desktop/${{ matrix.unpacked }}"
+          else
+            node desktop/test/package-smoke.mjs "dist/desktop/${{ matrix.unpacked }}"
+          fi
+      - name: Checksums
+        shell: bash
+        run: |
+          cd dist/desktop
+          for f in *.exe *.AppImage *.deb; do [ -f "$f" ] || continue; node -e "const c=require('crypto'),fs=require('fs');process.stdout.write(c.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex')+'\\n')" "$f" > "$f.sha256"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}-${{ matrix.arch }}
+          retention-days: 7
+          path: |
+            dist/desktop/*.exe
+            dist/desktop/*.AppImage
+            dist/desktop/*.deb
+            dist/desktop/*.sha256
+            dist/desktop/*.blockmap
+            dist/desktop/latest*.yml
+
+  # the Linux and Windows files join the release the macOS job created; latest*.yml is what installed apps update from
+  desktop-publish:
+    needs: [release, desktop]
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.desktop.result == 'success' && (github.event_name == 'push' || inputs.publish) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: desktop
+          merge-multiple: true
+      - name: Add to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = push ]; then VERSION="${TAG#v}"; else VERSION="$INPUT_VERSION"; fi
+          ls -la desktop
+          gh release upload "v$VERSION" desktop/* --repo "$GITHUB_REPOSITORY" --clobber

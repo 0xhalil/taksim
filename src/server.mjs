@@ -6,7 +6,7 @@ import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { execFile } from "node:child_process";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, normalize, extname } from "node:path";
+import { join, normalize, extname, relative, isAbsolute, delimiter } from "node:path";
 import { cfg, ROOT, isLoopback, baseUrl } from "./config.mjs";
 import { langOf, T } from "./lang.mjs";
 import { BACKENDS, initBackends, pickBackend } from "./backends/index.mjs";
@@ -29,18 +29,21 @@ import { agentByToken } from "./canvas/canvas.mjs";
 import { handleUpgrade } from "./term/ws.mjs";
 import { loadCanvases, closeCanvases, checkDir, allCanvases } from "./canvas/canvas.mjs";
 import { resetAll } from "./reset.mjs";
+import { folderDialog } from "./platform.mjs";
 import { repoInfo, checkout } from "./git.mjs";
 
 const UI_DIR = join(ROOT, "ui");
 // the code editor of the IDE dock, served from its npm package (it's large, and unmodified)
 const MONACO_DIR = join(ROOT, "node_modules", "monaco-editor", "min");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8", ".map": "application/json", ".svg": "image/svg+xml", ".ttf": "font/ttf" };
+  ".css": "text/css; charset=utf-8", ".map": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ttf": "font/ttf" };
 
 // Serves files under ui/ (or Monaco's directory) only; normalize + prefix check keeps "../" out.
 function serveUi(res, rel, dir = UI_DIR, cache = "no-cache") {
   const file = normalize(join(dir, rel));
-  if (!file.startsWith(dir + "/") || !TYPES[extname(file)] || !existsSync(file)) return false;
+  const within = relative(dir, file);
+  if (!within || within === ".." || within.startsWith("../") || within.startsWith("..\\") || isAbsolute(within)
+      || !TYPES[extname(file)] || !existsSync(file) || !statSync(file).isFile()) return false;
   res.writeHead(200, { "content-type": TYPES[extname(file)], "cache-control": cache });
   res.end(readFileSync(file));
   return true;
@@ -93,6 +96,8 @@ async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const path = url.pathname.replace(/\/+$/, "");
 
+  if (req.method === "GET" && path === "/app") return serveUi(res, "app/index.html");
+
   // one agent's IDE filling the window (the native app's web view); the page reads the ids from the path
   if (req.method === "GET" && /^\/ide\/[\w-]+\/[\w-]+$/.test(path)) return serveUi(res, "ide.html");
   if (req.method === "GET" && path.startsWith("/ui/") && serveUi(res, path.slice(4))) return;
@@ -126,7 +131,8 @@ async function handle(req, res) {
   // NOTE: after authorized() — restarting stops every agent, so it needs the token.
   if (req.method === "POST" && path === "/v1/restart") {
     sendJson(res, 200, { ok: true });
-    setTimeout(() => process.kill(process.pid, "SIGTERM"), 100);
+    // emitted, not sent: Windows has no signals, and process.kill there ends the engine without saving
+    setTimeout(() => (process.listenerCount("SIGTERM") ? process.emit("SIGTERM", "SIGTERM") : process.kill(process.pid, "SIGTERM")), 100);
     return;
   }
 
@@ -284,15 +290,20 @@ export async function serve() {
   const stop = () => { closeCanvases(); stopAllLogins(); killAll(); killAllPanelProcs(); stopBrowser(); server.close(); setTimeout(() => process.exit(0), 200).unref(); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
+  // started by a desktop app: when that app is gone (quit, crashed, killed), the engine stops too
+  const parent = Number(process.env.TAKSIM_PARENT_PID);
+  delete process.env.TAKSIM_PARENT_PID; // not passed on to the agents and terminals it starts
+  if (parent > 0) setInterval(() => { try { process.kill(parent, 0); } catch (e) { if (e.code === "ESRCH") stop(); } }, 2000).unref();
   return server;
 }
 
 function pickFolder(start, lang = "en") {
-  if (process.platform !== "darwin") return Promise.resolve(null);
-  const from = typeof start === "string" && start.startsWith("/") && existsSync(start) ? start : null;
-  const script = `POSIX path of (choose folder with prompt "${T(lang, "Choose folder", "Klasör seç")}"${from ? ` default location (POSIX file ${JSON.stringify(from)})` : ""})`;
+  const from = typeof start === "string" && isAbsolute(start) && existsSync(start) ? start : null;
+  const has = (name) => (process.env.PATH || "").split(delimiter).some((d) => d && existsSync(join(d, name)));
+  const dialog = folderDialog(from, T(lang, "Choose folder", "Klasör seç"), { has });
+  if (!dialog) return Promise.resolve(null);
   return new Promise((resolve) => {
-    execFile("osascript", ["-e", 'tell application "System Events" to activate', "-e", script], { timeout: 10 * 60 * 1000 },
-      (err, out) => resolve(err ? null : out.trim().replace(/(.)\/$/, "$1") || null));
+    execFile(dialog[0], dialog[1], { timeout: 10 * 60 * 1000, windowsHide: true },
+      (err, out) => resolve(err ? null : out.trim().replace(/([^:\\/])[\\/]$/, "$1") || null));
   });
 }

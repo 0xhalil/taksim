@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node bin/taksim.mjs serve",
     "test": "node --test --test-timeout=60000 test/*.test.mjs",
-    "site:logos": "node site/scripts/sync-logos.mjs"
+    "site:logos": "node site/scripts/sync-logos.mjs",
+    "desktop": "node desktop/launch.mjs",
+    "desktop:engine": "node desktop/scripts/stage-engine.mjs",
+    "desktop:dist": "node desktop/scripts/stage-engine.mjs && electron-builder --config desktop/electron-builder.yml --publish never"
   },
   "engines": {
     "node": ">=20"
@@ -31,5 +34,9 @@
     "type": "git",
     "url": "https://github.com/0xhalil/taksim.git"
   },
-  "homepage": "https://github.com/0xhalil/taksim"
+  "homepage": "https://github.com/0xhalil/taksim",
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "26.17.0"
+  }
 }

@@ -3,7 +3,7 @@
 import { TaskEvents } from "./backends/tasks.mjs";
 import { activityOf } from "./backends/activity.mjs";
 import { StringDecoder } from "node:string_decoder";
-import { spawn } from "node:child_process";
+import { spawn, killTree } from "./platform.mjs";
 import { cfg } from "./config.mjs";
 import { orchestratorNote } from "./backends/index.mjs";
 
@@ -50,8 +50,8 @@ const live = new Set();
 
 function killGroup(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); }
-  setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } }, 3000).unref();
+  killTree(child, "SIGTERM");
+  setTimeout(() => { if (child.exitCode === null && child.signalCode === null) killTree(child, "SIGKILL"); }, 3000).unref();
 }
 
 export function killAll() {

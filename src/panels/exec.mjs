@@ -1,14 +1,14 @@
 // Programs run by panels: argv only (no shell), in their own process group so stopping a panel also stops
 // what they started, with a time limit and capped output.
 
-import { spawn } from "node:child_process";
+import { spawn, killTree } from "../platform.mjs";
 
 const MAX_OUT = 4 * 1024 * 1024;
 
 function kill(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
-  try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); }
-  setTimeout(() => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } }, 2000).unref();
+  killTree(child, "SIGTERM");
+  setTimeout(() => { if (child.exitCode === null && child.signalCode === null) killTree(child, "SIGKILL"); }, 2000).unref();
 }
 
 const live = new Set();

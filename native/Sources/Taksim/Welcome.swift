@@ -17,6 +17,27 @@ final class AccountsModel {
     struct LoginState: Decodable { var running: Bool; var done: Bool; var url: String?; var status: Status? }
     struct Login { var backend: String; var account: String; var terminal: AgentTerminal; var url: String?; var privately = false }
 
+    struct Choice: Identifiable { var id: String; var backend: String; var account: String?; var label: String }
+    var preparing = false
+    var loginStarting = false
+    var selected: String?
+    var choices: [Choice] {
+        backends.filter { $0.installed == true }.flatMap { b -> [Choice] in
+            var result: [Choice] = []
+            if let st = machine[b.name], st.loggedIn == true {
+                result.append(Choice(id: "machine:\(b.name)", backend: b.name, account: nil, label: st.email ?? "This computer"))
+            }
+            // an added account signed in as the CLI's own login is that login: listed once
+            let own = machine[b.name]?.loggedIn == true ? machine[b.name]?.email?.lowercased() : nil
+            result += accounts.filter { $0.backend == b.name && $0.dir != nil && $0.status?.loggedIn == true && $0.loggingIn != true
+                && (own == nil || $0.status?.email?.lowercased() != own) }.map {
+                Choice(id: $0.id, backend: b.name, account: $0.id, label: $0.status?.email ?? $0.name)
+            }
+            return result
+        }
+    }
+    var readyChoice: Choice? { choices.first { $0.id == selected } ?? choices.first { $0.backend != "fake" } ?? choices.first }
+
     let api: APIClient
     var backends: [Backend] = []
     var accounts: [Account] = []
@@ -46,6 +67,7 @@ final class AccountsModel {
             }
             for await (name, st) in g { if let st { machine[name] = st } }
         }
+        await refreshStatuses()
     }
 
     /// signed in on this computer, by its own login or by an account named for it
@@ -64,7 +86,9 @@ final class AccountsModel {
     /// signs this computer's login of a CLI in: names it after the CLI (rename later in Settings), then runs
     /// the CLI's own sign-in in a terminal and watches it until it lands
     func signIn(_ b: Backend) async {
-        guard login == nil else { return }
+        guard login == nil, !preparing, !loginStarting else { return }
+        preparing = true
+        defer { preparing = false }
         clear(b.name)
         // not on this computer: it is installed first, then the sign-in goes on by itself
         if backends.first(where: { $0.name == b.name })?.installed != true, !(await install(b.name)) { return }
@@ -122,7 +146,9 @@ final class AccountsModel {
 
     /// another account of a CLI, with its own config folder, signed in right away
     func add(backend: String, name: String) async {
-        guard login == nil else { return }
+        guard login == nil, !preparing, !loginStarting else { return }
+        preparing = true
+        defer { preparing = false }
         clear(backend)
         if backends.first(where: { $0.name == backend })?.installed != true, !(await install(backend)) { return }
         // a draft: the engine keeps it once it signs in and drops it if the sign-in is cancelled, fails or is cut short
@@ -136,9 +162,11 @@ final class AccountsModel {
             ?? (machine[backend]?.loggedIn == true && machine[backend]?.email?.lowercased() == email.lowercased() ? "machine:\(backend)" : nil)
         if let twin {
             await remove(a.id)
+            selected = twin
             point(at: twin)
             return
         }
+        selected = a.id
         // signed in: the name the system gave it becomes who it is (the email), unless one was typed meanwhile
         if now.name == name, !accounts.contains(where: { $0.name.lowercased() == email.lowercased() }) {
             await rename(a.id, to: email)
@@ -197,9 +225,12 @@ final class AccountsModel {
     /// `privately`: the sign-in page opens in a private browser window instead of the default browser, so a
     /// Google account other than the one this computer's browser is signed in to can be used (a work Mac)
     func signIn(account id: String, backend: String, privately: Bool = false) async {
-        guard login == nil else { return }
+        guard login == nil, !loginStarting else { return }
+        loginStarting = true
         clear(backend)
-        guard await attempt(backend, { try await self.api.post("/v1/accounts/\(id)/login", ["private": privately], as: LoginState.self) }) != nil else { return }
+        let started = await attempt(backend, { try await self.api.post("/v1/accounts/\(id)/login", ["private": privately], as: LoginState.self) })
+        loginStarting = false
+        guard started != nil else { return }
         let t = AgentTerminal(base: api.base, path: "/term/account/\(id)")
         login = Login(backend: backend, account: id, terminal: t, privately: privately)
         var opened = false
@@ -256,6 +287,8 @@ struct WelcomeView: View {
     var autoLogin: String? = nil
     @State private var accounts: AccountsModel?
     @State private var shown = false
+    @State private var starting = false
+    @State private var startError: String?
 
     var body: some View {
         ZStack {
@@ -266,6 +299,10 @@ struct WelcomeView: View {
                 VStack(spacing: 18) {
                     if let accounts { CLITiles(accounts: accounts) } else { ProgressView().controlSize(.small).frame(height: 120) }
                     if let l = accounts?.login { LoginTerminal(login: l, cancel: { accounts?.cancel() }).transition(.move(edge: .bottom).combined(with: .opacity)) }
+                    ForEach((accounts?.problem.keys.sorted() ?? []), id: \.self) { key in
+                        Text(accounts?.problem[key] ?? "").font(.system(size: 11)).foregroundStyle(JB.err)
+                    }
+                    if let startError { Text(startError).font(.system(size: 11)).foregroundStyle(JB.err) }
                     startButton
                 }
                 .padding(.horizontal, 28).padding(.vertical, 22)
@@ -295,8 +332,7 @@ struct WelcomeView: View {
         .onExitCommand { close() }
     }
 
-    private var ready: String? { accounts?.backends.first { accounts?.signedIn($0.name) != nil && $0.name != "fake" }?.name
-        ?? accounts?.backends.first { accounts?.signedIn($0.name) != nil }?.name }
+    private var ready: String? { accounts?.readyChoice?.backend }
 
     /// the one action: an agent on the first signed-in CLI, its terminal open
     private var startButton: some View {
@@ -312,24 +348,30 @@ struct WelcomeView: View {
             .opacity(ready == nil ? 0.4 : 1)
         }
         .buttonStyle(Press())
-        .disabled(ready == nil || accounts?.login != nil)
+        .disabled(ready == nil || accounts?.login != nil || accounts?.preparing == true || accounts?.loginStarting == true || starting)
         .keyboardShortcut(.defaultAction)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ready)
     }
 
     private func start() {
-        guard let store = model.store, let backend = ready else { return }
-        close()
-        guard store.currentAgents.isEmpty else { return }
+        guard let store = model.store, let choice = accounts?.readyChoice else { return }
+        let backend = choice.backend
+        guard !starting else { return }
+        guard store.currentAgents.isEmpty else { close(); return }
+        starting = true
+        startError = nil
         Task {
+            defer { starting = false }
             await store.loadChoices()
-            let m = store.models.first { $0.owned_by == backend && ($0.id == "sonnet" || backend != "claude") }?.id
-                ?? store.models.first { $0.owned_by == backend }?.id ?? "sonnet"
+            guard let m = store.models.first { $0.owned_by == backend && ($0.id == "sonnet" || backend != "claude") }?.id
+                ?? store.models.first { $0.owned_by == backend }?.id else { startError = "No models available for this account"; return }
             var fields: [String: Any] = ["model": m]
+            if let account = choice.account { fields["account"] = account }
             let at = model.viewCenter()
             fields["pos"] = [at.x.rounded(), at.y.rounded()]
             // couldn't start it: the sheet asks in full instead of the first run ending on an empty canvas
-            if let a = try? await store.addAgent(fields) { model.agentAdded(a) } else { model.sheet = .add(at: at, model: m) }
+            do { let a = try await store.addAgent(fields); model.agentAdded(a); close() }
+            catch { startError = error.localizedDescription }
         }
     }
 
@@ -361,7 +403,7 @@ private struct CLITile: View {
     var body: some View {
         let st = accounts.signedIn(backend.name)
         let installed = backend.installed == true
-        let active = accounts.login?.backend == backend.name
+        let active = accounts.login?.backend == backend.name || accounts.readyChoice?.backend == backend.name
         VStack(spacing: 10) {
             BackendTile(backend: backend.name, size: 40)
                 .saturation(installed ? 1 : 0).opacity(installed ? 1 : 0.45)
@@ -376,8 +418,23 @@ private struct CLITile: View {
             Text(backend.label).font(.system(size: 12.5, weight: .medium)).foregroundStyle(JB.ink).lineLimit(1)
             Group {
                 if let st {
-                    Text(st.email ?? st.plan ?? " ").font(.system(size: 11)).foregroundStyle(JB.muted).lineLimit(1).truncationMode(.middle)
-                        .padding(.horizontal, 8)
+                    Menu {
+                        ForEach(accounts.choices.filter { $0.backend == backend.name }) { choice in
+                            Button { accounts.selected = choice.id } label: {
+                                if accounts.readyChoice?.id == choice.id { Label(choice.label, systemImage: "checkmark") }
+                                else { Text(choice.label) }
+                            }
+                        }
+                        if backend.named != false {
+                            Divider()
+                            Button("Add account") { Task { await accounts.add(backend: backend.name, name: accounts.freeName(backend.label)) } }
+                        }
+                    } label: {
+                        Text(accounts.choices.first { $0.id == accounts.selected && $0.backend == backend.name }?.label ?? st.email ?? st.plan ?? "Account")
+                            .font(.system(size: 11)).lineLimit(1).truncationMode(.middle)
+                    }
+                    .menuStyle(.borderlessButton).disabled(accounts.login != nil || accounts.preparing || accounts.loginStarting).padding(.horizontal, 8)
+                    .help(backend.named == false ? "This provider currently shares one system login" : "Choose account")
                 } else if accounts.installing.contains(backend.name) {
                     ProgressView().controlSize(.small).help(L("Installing"))
                 } else if !installed {
@@ -385,7 +442,7 @@ private struct CLITile: View {
                         Image(systemName: "arrow.down.circle.fill").font(.system(size: 17))
                             .foregroundStyle(accounts.failed.contains(backend.name) ? JB.err : JB.accent)
                     }
-                    .buttonStyle(Press()).disabled(accounts.login != nil)
+                    .buttonStyle(Press()).disabled(accounts.login != nil || accounts.preparing || accounts.loginStarting)
                     .help(accounts.problem[backend.name] ?? L("Install and sign in"))
                 } else if active {
                     ProgressView().controlSize(.small)
@@ -395,7 +452,7 @@ private struct CLITile: View {
                             .padding(.horizontal, 12).frame(height: 24)
                             .background(Capsule().fill(accounts.failed.contains(backend.name) ? JB.err : JB.accent))
                     }
-                    .buttonStyle(Press()).disabled(accounts.login != nil)
+                    .buttonStyle(Press()).disabled(accounts.login != nil || accounts.preparing || accounts.loginStarting)
                 }
             }
             .frame(height: 24)

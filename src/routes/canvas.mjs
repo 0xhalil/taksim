@@ -4,8 +4,8 @@ import { readJson, sendJson, httpError } from "../http.mjs";
 import { readTranscript, appendTranscript, listGroupHistory, readGroupVersion, workspaceDir } from "../canvas/store.mjs";
 import { turnReview, publicReview, changeReview, reviewStates } from "../canvas/chat-review.mjs";
 import { restore, fileDiff, fileInTree, repoTop } from "../canvas/checkpoint.mjs";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { join, resolve, relative, isAbsolute, extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { listCanvases, getCanvas, createCanvas, removeCanvas, allCanvases } from "../canvas/canvas.mjs";
 import { langOf, T } from "../lang.mjs";
@@ -343,6 +343,16 @@ export async function canvasRoutes(req, res, path) {
     const q = new URL(req.url, "http://x").searchParams;
     const content = await fileInTree(agent.workDir(), q.get("at"), q.get("path")).catch((e) => { throw httpError(400, e.message); });
     return sendJson(res, 200, { content });
+  }
+  // an image the chat attached, shown back to a client without file access (the web app's thumbnails):
+  // only files in this canvas's attachment folder
+  if (action === "attachments" && method === "GET") {
+    const dir = join(workspaceDir(canvas.id), "attachments");
+    const file = resolve(new URL(req.url, "http://x").searchParams.get("path") || "");
+    const type = { ".png": "image/png", ".jpg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" }[extname(file).toLowerCase()];
+    if (!type || relative(dir, file).startsWith("..") || isAbsolute(relative(dir, file)) || !existsSync(file)) throw httpError(404, "no such attachment");
+    res.writeHead(200, { "content-type": type, "cache-control": "private, max-age=3600" });
+    return res.end(readFileSync(file));
   }
   // an image pasted into the chat: kept in the canvas workspace, its path goes with the message
   if (action === "attachments" && method === "POST") {

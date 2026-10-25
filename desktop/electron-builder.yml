@@ -1,0 +1,53 @@
+# The Linux and Windows app: this shell (desktop/) with the engine and its own Node staged beside it by
+# desktop/scripts/stage-engine.mjs. macOS ships the native app; a Mac build here is only for trying the package.
+appId: dev.taksim.desktop
+productName: taksim
+executableName: taksim
+copyright: Copyright © halil akkaya
+directories:
+  app: desktop
+  output: dist/desktop
+  buildResources: desktop/build
+files:
+  - main.cjs
+  - preload.cjs
+  - engine.cjs
+  - package.json
+extraResources:
+  - from: dist/engine/${platform}-${arch}
+    to: engine
+  # electron-builder leaves node_modules out of a folder unless asked by name
+  - from: dist/engine/${platform}-${arch}/node_modules
+    to: engine/node_modules
+    filter: ["**/*"]
+npmRebuild: false
+publish:
+  - provider: github
+    owner: 0xhalil
+    repo: taksim
+    releaseType: release
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  icon: native/Resources/AppIcon.png
+  artifactName: Taksim-${version}-Setup.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  shortcutName: taksim
+  uninstallDisplayName: taksim
+linux:
+  target: [AppImage, deb]
+  icon: native/Resources/AppIcon.png
+  category: Development
+  synopsis: A live canvas for coding agents
+  maintainer: halil akkaya <contact@halilakkaya.dev>
+  vendor: taksim
+  artifactName: Taksim-${version}-${arch}.${ext}
+deb:
+  packageName: taksim
+mac:
+  target: dir
+  icon: native/Resources/AppIcon.icns
+  identity: null

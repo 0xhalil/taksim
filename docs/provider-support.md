@@ -3,6 +3,36 @@
 This tracks how completely taksim offers what each provider can do. A connection working doesn't mean all of a
 provider's features are covered. Update the tables and the open work with every new feature.
 
+## Linux and Windows rollout
+
+The accepted architecture is native macOS plus a shared web-based Linux/Windows interface. See
+[platform-support.md](platform-support.md). Existing feature verification below must not be read as Linux or
+Windows certification. No real Linux/Windows provider connection has been exercised for this rollout.
+The first increment adds Linux engine CI and Windows platform/PTY smoke CI; those use test fixtures, not
+provider accounts, and do not change the unverified statuses below.
+
+| Connection | Linux | Windows | Required verification on each OS |
+|---|---|---|---|
+| Codex | Unverified | Unverified | Install/discovery, authentication, sessions, events, approvals, tools, terminal |
+| Claude | Unverified | Unverified | Install/discovery, authentication, sessions, events, approvals, tools, terminal |
+| opencode | Unverified | Unverified | Install/discovery, authentication, sessions, events, approvals, tools, terminal |
+| Copilot | Unverified | Unverified | Install/discovery, authentication, sessions, events, approvals, tools, terminal |
+| Gemini | Unverified | Unverified | Install/discovery, authentication, sessions, events, approvals, tools, terminal |
+| Local LLMs | Unverified | Unverified | Server discovery/setup, model tool calling, offline CLI path, streaming, terminal |
+| Antigravity | Unverified | Unverified; current installer has no Windows target | Install/discovery, authentication, sessions, events, tools, terminal |
+
+Shared browser and computer tools also need OS-specific verification for every connection. Provider-specific
+features remain in scope; unsupported or unverified functionality must not appear as working.
+
+## Web client preview
+
+The `/app` model picker uses the complete engine catalogue, and each provider uses the same chat/SSE and
+terminal contracts. Shared questions and approval answers are wired to the existing workflow API. Automated
+browser checks exercise only `fake-echo`, not paid or local-model accounts. Codex, Claude, opencode, Copilot,
+Gemini, local LLMs and Antigravity all remain unverified in this client. Their login setup, Plan UI, task/activity
+views, panels and computer-control UI are not yet implemented here; see [platform-support.md](platform-support.md).
+The native app's feature coverage below does not imply web-client parity.
+
 ## Live tasks and tool activity
 
 | Connection | Built-in task relay | Shared taksim task tool | Tool activity |
@@ -218,3 +248,30 @@ Limits:
 - [Gemini JSON stream format](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/output/types.ts)
 - [Copilot event schema](https://github.com/github/copilot-sdk/blob/main/nodejs/src/generated/session-events.ts)
 - [Copilot tool names](https://docs.github.com/en/copilot/reference/hooks-reference)
+
+
+### First-run account selection (native and web, 2026-10-25)
+
+Both clients refresh named account status on opening onboarding, offer an account selector and
+Add account for providers whose engine integration supports isolated profiles, and pass the selected
+account ID when creating the first agent. Machine aliases are shown once. Start failures stay on
+onboarding with a retryable error; an unavailable model does not fall back to another provider.
+
+| Connection | First-run account behavior | Verification / remaining gap |
+| --- | --- | --- |
+| Claude | Machine and isolated named profiles | Selection covered by shared fake tests; real second-login flow not exercised in this change |
+| Codex / ChatGPT | Machine and isolated named profiles | Selection and exact account routing covered; real second-login flow not exercised |
+| Copilot | Machine and named profiles | UI enabled by existing engine; concurrent credential isolation with OS keychain remains unverified |
+| Gemini | Machine and isolated named profiles | Existing file-storage isolation; real second-login flow not exercised |
+| opencode | Machine and isolated named profiles | Existing XDG profile isolation; provider identities depend on CLI auth metadata |
+| Antigravity | Machine account only | CLI shares system credentials; independent named-profile isolation is not established. Both clients disclose the limitation in the selector tooltip. Multiple simultaneous Antigravity accounts remain incomplete. |
+| Local models | No CLI subscription account | Existing endpoint configuration; not represented as a signed-in subscription in onboarding |
+
+Web account and onboarding checks pass against the fake engine. These checks do not establish
+real-provider authentication, Linux/Windows packaging, or full visual parity across the application.
+
+Antigravity model selection now displays `Default` for its CLI-selected model and omits the internal
+`agy:` routing prefix in both native and Electron clients. Routing IDs and thinking levels are unchanged.
+Electron's directory picker is provider-independent: Claude, Codex, Copilot, Antigravity, Gemini,
+opencode and local-model agents all receive the selected folder through the existing shared API.
+The bridge and cancellation were exercised in Electron on macOS; Linux/Windows dialogs remain unverified.

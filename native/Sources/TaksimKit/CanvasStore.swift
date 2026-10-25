@@ -555,7 +555,13 @@ public final class CanvasStore {
     }
 
     public func loadChoices() async {
-        if let m = try? await api.get("/v1/models", as: ModelList.self) { models = m.data }
+        if let m = try? await api.get("/v1/models", as: ModelList.self) { models = m.data.map { item in
+            guard item.owned_by == "antigravity" else { return item }
+            var item = item
+            let name = item.display_name ?? item.id
+            item.display_name = item.id == "agy" ? "Default" : (name.hasPrefix("agy:") ? String(name.dropFirst(4)) : name)
+            return item
+        } }
         if let a = try? await api.get("/v1/accounts", as: AccountList.self) { accounts = a.accounts }
     }
 

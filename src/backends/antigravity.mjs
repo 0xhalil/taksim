@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
-import { spawn } from "node:child_process";
+import { spawn } from "../platform.mjs";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
 import { HOME } from "../canvas/store.mjs";
 

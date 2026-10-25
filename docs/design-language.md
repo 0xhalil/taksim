@@ -124,8 +124,8 @@ Motion values:
 ## 4. The native app
 
 - The interface is Swift, SwiftUI and AppKit. The engine is the Node server in `src/`; the app finds or starts it
-  (a released app carries it, with its own Node, in `Contents/Resources/engine`). The engine is to move to Swift
-  piece by piece.
+  (a released app carries it, with its own Node, in `Contents/Resources/engine`). The engine remains shared with the planned Linux/Windows client; a Swift migration is no longer the
+  default direction.
 - `TaksimKit/`: models, the REST client, the SSE event stream, `CanvasStore`, `ServerLauncher`, release and
   announcement logic. It has no UI and is where tests go.
 - `Taksim/`: `GraphView` + `GraphDraw` (the canvas), `GraphCanvas` (menus, renaming in place, grouping),
@@ -164,3 +164,12 @@ Motion values:
 - Text for agents (system prompts, tool descriptions) is English.
 - Write code with the comment density and naming of the code around it. The engine has no build step: plain ES
   modules.
+
+## 6. Linux and Windows
+
+The accepted direction is native macOS plus one shared web-based interface for Linux and Windows. See
+[platform-support.md](platform-support.md) for scope and verification status. Both interfaces follow the same
+design language, themes, interaction semantics and provider coverage. Adapt window chrome, shortcuts and OS
+permissions to the host platform. The existing native app remains the visual and behavioural reference; the
+old web canvas is not the design baseline. The first web preview uses browser ES modules in `ui/app/` with the existing terminal and IDE assets; desktop
+packaging remains unselected.

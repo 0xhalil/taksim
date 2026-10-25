@@ -13,6 +13,9 @@ const root = realpathSync(mkdtempSync(join(tmpdir(), "taksim-scm-")));
 const g = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: root }).toString();
 const w = (n, t) => writeFileSync(join(root, n), t);
 g("init", "-q", "-b", "main");
+// Engine commits must work without the developer's global Git identity.
+g("config", "user.name", "t");
+g("config", "user.email", "t@t");
 w("a.txt", "one\n"); w("b.txt", "two\n");
 g("add", "."); g("commit", "-qm", "init");
 const by = async () => Object.fromEntries((await gitStatus(root)).files.map((f) => [f.path, f]));

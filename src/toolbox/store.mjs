@@ -12,9 +12,9 @@
 
 import { mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, renameSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { execFileSync } from "node:child_process";
 import { userInfo } from "node:os";
 import { ROOT } from "../config.mjs";
+import { findProgram } from "../platform.mjs";
 import { HOME } from "../canvas/store.mjs";
 import { validate, reach } from "../bricks/catalog.mjs";
 import { httpError } from "../http.mjs";
@@ -257,7 +257,7 @@ function hasBin(bin) {
   const hit = which.get(bin);
   if (hit && Date.now() - hit.at < 60 * 1000) return hit.ok;
   let ok = false;
-  try { execFileSync("/bin/sh", ["-c", 'command -v "$1"', "sh", bin], { stdio: "ignore", timeout: 2000 }); ok = true; } catch { /* missing */ }
+  ok = !!findProgram(bin);
   which.set(bin, { ok, at: Date.now() });
   return ok;
 }

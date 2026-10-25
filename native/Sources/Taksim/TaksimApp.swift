@@ -514,12 +514,13 @@ final class AppModel {
                 print("ide \(id): frame=\(f) shot=\(ideShots[id] != nil)"); fflush(stdout)
             }
             // SwiftUI chats, like the header and panels, need their snapshot fallback to be drawn explicitly.
+            // laid out in graph units and scaled with the canvas, as ZoomBox shows it
             for (id, transcript) in graph.transcripts where !transcript.box.isHidden {
-                let f = transcript.box.frame
+                let f = transcript.box.frame, k = max(graph.scale, 0.01)
                 let renderer = ImageRenderer(content: ChatView(model: transcript.model, store: s)
                     .environment(\.colorScheme, dark ? .dark : .light).environment(\.isSnapshot, true)
-                    .frame(width: f.width, height: f.height))
-                renderer.scale = 2
+                    .frame(width: f.width / k, height: f.height / k, alignment: .topLeading))
+                renderer.scale = 2 * k
                 if let image = renderer.cgImage {
                     NSImage(cgImage: image, size: f.size).draw(in: NSRect(x: f.minX, y: 726 - f.maxY, width: f.width, height: f.height))
                 }

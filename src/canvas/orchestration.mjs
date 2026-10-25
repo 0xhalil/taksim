@@ -20,7 +20,7 @@
 //   - the agents a job made are cleared away when the next job starts, so the canvas doesn't fill up with yesterday's
 
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { shellSpawn, killTree } from "../platform.mjs";
 import { httpError } from "../http.mjs";
 import { T } from "../lang.mjs";
 import { readOnly } from "./chat-modes.mjs";
@@ -411,8 +411,8 @@ export class Orchestration {
 function runCheck(command, cwd, signal) {
   return new Promise((resolve) => {
     let out = "", done = false;
-    const child = spawn("/bin/sh", ["-c", command], { cwd, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "1" }, detached: true });
-    const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* already gone */ } };
+    const child = shellSpawn(command, { cwd, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, CI: "1" }, detached: true });
+    const kill = () => killTree(child, "SIGKILL");
     const end = (r) => { if (done) return; done = true; clearTimeout(timer); signal.removeEventListener("abort", stop); resolve({ ...r, output: out.slice(-3000) }); };
     const stop = () => { kill(); end({ status: "stopped", exit: null }); };
     const timer = setTimeout(() => { kill(); end({ status: "timed out", exit: null }); }, CHECK_TIMEOUT_MS);

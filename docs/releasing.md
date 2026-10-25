@@ -23,6 +23,33 @@ same intro in Simplified Chinese below it; the page ends with a Chinese section 
 | SHA-256 | the checksums of both files |
 | Full changelog | the compare link to the previous tag |
 
+## Synchronized releases: Native and Electron
+
+Native macOS and Electron (Linux & Windows) releases are strictly synchronized:
+- **Zero release drift**: Every release tag triggers builds for both macOS (native) and Linux/Windows (Electron).
+- **Parity required**: Features, bug fixes, and improvements are shipped together across all platforms.
+
+The Linux and Windows app is `desktop/` packaged by electron-builder (`desktop/electron-builder.yml`). Like the Mac
+app it carries the engine and its own Node (`desktop/scripts/stage-engine.mjs` stages bin, src, ui, toolbox, ws,
+node-pty's binaries, Monaco and the runtime into `resources/engine`), so nothing needs to be installed first.
+
+| File | For |
+|---|---|
+| `Taksim-<version>-Setup.exe` | Windows 10 or later, x64 and Arm in one installer, per user, no admin rights |
+| `Taksim-<version>-<arch>.AppImage` | any Linux with glibc 2.28 or later, x64 and arm64 |
+| `Taksim-<version>-<arch>.deb` | Debian and Ubuntu; installs an AppArmor profile on Ubuntu 24 |
+| `latest.yml`, `latest-linux*.yml` | what installed apps read to update themselves (electron-updater) |
+
+Each one is built on its own system in the `desktop` job (node-pty is compiled for Linux there) and run before it
+ships: `desktop/test/package-smoke.mjs` starts the packaged app, which starts its engine with its own Node, an
+agent answers in its chat, a real terminal opens in a node, and closing the window stops the engine. The
+`desktop-publish` job adds the files to the release the macOS job created. The `test` workflow packages and runs
+the Linux and Windows app the same way on every push.
+
+Locally: `npm run desktop:dist` packages for this machine into `dist/desktop` (a Mac build is a folder, only for
+trying the package). The Windows installer is not signed yet: SmartScreen asks once (More info › Run anyway).
+
+
 ## What the workflow does
 
 1. Waits for the `test` workflow to pass on the tagged commit (up to 30 minutes), so tag after pushing, not before.

@@ -5,6 +5,7 @@
 // session runs in the CLI's own TUI: messages are pasted in when it's idle and the CLI's hooks report
 // turn start/stop and the final answer.
 
+import { terminalShell } from "../platform.mjs";
 import { agentServers } from "../mcp/servers.mjs";
 import { modeOf, readOnly } from "./chat-modes.mjs";
 import { ChatTasks } from "./chat-tasks.mjs";
@@ -330,7 +331,7 @@ export class Agent {
   openShell() {
     if (this.shell) return;
     if (!this.cwd) throw Object.assign(new Error("the agent has no folder"), { status: 400 });
-    const shell = new Terminal({ file: process.env.SHELL || "/bin/zsh", args: [], env: {}, cwd: this.cwd,
+    const shell = new Terminal({ file: terminalShell(), args: [], env: {}, cwd: this.cwd,
       onExit: () => { if (this.shell === shell) { this.shell = null; this.canvas.bus.emit("agent_updated", { agent: this.view() }); } } });
     this.shell = shell;
     this.canvas.bus.emit("agent_updated", { agent: this.view() });

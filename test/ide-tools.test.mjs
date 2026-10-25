@@ -38,6 +38,9 @@ writeFileSync(join(project, "pkg", "calc.py"), [
 writeFileSync(join(project, "pkg", "boom.py"), "def f(x):\n    return 10 / x\n\n\nprint(f(0))\n");
 execFileSync("git", ["init", "-q", "--bare", remote]);
 g("init", "-q", "-b", "main");
+// Engine commits must work without the developer's global Git identity.
+g("config", "user.name", "t");
+g("config", "user.email", "t@t");
 g("add", ".");
 g("commit", "-qm", "init");
 g("remote", "add", "origin", remote);

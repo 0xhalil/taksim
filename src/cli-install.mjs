@@ -5,7 +5,7 @@
 // taksim ships. The CLIs that are Node scripts need `node` on PATH when they run: a link to that Node is
 // placed beside them only when the computer has none.
 
-import { spawn } from "node:child_process";
+import { spawn } from "./platform.mjs";
 import { existsSync, mkdirSync, symlinkSync, rmSync, readdirSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { HOME } from "./canvas/store.mjs";

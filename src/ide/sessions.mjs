@@ -5,6 +5,7 @@
 //   exec      an explicit command (kubectl exec -it pod -- sh, docker exec -it …): the pod shell Lens opens
 // They live as long as the IDE (not across server restarts).
 
+import { terminalShell } from "../platform.mjs";
 import { createServer } from "node:net";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -64,7 +65,7 @@ export class Sessions {
     const s = { id, kind, status: "running" };
     let file, argv, env = {};
     if (kind === "terminal") {
-      file = process.env.SHELL || "/bin/zsh";
+      file = terminalShell();
       argv = [];
       s.title = `Local${[...this.list.values()].some((x) => x.kind === "terminal") ? ` (${[...this.list.values()].filter((x) => x.kind === "terminal").length + 1})` : ""}`;
     } else if (kind === "exec") {

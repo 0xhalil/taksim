@@ -427,7 +427,8 @@ final class GraphView: NSView {
     func tick() {
         flashes = flashes.filter { CACurrentMediaTime() - $0.value < 0.7 }
         let moving = viewAnim != nil || !pulses.isEmpty || !groupAnims.isEmpty || drag != nil || panelsMoving || !flashes.isEmpty || pressedButton.map { CACurrentMediaTime() - $0.at < 0.25 } == true
-        let breathing = agents.contains { ($0.status ?? "idle") != "idle" || !($0.waitingOn ?? []).isEmpty || $0.waitsForOthers || ($0.isCollapsed && $0.panel?.status == "pending") }
+        let visibleAgents = agents.filter { screenRect(rectOf($0)).insetBy(dx: -40, dy: -40).intersects(visibleRect) }
+        let breathing = visibleAgents.contains { ($0.status ?? "idle") != "idle" || !($0.waitingOn ?? []).isEmpty || $0.waitsForOthers || ($0.isCollapsed && $0.panel?.status == "pending") }
         if moving {
             needsDisplay = true
             layoutTerminals() // views over the canvas follow what moves
@@ -435,7 +436,7 @@ final class GraphView: NSView {
             // only the status dots and outlines breathe (1.4 s): 20 frames a second is plenty, nothing else to lay out
             frameCount &+= 1
             if frameCount % 3 == 0 {
-                for a in agents where (a.status ?? "idle") != "idle" || !(a.waitingOn ?? []).isEmpty || a.waitsForOthers {
+                for a in visibleAgents where (a.status ?? "idle") != "idle" || !(a.waitingOn ?? []).isEmpty || a.waitsForOthers {
                     setNeedsDisplay(screenRect(rectOf(a)).insetBy(dx: -8, dy: -8))
                 }
             }

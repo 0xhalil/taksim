@@ -180,11 +180,8 @@ struct ChatView: View {
             Color.clear.frame(height: 1).id("end")
         }
         .padding(.horizontal, 14).padding(.vertical, 16)
-        if isSnapshot {
-            list.frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading).clipped()
-        } else {
-            ScrollViewReader { proxy in
-                ScrollView { list.frame(maxWidth: .infinity, alignment: .leading) } // the node's own width: the composer below spans it too
+        ScrollViewReader { proxy in
+            ScrollView { list.frame(maxWidth: .infinity, alignment: .leading) } // the node's own width: the composer below spans it too
                     .scrollIndicators(.never) // .hidden still draws the legacy bar when a mouse is connected
                     // the history arriving after the view, a row settling in, an answer growing: stay on the latest
                     .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
@@ -217,7 +214,6 @@ struct ChatView: View {
                         }
                     }
             }
-        }
     }
 
     @ViewBuilder private func row(_ i: Int, _ e: ChatEntry) -> some View {

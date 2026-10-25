@@ -4,6 +4,7 @@
 import { createRequire } from "node:module";
 import { chmodSync, existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { resolveCommand, killTree, normalizeEnv } from "../platform.mjs";
 
 const require = createRequire(import.meta.url);
 const SCROLLBACK = 1024 * 1024;
@@ -31,8 +32,11 @@ function loadPty() {
 
 export class Terminal {
   constructor({ file, args, env, cwd, cols = 120, rows = 34, onExit }) {
+    // Windows: the program through PATHEXT, an npm shim's script run by this Node (src/platform.mjs)
+    const all = normalizeEnv({ ...process.env, ...env, TERM: "xterm-256color", COLORTERM: "truecolor" });
+    ({ file, args } = resolveCommand(file, args, { env: all }));
     this.proc = loadPty().spawn(file, args, {
-      name: "xterm-256color", cols, rows, cwd, env: { ...process.env, ...env, TERM: "xterm-256color", COLORTERM: "truecolor" },
+      name: "xterm-256color", cols, rows, cwd, env: all,
     });
     this.pid = this.proc.pid;
     this.cols = cols;
@@ -128,6 +132,7 @@ export class Terminal {
 
   kill() {
     if (this.exited) return;
+    if (process.platform === "win32") { killTree({ pid: this.pid }); return; }
     try { process.kill(-this.pid, "SIGHUP"); } catch { this.proc.kill("SIGHUP"); }
     setTimeout(() => { try { process.kill(-this.pid, "SIGKILL"); } catch { /* gone */ } }, 3000).unref();
   }

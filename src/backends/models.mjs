@@ -6,7 +6,7 @@
 //   antigravity: `agy models` (its init), a model's levels gathered from its -low/-medium/-high slugs
 // GET /v1/models gives the list with these details; it refreshes in the background when it gets old.
 
-import { spawn } from "node:child_process";
+import { spawn } from "../platform.mjs";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -126,7 +126,7 @@ export function describeModels(lang = "en") {
   if (Date.now() - refreshedAt > STALE_MS) refreshModelDetails();
   return listModels().map((m) => {
     const d = details.get(m.id);
-    const base = { ...m, tier: tierOf(m.id), ...(isFree(m) ? { free: true } : {}) };
+    const base = { ...m, ...(m.owned_by === "antigravity" ? { display_name: m.id === "agy" ? "Default" : m.id.replace(/^agy:/, "") } : {}), tier: tierOf(m.id), ...(isFree(m) ? { free: true } : {}) };
     if (!d) return base;
     const desc = Array.isArray(d.description) ? (lang === "tr" ? d.description[1] : d.description[0]) : d.description;
     return { ...base, display_name: claudeName(m.id) || d.name || m.id, description: desc || null, context_window: d.context || null,

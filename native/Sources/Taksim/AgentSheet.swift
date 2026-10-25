@@ -40,6 +40,8 @@ struct AgentSheet: View {
     @State private var dropping = false
     /// the chosen login is signed out (or its CLI isn't here): the one action signs it in, then creates
     @State private var signedOut = false
+    /// each CLI's own login on this computer, read when the CLI is picked
+    @State private var machine: [String: AccountsModel.Status] = [:]
     @State private var signer: AccountsModel?
     /// getting a local model going (the Local tile with none there yet): Ollama, then a model for this Mac
     @State private var local: LocalState?
@@ -298,17 +300,17 @@ struct AgentSheet: View {
     private var accountPicker: some View {
         let current = accountsForBackend.first { $0.id == account }
         return Menu {
-            if !machineNamed { Button { account = "" } label: { Label(machineLogin, systemImage: "person.crop.circle") } }
+            if !machineNamed, machineTwin == nil { Button { account = "" } label: { Label(machineLogin, systemImage: "person.crop.circle") } }
             ForEach(accountsForBackend) { a in
-                Button("\(a.name)\(a.status?.email.map { " · \($0)" } ?? "")") { account = a.id }
+                Button(Self.accountLabel(a)) { account = a.id }
             }
             Divider()
-            Button { addAccount(backend) } label: { Label(L("Add account"), systemImage: "plus") }
+            Button { Task { await addAccountThenPick() } } label: { Label(L("Add account"), systemImage: "plus") }
         } label: {
             WellLabel {
                 if let current {
                     Text(current.name).foregroundStyle(JB.ink)
-                    if let e = current.status?.email { Text(e).foregroundStyle(JB.muted2).lineLimit(1) }
+                    if let e = current.status?.email, e != current.name { Text(e).foregroundStyle(JB.muted2).lineLimit(1) }
                 } else {
                     Text(machineLogin).foregroundStyle(JB.ink)
                 }
@@ -488,8 +490,19 @@ struct AgentSheet: View {
     }
     private var accountsForBackend: [CanvasStore.Account] { store.accounts.filter { $0.backend == backend } }
     /// the CLI's own login, named by the email it signed in with
-    private var machineLogin: String { store.usageLogins["machine:\(backend)"]?.email ?? CanvasStore.label(of: backend) }
+    private var machineLogin: String { machineEmail ?? CanvasStore.label(of: backend) }
+    private var machineEmail: String? { machine[backend]?.email ?? store.usageLogins["machine:\(backend)"]?.email }
     private var machineNamed: Bool { accountsForBackend.contains { $0.dir == nil } }
+    /// an added account signed in as the CLI's own login stands for it: that login is listed once
+    private var machineTwin: CanvasStore.Account? {
+        guard let e = machineEmail?.lowercased() else { return nil }
+        return accountsForBackend.first { $0.dir != nil && $0.status?.email?.lowercased() == e }
+    }
+    /// an added account: its name, and the email it signed in with when that says more
+    static func accountLabel(_ a: CanvasStore.Account) -> String {
+        guard let e = a.status?.email, e != a.name else { return a.name }
+        return "\(a.name) · \(e)"
+    }
     private var hasMore: Bool { !role.isEmpty || !system.isEmpty || autoApprove }
 
     /// a CLI's usual model (the one the server picks for it)
@@ -509,7 +522,7 @@ struct AgentSheet: View {
     private func rememberedAccount() -> String {
         let saved = UserDefaults.standard.string(forKey: "lastAccount.\(backend)") ?? ""
         if accountsForBackend.contains(where: { $0.id == saved }) { return saved }
-        return machineNamed ? (accountsForBackend.first { $0.dir == nil }?.id ?? "") : ""
+        return machineNamed ? (accountsForBackend.first { $0.dir == nil }?.id ?? "") : (machineTwin?.id ?? "")
     }
 
     private func setup() async {
@@ -539,6 +552,10 @@ struct AgentSheet: View {
     private func checkSignIn() async {
         guard !backend.isEmpty else { return }
         let b = backend, acct = account.isEmpty ? nil : account
+        if machine[b] == nil, let st = try? await store.api.get("/v1/accounts/machine/\(b)", as: AccountsModel.Status.self), st.loggedIn == true {
+            machine[b] = st
+            if b == backend, account.isEmpty, let twin = machineTwin { account = twin.id; return }
+        }
         let ready = await AccountsModel.ready(api: store.api, backend: b, account: acct)
         guard b == backend, acct == (account.isEmpty ? nil : account) else { return }
         signedOut = ready == false
@@ -563,6 +580,24 @@ struct AgentSheet: View {
         await checkSignIn()
         if s.problem[b] != nil { error = s.problem[b] }
         if !signedOut { await submit() }
+    }
+
+    /// creates a new account for this CLI, signs it in with a terminal/OAuth right here in the sheet, and selects it
+    private func addAccountThenPick() async {
+        let s = signer ?? AccountsModel(api: store.api)
+        signer = s
+        if s.backends.isEmpty { await s.load() }
+        let b = backend
+        let beforeIds = Set(accountsForBackend.map(\.id))
+        await s.add(backend: b, name: s.freeName(CanvasStore.label(of: b)))
+        await store.loadChoices()
+        if let added = accountsForBackend.first(where: { !beforeIds.contains($0.id) }) {
+            account = added.id
+        } else if account.isEmpty {
+            account = rememberedAccount()
+        }
+        await checkSignIn()
+        if s.problem[b] != nil { error = s.problem[b] }
     }
 
     private func loadBranches() async {

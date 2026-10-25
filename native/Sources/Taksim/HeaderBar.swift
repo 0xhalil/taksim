@@ -42,7 +42,6 @@ struct AddButtonStyle: ButtonStyle {
 struct HeaderBar: View {
     @Bindable var model: AppModel
     @Environment(\.openSettings) private var openSettings
-    @Environment(\.isSnapshot) private var isSnapshot
     private var shelf = ToolShelf.shared
     private var updater = Updater.shared
 
@@ -129,52 +128,8 @@ struct HeaderBar: View {
             .overlay(alignment: .trailing) { Rectangle().fill(JB.line).frame(width: 1) }
             .padding(.trailing, 4)
             // one click: an agent like the last one (model, folder, account), its terminal open; the chevron picks another CLI
-            HStack(spacing: 0) {
-                // the folder is asked first: the ones the canvas's agents work in, or another
-                if isSnapshot {
-                    HStack(spacing: 5) { AppIcon.plus.frame(width: 12, height: 12); Text(L("Agent")) }
-                        .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(JB.accentInk).padding(.leading, 9).padding(.trailing, 11).frame(height: 28)
-                } else {
-                    Menu {
-                        let folders = model.folderChoices()
-                        ForEach(folders, id: \.self) { path in
-                            Button { model.addAgent(backend: nil, folder: path) } label: { Label(Self.folderTitle(path, among: folders), systemImage: "folder") }
-                                .help(path)
-                        }
-                        if !folders.isEmpty { Divider() }
-                        Button { model.quickAdd() } label: { Label(L("Choose folder"), systemImage: "folder.badge.plus") }
-                        Button { model.addAgent(backend: nil, folder: "") } label: { Label(L("No folder"), systemImage: "tray") }
-                    } label: {
-                        HStack(spacing: 5) { AppIcon.plus.frame(width: 12, height: 12); Text(L("Agent")) }
-                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(JB.accentInk)
-                            .padding(.leading, 9).padding(.trailing, 11).frame(height: 28).contentShape(Rectangle())
-                    }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .help(L("Add agent"))
-                }
-                Rectangle().fill(JB.accentInk.opacity(0.22)).frame(width: 1, height: 14)
-                if isSnapshot {
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).foregroundStyle(JB.accentInk).frame(width: 22, height: 28)
-                } else {
-                    Menu {
-                        ForEach(model.store?.backends ?? [], id: \.self) { b in
-                            Button { model.quickAdd(backend: b) } label: { Label(CanvasStore.label(of: b), systemImage: "terminal") }
-                        }
-                        Divider()
-                        Button(L("Details…")) { model.sheet = .add(at: model.viewCenter()) }
-                    } label: {
-                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                    }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                    .foregroundStyle(JB.accentInk)
-                    .frame(width: 24, height: 28)
-                    .contentShape(Rectangle())
-                    .task { await model.store?.loadChoices() }
-                }
-            }
-            .background(RoundedRectangle(cornerRadius: 6).fill(JB.accent))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .disabled(model.store?.currentId == nil)
+            AgentKey(model: model)
+                .disabled(model.store?.currentId == nil)
         }
         .padding(.leading, 84).padding(.trailing, 10)
         .frame(height: 40)
@@ -204,6 +159,137 @@ struct HeaderBar: View {
                 .transition(.opacity)
                 .help(L("Connection lost"))
                 .accessibilityLabel(L("Connection lost"))
+        }
+    }
+}
+
+/// The bar's single accent key, "+ Agent" and its chevron: a physical key that answers the pointer as Apple's do.
+/// Hovering lifts it (a deeper shadow, a lighter face) and lights the half under the pointer; the plus turns a
+/// quarter as if to say "a new one", the chevron dips toward the menu it opens. A press sinks the key with a
+/// spring and it stays down while its menu is open. The key draws itself and opens plain AppKit menus under it:
+/// a SwiftUI `Menu` label in the toolbar is redrawn as a bare system button, dropping the icon and the key's size.
+struct AgentKey: View {
+    @Bindable var model: AppModel
+    @Environment(\.isSnapshot) private var isSnapshot
+    @Environment(\.isEnabled) private var enabled
+    @State private var addHover = false
+    @State private var addDown = false
+    @State private var moreHover = false
+    @State private var moreDown = false
+    @State private var open = false
+    @State private var frame = CGRect.zero
+
+    var body: some View {
+        let lit = enabled && (addHover || moreHover), down = enabled && (addDown || moreDown || open)
+        HStack(spacing: 0) {
+            Button { pop(folderMenu()) } label: { addLabel }
+                .buttonStyle(KeyHalf(down: $addDown, hover: addHover))
+                .onHover { addHover = $0 }
+                .help(L("Add agent")).accessibilityLabel(L("Add agent"))
+            Rectangle().fill(JB.accentInk.opacity(lit ? 0.32 : 0.22)).frame(width: 1, height: 14)
+            Button { pop(backendMenu()) } label: { moreLabel }
+                .buttonStyle(KeyHalf(down: $moreDown, hover: moreHover))
+                .onHover { moreHover = $0 }
+                .accessibilityLabel(L("More"))
+                .task { await model.store?.loadChoices() }
+        }
+        .foregroundStyle(JB.accentInk)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(JB.accent)
+                // a key's edge: light catches the top, the face falls off toward the bottom
+                .overlay(LinearGradient(colors: [.white.opacity(lit ? 0.16 : 0.10), .clear, .black.opacity(0.08)], startPoint: .top, endPoint: .bottom))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.white.opacity(lit ? 0.22 : 0.14), lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .brightness(down ? -0.07 : lit ? 0.03 : 0)
+        .shadow(color: .black.opacity(down ? 0.18 : lit ? 0.34 : 0.2), radius: down ? 0.5 : lit ? 4 : 1, y: down ? 0 : lit ? 2 : 0.5)
+        .scaleEffect(down ? 0.955 : 1)
+        .opacity(enabled ? 1 : 0.5)
+        .background(GeometryReader { g in Color.clear.onAppear { frame = g.frame(in: .global) }.onChange(of: g.frame(in: .global)) { frame = $1 } })
+        .animation(isSnapshot ? nil : .spring(response: 0.26, dampingFraction: 0.62), value: down)
+        .animation(isSnapshot ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: lit)
+    }
+
+    private var addLabel: some View {
+        HStack(spacing: 5) {
+            AppIcon.plus.frame(width: 12, height: 12)
+                .rotationEffect(.degrees(enabled && addHover ? 90 : 0))
+                .animation(isSnapshot ? nil : .spring(response: 0.38, dampingFraction: 0.55), value: addHover)
+            Text(L("Agent"))
+        }
+        .font(.system(size: 12.5, weight: .semibold))
+        .padding(.leading, 9).padding(.trailing, 11).frame(height: 28)
+    }
+
+    private var moreLabel: some View {
+        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            .offset(y: enabled && moreHover ? 1.5 : 0)
+            .animation(isSnapshot ? nil : .spring(response: 0.3, dampingFraction: 0.5), value: moreHover)
+            .frame(width: 24, height: 28)
+    }
+
+    /// the folder is asked first: the ones the canvas's agents work in, or another
+    private func folderMenu() -> NSMenu {
+        let m = NSMenu()
+        let folders = model.folderChoices()
+        for path in folders {
+            let i = MenuItem(title: HeaderBar.folderTitle(path, among: folders)) { [model] in model.addAgent(backend: nil, folder: path) }
+            i.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+            i.toolTip = path
+            m.addItem(i)
+        }
+        if !folders.isEmpty { m.addItem(.separator()) }
+        let choose = MenuItem(title: L("Choose folder")) { [model] in model.quickAdd() }
+        choose.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: nil)
+        m.addItem(choose)
+        let none = MenuItem(title: L("No folder")) { [model] in model.addAgent(backend: nil, folder: "") }
+        none.image = NSImage(systemSymbolName: "tray", accessibilityDescription: nil)
+        m.addItem(none)
+        return m
+    }
+
+    /// the chevron picks another CLI
+    private func backendMenu() -> NSMenu {
+        let m = NSMenu()
+        for b in model.store?.backends ?? [] {
+            let i = MenuItem(title: CanvasStore.label(of: b)) { [model] in model.quickAdd(backend: b) }
+            i.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+            m.addItem(i)
+        }
+        m.addItem(.separator())
+        m.addItem(MenuItem(title: L("Details…")) { [model] in model.sheet = .add(at: model.viewCenter()) })
+        return m
+    }
+
+    /// opens the menu just under the key, its left edge on the key's; the key stays down until it closes
+    private func pop(_ m: NSMenu) {
+        guard let view = NSApp.keyWindow?.contentView else { return }
+        let y = view.isFlipped ? frame.maxY + 4 : view.bounds.height - frame.maxY - 4
+        open = true
+        m.popUp(positioning: nil, at: NSPoint(x: frame.minX, y: y), in: view)
+        open = false
+    }
+}
+
+/// one half of the accent key: the half under the pointer brightens, the pressed one darkens, the hand says "press"
+private struct KeyHalf: ButtonStyle {
+    @Binding var down: Bool
+    let hover: Bool
+    func makeBody(configuration: Configuration) -> some View { Face(configuration: configuration, down: $down, hover: hover) }
+
+    private struct Face: View {
+        let configuration: Configuration
+        @Binding var down: Bool
+        let hover: Bool
+        @Environment(\.isEnabled) private var enabled
+        @Environment(\.isSnapshot) private var snapshot
+        var body: some View {
+            configuration.label
+                .background(Rectangle().fill(configuration.isPressed ? Color.black.opacity(0.12) : .white.opacity(enabled && hover ? 0.12 : 0)))
+                .contentShape(Rectangle())
+                .pointerStyle(enabled ? .link : .default)
+                .animation(snapshot ? nil : .easeOut(duration: 0.14), value: hover)
+                .onChange(of: configuration.isPressed) { down = $1 }
         }
     }
 }

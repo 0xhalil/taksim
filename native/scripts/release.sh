@@ -132,10 +132,13 @@ case "$NOTES" in *'[zh]'*) HIGHLIGHTS_ZH=$(printf '%s\n' "$NOTES" | sed '1,/^\[z
   printf '## Install\n\n| | |\n|---|---|\n'
   printf '| Homebrew | `brew install --cask %s/taksim/taksim` |\n' "${TAP%%/*}"
   printf '| Disk image | `%s`, drag to Applications |\n' "$(basename "$DMG")"
-  printf '| ZIP | `%s` |\n\n' "$(basename "$ZIP")"
+  printf '| ZIP | `%s` |\n' "$(basename "$ZIP")"
+  printf '| Windows | `Taksim-%s-Setup.exe` (x64 and Arm) |\n' "$VERSION"
+  printf '| Linux | `Taksim-%s-<arch>.AppImage`, or the `.deb` for Debian and Ubuntu (x64 and arm64) |\n\n' "$VERSION"
   printf 'macOS 15 or later on Apple silicon.'
   [ -n "$NOTARIZING" ] && printf ' Signed with a Developer ID and notarized by Apple.'
   printf ' The app updates itself.\n\n'
+  printf 'Windows and Linux: Windows 10 or later; Linux with glibc 2.28 or later. The Windows installer is not signed yet, so SmartScreen asks once (More info › Run anyway). The AppImage and the Windows app update themselves.\n\n'
   printf '## SHA-256\n\n```\n%s  %s\n%s  %s\n```\n' "$(cat "$DMG.sha256")" "$(basename "$DMG")" "$(cat "$ZIP.sha256")" "$(basename "$ZIP")"
   [ -n "$PREV" ] && printf '\n**Full changelog:** https://github.com/%s/compare/%s...v%s\n' "$REPO" "$PREV" "$VERSION"
   # the same page in Chinese: users there read it too
@@ -144,7 +147,9 @@ case "$NOTES" in *'[zh]'*) HIGHLIGHTS_ZH=$(printf '%s\n' "$NOTES" | sed '1,/^\[z
   printf '| 安装方式 | |\n|---|---|\n'
   printf '| Homebrew | `brew install --cask %s/taksim/taksim` |\n' "${TAP%%/*}"
   printf '| 磁盘映像 | `%s`，拖入“应用程序” |\n' "$(basename "$DMG")"
-  printf '| ZIP | `%s` |\n\n' "$(basename "$ZIP")"
+  printf '| ZIP | `%s` |\n' "$(basename "$ZIP")"
+  printf '| Windows | `Taksim-%s-Setup.exe`（x64 与 Arm） |\n' "$VERSION"
+  printf '| Linux | `Taksim-%s-<arch>.AppImage`，或 Debian/Ubuntu 的 `.deb`（x64 与 arm64） |\n\n' "$VERSION"
   printf '需要 macOS 15 或更高版本，Apple 芯片。'
   [ -n "$NOTARIZING" ] && printf '已使用 Developer ID 签名并经过 Apple 公证。'
   printf '应用会自动更新。校验值（SHA-256）见上方。\n'

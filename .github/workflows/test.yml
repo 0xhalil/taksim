@@ -1,7 +1,7 @@
 name: test
 
-# Actions minutes are short: tests run only when code changes, on one macOS machine, and a newer push to the same
-# branch cancels the run still going.
+# A newer push cancels the previous run. Native checks stay on macOS; Linux runs the engine suite.
+# Windows starts with platform/PTY checks until the remaining POSIX assumptions are removed.
 on:
   push:
     branches: [main]
@@ -12,6 +12,7 @@ on:
       - "ui/**"
       - "toolbox/**"
       - "native/**"
+      - "desktop/**"
       - "server.mjs"
       - "package.json"
       - "package-lock.json"
@@ -24,6 +25,7 @@ on:
       - "ui/**"
       - "toolbox/**"
       - "native/**"
+      - "desktop/**"
       - "server.mjs"
       - "package.json"
       - "package-lock.json"
@@ -54,3 +56,78 @@ jobs:
       - name: Swift tests
         working-directory: native
         run: swift test
+
+  linux-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Engine tests with a virtual display for Chrome
+        run: xvfb-run -a npm test
+
+  windows-platform:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Platform, web assets and real terminal smoke tests (not the full engine suite)
+        run: node --test --test-timeout=60000 test/platform.test.mjs test/web-app.test.mjs
+
+  # the engine suite on Windows: shown, not yet required (some tests still assume a POSIX shell)
+  windows-engine:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Engine tests
+        run: npm test
+
+  # the Linux and Windows app as it ships: packaged with its own Node and engine, then run the way a person would
+  desktop-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - name: Stage the engine with its Node
+        run: node desktop/scripts/stage-engine.mjs
+      - name: Package
+        shell: bash
+        run: npx electron-builder --config desktop/electron-builder.yml --dir --publish never --x64 ${{ runner.os == 'Windows' && '--win' || '--linux' }}
+      - name: The packaged app starts its engine, chats, opens a terminal and stops on quit
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          xvfb-run -a node desktop/test/package-smoke.mjs dist/desktop/linux-unpacked/taksim
+      - name: The packaged app starts its engine, chats, opens a terminal and stops on quit
+        if: runner.os == 'Windows'
+        run: node desktop/test/package-smoke.mjs dist/desktop/win-unpacked/taksim.exe

@@ -98,6 +98,14 @@ tracked in [docs/provider-support.md](docs/provider-support.md).
 The app is the only interface; the engine is its server and also exposes your subscriptions as an OpenAI- and
 Anthropic-compatible API (see below). Agents reach each other and the canvas through taksim's MCP server.
 
+## Platform and release parity (Native macOS & Electron)
+
+The native macOS application (`native/`) and the Electron/web client (`ui/app/`) must **always remain identical** in architecture, capability, and visual design:
+- **Dual-target updates**: Any bug fix, feature, UI refinement, or protocol change made to one must simultaneously be applied to both.
+- **Synchronized releases**: Every version release must ship binaries for both native macOS and Electron (Linux and Windows).
+- **Strict parity**: Neither platform is allowed to diverge or lag behind the other; validation must cover both targets before any release.
+
+
 ## Documentation
 
 | | |

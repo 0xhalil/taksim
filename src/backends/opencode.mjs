@@ -1,6 +1,6 @@
 // opencode: `opencode run --format json`. Models are provider/model, listed by `opencode models`.
 
-import { spawn } from "node:child_process";
+import { spawn } from "../platform.mjs";
 import { pathToFileURL } from "node:url";
 import { CHAT_DIR, splitCmd } from "../config.mjs";
 import { asksPermission, permissionEnv, PLUGIN } from "../term/permission-hook.mjs";

@@ -7,7 +7,7 @@
 //   Codex   the rate_limits of the newest token_count event in its session files (CODEX_HOME/sessions).
 // Keyed per login: an account's id, or "machine:<cli>" for this computer's own login.
 
-import { spawn } from "node:child_process";
+import { spawn, killTree } from "./platform.mjs";
 import { openSync, readSync, closeSync, readdirSync, statSync, readFileSync, writeFileSync, renameSync, mkdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -152,7 +152,7 @@ function probeClaude(key, env) {
     try { child = spawn(file, args, { cwd: CHAT_DIR, env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "ignore"], detached: true }); }
     catch { return resolve(null); }
     let buf = "", got = null;
-    const finish = () => { clearTimeout(timer); try { if (child.exitCode === null && child.signalCode === null) process.kill(-child.pid, "SIGTERM"); } catch { try { child.kill(); } catch {} } resolve(got); };
+    const finish = () => { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) killTree(child); resolve(got); };
     const timer = setTimeout(finish, 45000);
     timer.unref?.();
     child.stdout.on("data", (c) => {

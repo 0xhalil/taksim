@@ -2,7 +2,7 @@
 // run a command there. Short descriptions, so they fit a small window; everything stays inside the folder (fs.mjs
 // inside), and Manual / Accept edits ask in the chat first, as the CLIs' hooks do.
 
-import { spawn } from "node:child_process";
+import { shellSpawn, killTree } from "../platform.mjs";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, relative } from "node:path";
 import { inside } from "../ide/fs.mjs";
@@ -135,11 +135,11 @@ export function reindent(text, indents) {
 
 function command(cmd, cwd, signal, maxChars) {
   return new Promise((resolve) => {
-    const child = spawn("/bin/sh", ["-c", cmd], { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
+    const child = shellSpawn(cmd, { cwd, stdio: ["ignore", "pipe", "pipe"], detached: true });
     let out = "";
     const keep = (c) => { out = (out + c).slice(-maxChars); };
     child.stdout.on("data", keep); child.stderr.on("data", keep);
-    const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch { /* gone */ } };
+    const kill = () => killTree(child, "SIGKILL");
     const timer = setTimeout(kill, 120000);
     signal?.addEventListener("abort", kill, { once: true });
     child.on("error", (e) => { clearTimeout(timer); resolve(`error: ${e.message}`); });

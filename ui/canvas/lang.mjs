@@ -5,6 +5,11 @@ try { lang ||= localStorage.getItem("taksim.lang"); } catch {}
 if (q) { try { localStorage.setItem("taksim.lang", q); } catch {} }
 export const LANG = lang === "tr" ? "tr" : "en";
 const TR = {
+  "+ Agent": "+ Ajan", "Agent": "Ajan", "Model": "Model", "Folder": "Klasör", "Add": "Ekle",
+  "Chat": "Sohbet", "Message": "Mesaj", "Send": "Gönder", "You": "Siz", "Ready": "Hazır",
+  "New canvas": "Yeni tuval", "Reconnecting": "Yeniden bağlanıyor", "Reconnect": "Yeniden bağlan",
+  "Connecting": "Bağlanıyor", "Disconnected": "Bağlantı kesildi",
+
   "editor failed to load (npm install?)": "düzenleyici yüklenemedi (npm install?)",
   "editor failed to load; close and reopen the IDE": "düzenleyici yüklenemedi; IDE'yi kapatıp açın",
   "Run (⌃R)": "Çalıştır (⌃R)",

@@ -10,7 +10,7 @@
 // Logins run the CLI's own sign-in in a terminal; taksim never sees or stores passwords or tokens. It
 // reads only who is signed in (email, plan) from the CLI's status output or its credential files.
 
-import { spawn } from "node:child_process";
+import { spawn, findProgram } from "./platform.mjs";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, symlinkSync, rmSync, renameSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -400,8 +400,8 @@ function cliCommand(backend) {
 
 function installed(backend) {
   const { file } = cliCommand(backend);
-  if (file.includes("/")) return existsSync(file);
-  return (process.env.PATH || "").split(delimiter).some((d) => d && existsSync(join(d, file)));
+  if (/[\\/]/.test(file)) return existsSync(file);
+  return !!findProgram(file);
 }
 
 function runCli(a, args) {
@@ -454,6 +454,8 @@ function signInUrl(session) {
 
 // A login's `open` / `xdg-open`: notes the page in $TAKSIM_OPENED, then opens it with the real command.
 function openShim() {
+  // Windows CLIs open the browser through the shell, not a program on PATH: the page is read from the terminal
+  if (process.platform === "win32") return {};
   const dir = join(HOME, "login-bin");
   mkdirSync(dir, { recursive: true });
   for (const name of ["open", "xdg-open"]) {
