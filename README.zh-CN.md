@@ -8,7 +8,7 @@
   <a href="https://github.com/0xhalil/taksim/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/0xhalil/taksim?style=flat-square&color=3574F0"></a>
   <a href="https://github.com/0xhalil/taksim/actions/workflows/test.yml"><img alt="测试" src="https://img.shields.io/github/actions/workflow/status/0xhalil/taksim/test.yml?branch=main&style=flat-square&label=tests"></a>
   <a href="LICENSE"><img alt="许可证：PolyForm Shield" src="https://img.shields.io/badge/license-PolyForm%20Shield-3574F0?style=flat-square"></a>
-  <img alt="macOS 15+，Apple 芯片" src="https://img.shields.io/badge/macOS-15%2B%20%C2%B7%20Apple%20silicon-1E1F22?style=flat-square&logo=apple&logoColor=white">
+  <img alt="macOS、Windows 和 Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-1E1F22?style=flat-square">
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ---
 
-taksim 是一款原生 macOS 应用，它把你已经登录的智能体 CLI——**Claude Code、Codex、Gemini CLI、opencode 和
+taksim 是一款适用于 macOS、Windows 和 Linux 的应用，它把你已经登录的智能体 CLI——**Claude Code、Codex、Gemini CLI、opencode 和
 GitHub Copilot**——变成画布上的一张张卡片。你可以和其中任何一个对话；它们之间会互相提问、移交工作、创建帮手，
 还会搭建小型的实时工具，这一切都发生在你看得见的地方。无需 API key：每个智能体都使用你自己的账号，
 在你自己的电脑上运行，引擎只监听 `127.0.0.1`。
@@ -36,11 +36,16 @@ GitHub Copilot**——变成画布上的一张张卡片。你可以和其中任�
 | **Homebrew** | `brew install --cask 0xhalil/taksim/taksim` |
 | **磁盘映像（DMG）** | 从[版本发布页](https://github.com/0xhalil/taksim/releases/latest)下载 `Taksim-<version>-arm64.dmg`，拖入“应用程序” |
 | **ZIP** | 同一页面上的 `Taksim-<version>.zip` |
+| **Windows** | `Taksim-<version>-Setup.exe`（x64 与 Arm），仅为当前用户安装，无需管理员权限 |
+| **Linux** | `Taksim-<version>-<arch>.AppImage`，或 Debian/Ubuntu 的 `.deb`（x64 与 arm64） |
 
-发布版本使用 Developer ID 签名并经过 Apple 公证，因此应用可以像其他应用一样直接打开，之后会自动更新。
-每个文件旁边都有对应的 `.sha256` 校验文件。
+也可以在 [taksim.dev/download](https://taksim.dev/download/) 获取适合你电脑的文件。应用之后会自动更新，
+每个文件旁边都有对应的 `.sha256` 校验文件。Mac 版是原生应用，使用 Developer ID 签名并经过 Apple 公证。
+Windows 和 Linux 版自带引擎和 Node，无需另外安装；Windows 安装程序暂未签名，SmartScreen 会询问一次
+（更多信息 › 仍要运行）。
 
-需要 **macOS 15 或更高版本，Apple 芯片（M 系列）**，以及至少一个智能体 CLI（见[支持的 CLI](#支持的-cli)）。
+需要 **macOS 15 或更高版本（Apple 芯片）、Windows 10 或更高版本，或 glibc 2.28 及以上的 Linux**，以及至少一个
+智能体 CLI（见[支持的 CLI](#支持的-cli)）。
 
 ## 快速上手
 

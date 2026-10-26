@@ -8,7 +8,7 @@
   <a href="https://github.com/0xhalil/taksim/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/0xhalil/taksim?style=flat-square&color=3574F0"></a>
   <a href="https://github.com/0xhalil/taksim/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/0xhalil/taksim/test.yml?branch=main&style=flat-square&label=tests"></a>
   <a href="LICENSE"><img alt="License: PolyForm Shield" src="https://img.shields.io/badge/license-PolyForm%20Shield-3574F0?style=flat-square"></a>
-  <img alt="macOS 15+ on Apple silicon" src="https://img.shields.io/badge/macOS-15%2B%20%C2%B7%20Apple%20silicon-1E1F22?style=flat-square&logo=apple&logoColor=white">
+  <img alt="macOS, Windows and Linux" src="https://img.shields.io/badge/runs%20on-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-1E1F22?style=flat-square">
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ---
 
-taksim is a native macOS app that runs the agent CLIs you are signed in to — **Claude Code, Codex, Gemini CLI,
+taksim is an app for macOS, Windows and Linux that runs the agent CLIs you are signed in to — **Claude Code, Codex, Gemini CLI,
 opencode and GitHub Copilot** — as cards on a canvas. You talk to any of them; they ask each other questions, hand
 off work, create helpers and build small live tools, and all of it happens where you can see it. No API keys: every
 agent runs on your own login, on your own machine.
@@ -36,11 +36,16 @@ agent runs on your own login, on your own machine.
 | **Homebrew** | `brew install --cask 0xhalil/taksim/taksim` |
 | **Disk image** | `Taksim-<version>-arm64.dmg` from [Releases](https://github.com/0xhalil/taksim/releases/latest), drag to Applications |
 | **ZIP** | `Taksim-<version>.zip` from the same page |
+| **Windows** | `Taksim-<version>-Setup.exe` (x64 and Arm), installs for you alone, no admin rights |
+| **Linux** | `Taksim-<version>-<arch>.AppImage`, or the `.deb` for Debian and Ubuntu (x64 and arm64) |
 
-Releases are signed with a Developer ID and notarized by Apple, so the app opens like any other. It updates itself from
-then on. Each file has a `.sha256` beside it.
+Or take the right file for your computer from [taksim.dev/download](https://taksim.dev/download/). Every app updates
+itself from then on, and each file has a `.sha256` beside it. The Mac app is native and is signed with a Developer ID
+and notarized by Apple. The Windows and Linux app carries its own engine and Node, so nothing needs installing first;
+the Windows installer isn't signed yet, so SmartScreen asks once (More info › Run anyway).
 
-You need **macOS 15 or later on Apple silicon** and at least one agent CLI (see [Supported CLIs](#supported-clis)).
+You need **macOS 15 or later on Apple silicon, Windows 10 or later, or Linux with glibc 2.28 or later**, and at least
+one agent CLI (see [Supported CLIs](#supported-clis)).
 
 ## Quick start
 
