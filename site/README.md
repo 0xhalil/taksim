@@ -47,7 +47,7 @@ Story text goes through `t()`; add its translation to the `ZH` table. The app's 
 ## Links
 
 - GitHub: `https://github.com/0xhalil/taksim`
-- Download for Mac / Windows / Linux (named by the visitor's system): `/download/`, the page with the Download button (the newest disk image, Windows installer or AppImage for that system, read from GitHub's API; a switch shows the other systems),
+- Download: `/download/`, the page with the Download button (the newest disk image, Windows installer or AppImage for that system, read from GitHub's API; a switch shows the other systems),
   the Homebrew command and the GitHub links. The home page's button goes there.
 
 Both start working once the repository and its first release exist.
