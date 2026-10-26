@@ -55,7 +55,8 @@ trying the package). The Windows installer is not signed yet: SmartScreen asks o
 
 ## What the workflow does
 
-1. Waits for the `test` workflow to pass on the tagged commit (up to 30 minutes), so tag after pushing, not before.
+1. Builds everything at once while the `test` workflow runs on the tagged commit; nothing is published until it
+   passes (it waits up to 30 minutes), so a tag right after the push costs no extra time.
 2. Builds the app, packs the engine and a Node runtime into it, signs everything inside with the Developer ID
    certificate (hardened runtime), sends it to Apple's notary service and staples the ticket. Apple's check usually
    takes minutes, but the first ones of a new account can take hours; the workflow waits up to three.

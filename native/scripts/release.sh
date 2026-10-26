@@ -5,17 +5,29 @@
 # into it, zips it and wraps it in a disk image (Taksim-0.3.0-arm64.dmg), writes their SHA-256 beside them, and
 # creates release v0.3.0 with the four files.
 # The releases repository is TAKSIM_RELEASE_REPO (default 0xhalil/taksim, the source repository itself); it must be public.
-# Without --publish it only builds the files under native/build/release/ (to try them first).
+# Without --publish it only builds the files under native/build/release/ (to try them first); --publish-built then
+# publishes those files without building again (CI builds while the tests run and publishes once they pass).
 # Signing: with TAKSIM_SIGN_IDENTITY (a Developer ID Application certificate, its SHA-1 hash) the app gets the hardened
 # runtime; with TAKSIM_NOTARY_KEY (an App Store Connect API key .p8), TAKSIM_NOTARY_KEY_ID and TAKSIM_NOTARY_ISSUER it is
 # also notarized and stapled. Without them the app is signed ad-hoc and only runs on this Mac.
 set -e
 cd "$(dirname "$0")/../.."
-VERSION="$1"; NOTES="${2:-}"; PUBLISH=""
-for a in "$@"; do [ "$a" = "--publish" ] && PUBLISH=1; done
-[ "$NOTES" = "--publish" ] && NOTES=""
+VERSION="$1"; NOTES="${2:-}"; PUBLISH=""; BUILT=""
+for a in "$@"; do
+  [ "$a" = "--publish" ] && PUBLISH=1
+  [ "$a" = "--publish-built" ] && PUBLISH=1 && BUILT=1
+done
+case "$NOTES" in --publish|--publish-built) NOTES="" ;; esac
 case "$VERSION" in [0-9]*.[0-9]*) ;; *) echo "usage: release.sh <version, e.g. 0.3.0> [notes] [--publish]" >&2; exit 2 ;; esac
 REPO="${TAKSIM_RELEASE_REPO:-0xhalil/taksim}"
+OUT=native/build/release
+ZIP="$OUT/Taksim-$VERSION.zip"
+DMG="$OUT/Taksim-$VERSION-arm64.dmg"
+NOTARIZING=""; [ -n "$TAKSIM_SIGN_IDENTITY" ] && [ -n "$TAKSIM_NOTARY_KEY" ] && NOTARIZING=1
+
+if [ -n "$BUILT" ]; then
+  for f in "$ZIP" "$ZIP.sha256" "$DMG" "$DMG.sha256"; do [ -f "$f" ] || { echo "nothing built for $VERSION: $f is missing" >&2; exit 1; }; done
+else
 
 TAKSIM_VERSION="$VERSION" TAKSIM_RELEASE_REPO="$REPO" native/scripts/build-app.sh >/dev/null
 APP=native/build/Taksim.app
@@ -81,7 +93,6 @@ notarize() {
     exit 1
   fi
 }
-NOTARIZING=""; [ -n "$TAKSIM_SIGN_IDENTITY" ] && [ -n "$TAKSIM_NOTARY_KEY" ] && NOTARIZING=1
 
 if [ -n "$NOTARIZING" ]; then
   # the ticket is stapled to the app so it opens offline too
@@ -93,16 +104,13 @@ if [ -n "$NOTARIZING" ]; then
   echo "notarized and stapled"
 fi
 
-OUT=native/build/release
 rm -rf "$OUT"; mkdir -p "$OUT"
-ZIP="$OUT/Taksim-$VERSION.zip"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 shasum -a 256 "$ZIP" | awk '{print $1}' > "$ZIP.sha256"
 echo "$ZIP ($(du -h "$ZIP" | cut -f1)), sha256 $(cat "$ZIP.sha256")"
 
 # the disk image people expect to drag from: the app and a link to Applications, signed and notarized like the app
 # (the zip stays: the app updates itself from it and the Homebrew cask installs it)
-DMG="$OUT/Taksim-$VERSION-arm64.dmg"
 DMGSRC=$(mktemp -d)
 ditto "$APP" "$DMGSRC/Taksim.app"; ln -s /Applications "$DMGSRC/Applications"
 hdiutil create -quiet -volname taksim -srcfolder "$DMGSRC" -fs HFS+ -format UDZO "$DMG"
@@ -114,6 +122,7 @@ if [ -n "$NOTARIZING" ]; then
 fi
 shasum -a 256 "$DMG" | awk '{print $1}' > "$DMG.sha256"
 echo "$DMG ($(du -h "$DMG" | cut -f1)), sha256 $(cat "$DMG.sha256")"
+fi
 
 TAP="${TAKSIM_TAP:-0xhalil/homebrew-taksim}"
 # The release page, laid out like the README: what it is, what changed, how to install, checksums

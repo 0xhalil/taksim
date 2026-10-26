@@ -1,6 +1,6 @@
 # Ships a version of the app: push a tag (git tag -a v0.2.0 -m "what changed" && git push origin v0.2.0).
-# The tagged commit must already have a passing `test` run, then native/scripts/release.sh builds, signs and
-# notarizes Taksim-<version>.zip, creates the GitHub release that
+# Everything builds at once, while the `test` workflow runs on the tagged commit; only publishing waits for it to pass.
+# native/scripts/release.sh builds, signs and notarizes Taksim-<version>.zip, then creates the GitHub release that
 # installed apps look for (Updater.swift) and updates the Homebrew cask in 0xhalil/homebrew-taksim.
 # The same tag builds the Linux and Windows app (desktop/), runs each package, and adds it to that release.
 # Run by hand ("Run workflow") it builds only and leaves the zip as a downloadable artifact, unless "publish" is ticked.
@@ -35,30 +35,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # waiting for the test run happens on a cheap Linux machine, not on the macOS one that builds
+  # the gate for publishing the Linux and Windows files, on a cheap Linux machine
   tested:
     if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
+      - uses: actions/checkout@v4
       - name: The tests passed on this commit
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
-        run: |
-          # the `test` workflow runs on every push to main; a tag pushed right behind it waits for it
-          for i in $(seq 1 60); do
-            runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/test.yml/runs?head_sha=$SHA&per_page=20" \
-              --jq '[.workflow_runs[] | .conclusion // "pending"] | join(" ")')
-            case " $runs " in *" success "*) echo "tests passed on $SHA"; exit 0 ;; esac
-            case " $runs " in *" pending "*) ;; *"  "*) [ "$i" -gt 6 ] && break ;; *) echo "tests did not pass on $SHA: $runs" >&2; exit 1 ;; esac
-            sleep 30
-          done
-          echo "no passing test run for $SHA" >&2; exit 1
+        run: .github/scripts/wait-for-tests.sh
 
   release:
-    needs: tested
-    if: ${{ !cancelled() && !inputs.desktop_only && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
+    if: ${{ !inputs.desktop_only }}
     runs-on: macos-26
     timeout-minutes: 240
     steps:
@@ -127,20 +118,27 @@ jobs:
             echo "TAKSIM_NOTARY_KEY_ID=$NOTARY_KEY_ID"
             echo "TAKSIM_NOTARY_ISSUER=$NOTARY_ISSUER"
           } >> "$GITHUB_ENV"
-      - name: Build and publish
+      - name: Build, sign and notarize
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          NOTES: ${{ steps.v.outputs.notes }}
+        run: native/scripts/release.sh "$VERSION" "$NOTES"
+      - name: The tests passed on this commit
+        if: steps.v.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: .github/scripts/wait-for-tests.sh
+      - name: Publish
+        if: steps.v.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAP_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
           VERSION: ${{ steps.v.outputs.version }}
           NOTES: ${{ steps.v.outputs.notes }}
-          PUBLISH: ${{ steps.v.outputs.publish }}
         run: |
-          if [ "$PUBLISH" = true ]; then
-            printf '%s\n' "$TAP_KEY" > "$RUNNER_TEMP/tap_key"; chmod 600 "$RUNNER_TEMP/tap_key"
-            TAKSIM_TAP_KEY="$RUNNER_TEMP/tap_key" native/scripts/release.sh "$VERSION" "$NOTES" --publish
-          else
-            native/scripts/release.sh "$VERSION" "$NOTES"
-          fi
+          printf '%s\n' "$TAP_KEY" > "$RUNNER_TEMP/tap_key"; chmod 600 "$RUNNER_TEMP/tap_key"
+          TAKSIM_TAP_KEY="$RUNNER_TEMP/tap_key" native/scripts/release.sh "$VERSION" "$NOTES" --publish-built
       - name: Keep the zip of a dry run
         if: steps.v.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
@@ -151,8 +149,6 @@ jobs:
 
   # the Linux and Windows app, built on each system (node-pty is compiled for Linux there) and run before it ships
   desktop:
-    needs: tested
-    if: ${{ !cancelled() && (needs.tested.result == 'success' || needs.tested.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
@@ -234,8 +230,8 @@ jobs:
 
   # the Linux and Windows files join the release the macOS job created; latest*.yml is what installed apps update from
   desktop-publish:
-    needs: [release, desktop]
-    if: ${{ !cancelled() && (needs.release.result == 'success' || inputs.desktop_only) && needs.desktop.result == 'success' && (github.event_name == 'push' || inputs.publish) }}
+    needs: [tested, release, desktop]
+    if: ${{ !cancelled() && needs.tested.result == 'success' && (needs.release.result == 'success' || inputs.desktop_only) && needs.desktop.result == 'success' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
